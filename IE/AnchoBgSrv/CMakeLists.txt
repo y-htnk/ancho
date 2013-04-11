@@ -24,6 +24,9 @@ include_directories(
   )
 
 set(${PROJECT_NAME}_HEADERS
+  "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/AsynchronousTaskManager.hpp"
+  "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/COMConversions.hpp"
+  "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/JavaScriptCallback.hpp"
   "${${PROJECT_NAME}_INC_DIR}/AnchoAddonService.h"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackgroundAPI.h"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackground.h"
@@ -44,6 +47,7 @@ set(${PROJECT_NAME}_HEADERS
   )
 
 set(${PROJECT_NAME}_SOURCES
+  "${${PROJECT_NAME}_SRC_DIR}/src/AsynchronousTaskManager.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoAddonService.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoBackgroundAPI.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoBackground.cpp"
@@ -158,6 +162,14 @@ source_group("Resources" FILES ${${PROJECT_NAME}_RC_FILES})
 
 ################# MAIN TARGET SETUP #########################
 
+add_definitions(-DSQLITE_THREADSAFE=1)
+
+# _WIN64
+if (${CMAKE_CL_64})
+  add_definitions(-DWIN64 -D_WIN64)
+endif (${CMAKE_CL_64})
+
+
 add_executable(${PROJECT_NAME} WIN32
   ${${PROJECT_NAME}_HEADERS}
   ${${PROJECT_NAME}_SOURCES}
@@ -168,16 +180,9 @@ add_executable(${PROJECT_NAME} WIN32
   )
 target_link_libraries(${PROJECT_NAME} libbhohelper anchocommons libprothandlers Wininet AnchoShared)
 
-
-
-
 # set UNICODE
 set_target_properties(${PROJECT_NAME} PROPERTIES COMPILE_DEFINITIONS _UNICODE,UNICODE)
 
-# _WIN64
-if (${CMAKE_CL_64})
-  add_definitions(-DWIN64 -D_WIN64)
-endif (${CMAKE_CL_64})
 
 #Generating files in pre-build step
 add_custom_command(TARGET ${PROJECT_NAME}

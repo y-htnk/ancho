@@ -8,7 +8,7 @@
 #include "IECookieManager.h"
 #include <set>
 #include <Shlobj.h>
-
+#include <Exceptions.h>
 
 CString lastErrorMessage(const DWORD& dwErrorCode)
 {

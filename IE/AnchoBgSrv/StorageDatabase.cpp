@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "StorageDatabase.h"
 #include "sqlite3.h"
+#include <Exceptions.h>
 
 //RAII wrapper for SQLite statement
 struct StorageDatabase::SQLiteStatement
@@ -152,6 +153,7 @@ void StorageDatabase::open(const std::wstring &aPath, const std::wstring & aTabl
 {
   mPath = aPath;
   mTableName = aTableName;
+  //Multithreading safety ensured by defining SQLITE_THREADSAFE=1
   if(SQLITE_OK != sqlite3_open16(mPath.c_str(), &mDatabase)) {
     ANCHO_THROW(EDatabaseOpenFailure());
   }
