@@ -302,8 +302,7 @@ STDMETHODIMP CAnchoPassthruAPP::fireOnBeforeHeaders(CComPtr<CAnchoProtocolSink> 
       if (FAILED(hr)) {
         return hr;
       }
-      m_DocumentRecord = gWindowDocumentMap.get(hwnd);
-      m_Doc = m_DocumentRecord.document;
+      tryToFillDocumentRecord(hwnd);
     }
 
     if (m_DocumentRecord.window) {
@@ -383,8 +382,7 @@ STDMETHODIMP CAnchoPassthruAPP::StartEx(
       if FAILED(getDocumentWindowFromSink(pSink, hwnd)) {
         return S_OK;
       }
-      m_DocumentRecord = gWindowDocumentMap.get(hwnd);
-      m_Doc = m_DocumentRecord.document;
+      tryToFillDocumentRecord(hwnd);
     }
 
     if (m_DocumentRecord.window) {
@@ -408,6 +406,20 @@ STDMETHODIMP CAnchoPassthruAPP::StartEx(
   }
 
   return S_OK;
+}
+
+void CAnchoPassthruAPP::tryToFillDocumentRecord(HWND aDocWindow)
+{
+  if (!aDocWindow) return;
+
+  m_DocumentRecord = gWindowDocumentMap.get(aDocWindow);
+  if (!m_DocumentRecord.window) {
+    aDocWindow = findParentWindowByClass(aDocWindow, L"TabWindowClass");
+    if (aDocWindow) {
+      m_DocumentRecord = gWindowDocumentMap.get(aDocWindow);
+    }
+  }
+  m_Doc = m_DocumentRecord.getDocument();
 }
 
 //----------------------------------------------------------------------------
@@ -444,8 +456,7 @@ STDMETHODIMP CAnchoPassthruAPP::Continue(PROTOCOLDATA* data)
           }
           return S_FALSE;
         }
-        m_DocumentRecord = gWindowDocumentMap.get(hwnd);
-        m_Doc = m_DocumentRecord.document;
+        tryToFillDocumentRecord(hwnd);
       }
 
       if (m_DocumentRecord.window) {
@@ -481,8 +492,6 @@ STDMETHODIMP CAnchoPassthruAPP::Continue(PROTOCOLDATA* data)
     }
     ATLTRACE(L"CAnchoPassthruAPP - %s is frame.\n", bstrUrl);
 
-    ATLASSERT(m_Doc != NULL);
-
     // Send the event for any redirects that occurred before we had access to the event sink.
     RedirectList::iterator it = m_Redirects.begin();
     while(it != m_Redirects.end()) {
@@ -497,14 +506,16 @@ STDMETHODIMP CAnchoPassthruAPP::Continue(PROTOCOLDATA* data)
 
       IF_FAILED_RET(m_BrowserEvents->OnFrameStart(bstrUrl, m_IsRefreshingMainFrame ? VARIANT_TRUE : VARIANT_FALSE));
 
-      CComBSTR readyState;
-      m_Doc->get_readyState(&readyState);
-      if (wcscmp(readyState, L"complete") == 0) {
-        IF_FAILED_RET(m_BrowserEvents->OnFrameEnd(bstrUrl, m_IsRefreshingMainFrame ? VARIANT_TRUE : VARIANT_FALSE));
-      }
-      else {
-        m_DocSink = new DocumentSink(this, m_Doc, m_BrowserEvents, bstrUrl, m_IsRefreshingMainFrame);
-        m_DocSink->DispEventAdvise(m_Doc);
+      if (m_Doc) { //in few situations the document is not yet ready
+        CComBSTR readyState;
+        m_Doc->get_readyState(&readyState);
+        if (wcscmp(readyState, L"complete") == 0) {
+          IF_FAILED_RET(m_BrowserEvents->OnFrameEnd(bstrUrl, m_IsRefreshingMainFrame ? VARIANT_TRUE : VARIANT_FALSE));
+        }
+        else {
+          m_DocSink = new DocumentSink(this, m_Doc, m_BrowserEvents, bstrUrl, m_IsRefreshingMainFrame);
+          m_DocSink->DispEventAdvise(m_Doc);
+        }
       }
     }
     else if (data->dwState == ANCHO_SWITCH_REDIRECT) {

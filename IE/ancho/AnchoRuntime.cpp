@@ -6,7 +6,7 @@
 
 #include "stdafx.h"
 #include <map>
-
+#include "anchocommons.h"
 #include "AnchoRuntime.h"
 #include "AnchoAddon.h"
 #include "AnchoBrowserEvents.h"
@@ -231,10 +231,10 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
       if (docWinHWND) {
         gWindowDocumentMap.put(WindowDocumentRecord(docWinHWND, m_TabID, m_pWebBrowser, pWebBrowser, doc));
       }
-      HWND tabWindow = getTabWindow();
-      if (tabWindow) {
-        gWindowDocumentMap.put(WindowDocumentRecord(tabWindow, m_TabID, m_pWebBrowser, pWebBrowser, doc));
-      }
+    }
+    HWND tabWindow = getTabWindow();
+    if (tabWindow) {
+      gWindowDocumentMap.put(WindowDocumentRecord(tabWindow, m_TabID, m_pWebBrowser, pWebBrowser, doc));
     }
   }
 
@@ -643,18 +643,7 @@ HWND CAnchoRuntime::getTabWindow()
 //
 HWND CAnchoRuntime::findParentWindowByClass(std::wstring aClassName)
 {
-  HWND window = getTabWindow();
-  wchar_t className[256];
-  while (window) {
-    if (!GetClassName(window, className, 256)) {
-      return NULL;
-    }
-    if (aClassName == className) {
-      return window;
-    }
-    window = GetParent(window);
-  }
-  return NULL;
+  return ::findParentWindowByClass(getTabWindow(), aClassName);
 }
 //----------------------------------------------------------------------------
 //

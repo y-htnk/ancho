@@ -55,3 +55,20 @@ struct ZOrderComparator
   }
 };
 
+//----------------------------------------------------------------------------
+//
+inline HWND findParentWindowByClass(HWND aWindow, std::wstring aClassName)
+{
+  wchar_t className[256];
+  while (aWindow) {
+    if (!GetClassName(aWindow, className, 256)) {
+      return NULL;
+    }
+    if (aClassName == className) {
+      return aWindow;
+    }
+    aWindow = GetParent(aWindow);
+  }
+  return NULL;
+}
+

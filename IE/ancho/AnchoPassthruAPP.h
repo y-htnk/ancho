@@ -177,6 +177,8 @@ private:
   STDMETHOD(getDocumentWindowFromSink)(CComPtr<CAnchoProtocolSink> aSink, HWND &aWinHWND);
   STDMETHOD(getEventsFromBrowser)(CComPtr<IWebBrowser2> aBrowser, CComPtr<DAnchoBrowserEvents> &aEvents);
 
+  void tryToFillDocumentRecord(HWND aDocWindow);
+
   // -------------------------------------------------------------------------
   // Data members
   CComQIPtr<DAnchoBrowserEvents> m_BrowserEvents;
