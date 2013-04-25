@@ -97,7 +97,9 @@ STDMETHODIMP CAnchoProtocolSink::BeginningTransaction(
     *pszAdditionalHeaders = 0;
   }
 
-  { // event firing
+  std::wstring additionalHeaders;
+  {
+    // event firing
     CAnchoPassthruAPP *protocol = CAnchoPassthruAPP::GetProtocol(this);
 
     CComBSTR method;
@@ -110,24 +112,20 @@ STDMETHODIMP CAnchoProtocolSink::BeginningTransaction(
       method = L"GET";
     }
 
+
     WebRequestReporterComObject * pNewObject = NULL;
     if (SUCCEEDED(WebRequestReporterComObject::CreateInstance(&pNewObject))) {
       CComPtr<IWebRequestReporter> reporter(pNewObject);
       if (reporter && SUCCEEDED(reporter->init(CComBSTR(szURL), method))) {
-        if (SUCCEEDED(protocol->fireOnBeforeHeaders(CComPtr<CAnchoProtocolSink>(this), CComBSTR(szURL), reporter))) {
+        if(SUCCEEDED(protocol->fireOnBeforeHeaders(CComPtr<CAnchoProtocolSink>(this), CComBSTR(szURL), reporter))) {
           if (pNewObject->mNewHeadersAdded) {
-            LPWSTR wszAdditionalHeaders = (LPWSTR) CoTaskMemAlloc((pNewObject->mNewHeaders.Length()+1)*sizeof(WCHAR));
-            if (!wszAdditionalHeaders) {
-              return E_OUTOFMEMORY;
-            }
-            wcscpy_s(wszAdditionalHeaders, pNewObject->mNewHeaders.Length()+1, pNewObject->mNewHeaders.m_str);
-            wszAdditionalHeaders[pNewObject->mNewHeaders.Length()] = 0;
-            *pszAdditionalHeaders = wszAdditionalHeaders;
+            additionalHeaders = pNewObject->mNewHeaders.m_str;
           }
         }
       }
     }
   }
+
   CComPtr<IHttpNegotiate> spHttpNegotiate;
   IF_FAILED_RET(QueryServiceFromClient(&spHttpNegotiate));
 
@@ -136,6 +134,23 @@ STDMETHODIMP CAnchoProtocolSink::BeginningTransaction(
       dwReserved, pszAdditionalHeaders) :
     S_OK;
   IF_FAILED_RET(hr);
+
+  //Adding headers
+  if (!additionalHeaders.empty()) {
+    ATLASSERT(pszAdditionalHeaders);
+    std::wstring tmp = std::wstring(*pszAdditionalHeaders) + additionalHeaders;
+    if (*pszAdditionalHeaders) {
+      CoTaskMemFree(*pszAdditionalHeaders);
+    }
+
+    LPWSTR wszAdditionalHeaders = (LPWSTR) CoTaskMemAlloc((tmp.size()+1)*sizeof(WCHAR));
+    if (!wszAdditionalHeaders) {
+      return E_OUTOFMEMORY;
+    }
+    wcscpy_s(wszAdditionalHeaders, tmp.size()+1, tmp.c_str());
+    //wszAdditionalHeaders[pNewObject->mNewHeaders.Length()] = 0;
+    *pszAdditionalHeaders = wszAdditionalHeaders;
+  }
 
   return S_OK;
 }
