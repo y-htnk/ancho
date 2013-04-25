@@ -365,7 +365,7 @@ var types = [
     "type": "object"
   },
   {
-    "id": "onHeadersReceived.deails",
+    "id": "onHeadersReceived.details",
     "properties": {
       "frameId": {
         "id": "frameId",

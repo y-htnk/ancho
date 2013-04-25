@@ -423,7 +423,7 @@ var ObjectValidator = function(aSpec, aNamespace) {
       return createValidationReportError(e, validationError.NOT_AN_OBJECT);
     }
 
-    properties = (specification && specification.properties) || null;
+    properties = (specification && specification.properties ? specification.properties : null);
     if (!properties) {
       return validationReport;
     }
@@ -440,6 +440,7 @@ var ObjectValidator = function(aSpec, aNamespace) {
         }
       } else {
         if (propertySpecification.required) {
+        debugger;
           var e = 'Missing property \'' + i + '\'!';
           return createValidationReportError(e, validationError.MISSING_PROPERTY);
         }
