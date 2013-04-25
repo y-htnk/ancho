@@ -15,6 +15,7 @@ var preprocessArguments = require("typeChecking.js").preprocessArguments;
 var notImplemented = require("typeChecking.js").notImplemented;
 var typeCheckedCopy = require("typeChecking.js").typeCheckedCopy;
 var matchUrl = require("utils.js").matchUrl;
+var utils = require("utils.js");
 
 var JSON = require("JSON.js");
 /**
@@ -60,10 +61,9 @@ function WebRequestListenerRecord(/*eventName, callback, filter, opt_extraInfoSp
   var args = preprocessArguments('chrome.webRequest.webRequestEventInvoke', arguments, 'chrome.webRequest');
   var eventName = args.eventName;
   var requestFilter = new RequestFilterHandler(args.filter);
-
   this.callback = args.callback;
   this.invoke = function(details) {
-    var checkedDetails = typeCheckedCopy(details, "chrome." + eventName + ".details");
+    var checkedDetails = typeCheckedCopy(details, "chrome." + eventName + ".details", 'chrome.webRequest');
     if (!requestFilter.filter(checkedDetails)) {
       //console.debug("Request event " + eventName + " was filtered out :" + checkedDetails.url);
       return;

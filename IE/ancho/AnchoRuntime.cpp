@@ -432,7 +432,9 @@ HRESULT CAnchoRuntime::fireOnBeforeSendHeaders(const std::wstring &aUrl, const s
   IF_FAILED_RET(SimpleJSObject::createInstance(info));
 
   fillRequestInfo(*info, aUrl, aMethod, aFrameRecord);
-  info->setProperty(L"requestHeaders", CComVariant());
+  CComPtr<ComSimpleJSArray> requestHeaders;
+  IF_FAILED_RET(SimpleJSArray::createInstance(requestHeaders));
+  info->setProperty(L"requestHeaders", CComVariant(requestHeaders.p));
 
   CComPtr<ComSimpleJSArray> argArray;
   IF_FAILED_RET(SimpleJSArray::createInstance(argArray));
