@@ -313,7 +313,7 @@ STDMETHODIMP CAnchoPassthruAPP::fireOnBeforeHeaders(CComPtr<CAnchoProtocolSink> 
   if (!m_BrowserEvents) {
     if (!m_DocumentRecord.window) {
       HWND hwnd = NULL;
-      HRESULT hr = getDocumentWindowFromSink(aSink, hwnd);
+      HRESULT hr = getWindowFromSink(aSink, hwnd);
       if (FAILED(hr)) {
         return hr;
       }
@@ -332,7 +332,7 @@ STDMETHODIMP CAnchoPassthruAPP::fireOnBeforeHeaders(CComPtr<CAnchoProtocolSink> 
   return E_FAIL;
 }
 
-STDMETHODIMP CAnchoPassthruAPP::getDocumentWindowFromSink(CComPtr<CAnchoProtocolSink> aSink, HWND &aWinHWND)
+STDMETHODIMP CAnchoPassthruAPP::getWindowFromSink(CComPtr<CAnchoProtocolSink> aSink, HWND &aWinHWND)
 {
   CComPtr<IWindowForBindingUI> windowForBindingUI;
 
@@ -394,7 +394,7 @@ STDMETHODIMP CAnchoPassthruAPP::StartEx(
   if (!m_BrowserEvents) {
     if (!m_DocumentRecord.window) {
       HWND hwnd = NULL;
-      if FAILED(getDocumentWindowFromSink(pSink, hwnd)) {
+      if FAILED(getWindowFromSink(pSink, hwnd)) {
         return S_OK;
       }
       tryToFillDocumentRecord(hwnd);
@@ -462,7 +462,7 @@ STDMETHODIMP CAnchoPassthruAPP::Continue(PROTOCOLDATA* data)
     if (!m_BrowserEvents) {
       if (!m_DocumentRecord.window) {
         HWND hwnd = NULL;
-        HRESULT hr = getDocumentWindowFromSink(pSink, hwnd);
+        HRESULT hr = getWindowFromSink(pSink, hwnd);
         if (S_FALSE == hr) {
           // Not ready to get the window yet so we'll try again with the next notification.
           if (data->dwState == ANCHO_SWITCH_REDIRECT) {
@@ -501,7 +501,7 @@ STDMETHODIMP CAnchoPassthruAPP::Continue(PROTOCOLDATA* data)
       // so we check if the URL of the request matches the URL of the browser to handle
       // that case.
       if (!(pSink->IsFrame()) && !m_IsRefreshingMainFrame) {
-        ATLTRACE(L"CAnchoPassthruAPP - %s is not a frame.\n", bstrUrl);
+        //ATLTRACE(L"CAnchoPassthruAPP - %s is not a frame.\n", bstrUrl);
         return S_OK;
       }
     }
