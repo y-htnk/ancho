@@ -212,7 +212,7 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
   removeUrlFragment(pURL->bstrVal, &bstrUrl);
   m_Frames[(BSTR) bstrUrl] = FrameRecord(pWebBrowser, isTop != VARIANT_FALSE, m_NextFrameId++);
 
-  pWebBrowser->PutProperty(CComBSTR(L"NavigateURL"), CComVariant(*pURL));
+  pWebBrowser->PutProperty(CComBSTR(L"_anchoNavigateURL"), CComVariant(*pURL));
 
   SHANDLE_PTR hwndBrowser = NULL;
   pWebBrowser->get_HWND(&hwndBrowser);
