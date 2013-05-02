@@ -144,25 +144,19 @@ function loadConfig(addon, firstRun) {
   } // has manifest.json?
 }
 
-function registerProtocolHandler(addon) {
+function registerComponents(addon) {
   var protocolHandler = require('./js/protocolHandler');
-  Cm.QueryInterface(Ci.nsIComponentRegistrar).registerFactory(
-    protocolHandler.classID,
-    '',
-    '@mozilla.org/network/protocol;1?name=chrome-extension',
-    protocolHandler.componentFactory
-  );
+  protocolHandler.register();
 
   // TODO: Make this generic so we can handle multiple Ancho addons.
   protocolHandler.registerExtensionURI('ancho', addon.getResourceURI('chrome-ext'));
+
+  require('./js/contentPolicy').register();
 }
 
-function unregisterProtocolHandler() {
-  var protocolHandler = require('./js/protocolHandler');
-  Cm.QueryInterface(Ci.nsIComponentRegistrar).unregisterFactory(
-    protocolHandler.classID,
-    protocolHandler.componentFactory
-  );
+function unregisterComponents() {
+  require('./js/protocolHandler').unregister();
+  require('./js/contentPolicy').unregister();
 }
 
 function unloadBackgroundScripts() {
@@ -184,7 +178,7 @@ function startup(data, reason) {
   AddonManager.getAddonByID(EXTENSION_ID, function(addon) {
     setResourceSubstitution(addon);
     loadConfig(addon, (reason === ADDON_INSTALL || reason === ADDON_ENABLE));
-    registerProtocolHandler(addon);
+    registerComponents(addon);
     createBackground();
   });
 }
@@ -195,7 +189,7 @@ function shutdown(data, reason) {
   dump('\nAncho: shutting down ...\n\n');
 
   closeStorageConnection();
-  unregisterProtocolHandler();
+  unregisterComponents();
   releaseBackground();
   unloadBackgroundScripts();
 

@@ -1,17 +1,15 @@
 (function() {
-  const Cc = Components.classes;
-  const Ci = Components.interfaces;
+  const { classes: Cc, interfaces: Ci, utils: Cu, manager: Cm } = Components;
 
-  Components.utils.import("resource://gre/modules/NetUtil.jsm");
-  Components.utils.import("resource://gre/modules/XPCOMUtils.jsm");
-  Components.utils.import("resource://gre/modules/Services.jsm");
+  Cu.import("resource://gre/modules/NetUtil.jsm");
+  Cu.import("resource://gre/modules/XPCOMUtils.jsm");
+  Cu.import("resource://gre/modules/Services.jsm");
 
   var config = require('./config');
-  var ChannelWrapper = require('./channelWrapper');
 
   const SCHEME = "chrome-extension";
 
-  exports.classID = Components.ID("{b0a95b24-4270-4e74-8179-f170d6dab4a1}");
+  var classID = Components.ID("{b0a95b24-4270-4e74-8179-f170d6dab4a1}");
 
   var extensionURIs = {};
 
@@ -27,51 +25,12 @@
     return extensionURIs[id];
   }
 
-  function getLoadContext(aRequest) {
-    try {
-      // First try the notification callbacks.
-      let loadContext = aRequest.QueryInterface(Ci.nsIChannel)
-        .notificationCallbacks
-        .getInterface(Ci.nsILoadContext);
-      return loadContext;
-    }
-    catch (ex) {
-      // Fail over to trying the load group.
-      try {
-        if (!aRequest.loadGroup) {
-          return null;
-        }
-        let loadContext = aRequest.loadGroup.notificationCallbacks
-          .getInterface(Ci.nsILoadContext);
-        return loadContext;
-      }
-      catch (ex) {
-        return null;
-      }
-    }
-  }
-
-  function isWebAccessible(path) {
-    for (let i=0; i<config.webAccessibleResources.length; i++) {
-      if (path.match(config.webAccessibleResources[i])) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  function onStartRequest(aRequest, aContext) {
-    if (aRequest != this._channel) {
-      return this._listener.onStartRequest(aRequest, aContext);
-    }
-    this._listener.onStartRequest(this, aContext);
-    let loadContext = getLoadContext(aRequest);
-    if (loadContext && loadContext.isContent && !isWebAccessible(this._channel.URI.path)) {
-      throw Components.results.NS_ERROR_DOM_SECURITY_ERR;
-    }
-  }
-
   function AnchoProtocolHandler() {
+    this.privilegedURLs = ['/' + config.backgroundPage];
+    if (config.browser_action && config.browser_action.default_popup) {
+      this.privilegedURLs.push('/' + config.browser_action.default_popup);
+    }
+    // TODO: page action
   }
 
   AnchoProtocolHandler.prototype = {
@@ -96,37 +55,35 @@
       let channel = NetUtil.newChannel(this._mapToFileURI(aURI), null, null);
       channel.originalURI = aURI;
 
-      // Use the system principal for the channel.
-      channel.owner = Services.scriptSecurityManager.getSystemPrincipal();
-
-      let wrapper = new ChannelWrapper(channel);
-      // Monkey patch in our custom onStartRequest method.
-      // This function rejects requests from content pages for resources that
-      // are not whitelisted in the web_accessible_resources section of the
-      // manifest.
-      wrapper.onStartRequest = onStartRequest;
-      return wrapper;
+      if (this.privilegedURLs.indexOf(aURI.path) !== -1) {
+        // Use the system principal for the channel.
+        channel.owner = Services.scriptSecurityManager.getSystemPrincipal();
+      }
+      return channel;
     },
 
     allowPort: function(aPort, aScheme) {
       return false;
     },
 
-    QueryInterface: XPCOMUtils.generateQI([
-      Ci.nsIProtocolHandler
-    ]),
+    QueryInterface: XPCOMUtils.generateQI([Ci.nsIProtocolHandler]),
 
-    classID: exports.classID
+    classID: classID
   };
 
-  exports.componentFactory = {
-    createInstance: function(outer, iid) {
-      if (outer) {
-        throw Cr.NS_ERROR_NO_AGGREGATION;
-      }
-      return new AnchoProtocolHandler().QueryInterface(iid);
-    },
+  var NSGetFactory = XPCOMUtils.generateNSGetFactory([AnchoProtocolHandler]);
+  var factory = NSGetFactory(classID);
 
-    QueryInterface: XPCOMUtils.generateQI([Ci.nsIFactory])
+  exports.register = function() {
+    Cm.QueryInterface(Ci.nsIComponentRegistrar).registerFactory(
+      classID,
+      '',
+      '@mozilla.org/network/protocol;1?name=chrome-extension',
+      factory
+    );
+  };
+
+  exports.unregister = function() {
+    Cm.QueryInterface(Ci.nsIComponentRegistrar).unregisterFactory(classID, factory);
   };
 }).call(this);
