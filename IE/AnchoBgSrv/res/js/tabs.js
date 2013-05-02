@@ -128,7 +128,7 @@ var Tabs = function(instanceID) {
   // chrome.tabs.create
   this.create = function(createProperties, callback) {
     var args = preprocessArguments('chrome.tabs.create', arguments);
-    serviceAPI.createTab(args['createProperties'], Object, args['callback']);
+    serviceAPI.tabManager.createTab(args.createProperties, args.callback, _instanceID);
   };
 
   //----------------------------------------------------------------------------

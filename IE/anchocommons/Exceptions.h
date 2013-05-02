@@ -72,7 +72,9 @@ hresultToException(HRESULT hr)
 }
 
 #define IF_FAILED_THROW(...) \
-  HRESULT _hr__ = __VA_ARGS__;\
-  if (FAILED(_hr__)) {\
-    hresultToException(_hr__);\
+  {\
+    HRESULT _hr__ = __VA_ARGS__;\
+    if (FAILED(_hr__)) {\
+      hresultToException(_hr__);\
+    }\
   }

@@ -433,6 +433,9 @@ public:
   size_t length()
   {
     CComVariant len = getMember(L"length");
+    if (len.vt == VT_EMPTY) {
+      ANCHO_THROW(ENotAnArray());
+    }
     HRESULT hr = len.ChangeType(VT_I4);
     if (FAILED(hr)) {
       ANCHO_THROW(ENotAnArray());

@@ -200,6 +200,26 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
     return;
   }
 
+  // Check if this is a new tab we are creating programmatically.
+  // If so redirect it to the correct URL.
+  std::wstring url(pURL->bstrVal, SysStringLen(pURL->bstrVal));
+
+  boost::wregex expression(L"(.*)://\\$\\$([0-9]+)\\$\\$(.*)");
+  boost::wsmatch what;
+  //TODO - find a better way
+  if (boost::regex_match(url, what, expression)) {
+    int requestId = boost::lexical_cast<int>(what[2].str());
+    url = boost::str(boost::wformat(L"%1%://%2%") % what[1] % what[3]);
+
+    _variant_t vtUrl(url.c_str());
+    *Cancel = TRUE;
+    pWebBrowser->Stop();
+    pWebBrowser->Navigate2(&vtUrl.GetVARIANT(), Flags, TargetFrameName, PostData, Headers);
+    //m_pAnchoService->createTabNotification(m_TabID, requestID);
+    return;
+  }
+
+
   VARIANT_BOOL isTop;
   if (SUCCEEDED(pWebBrowser->get_TopLevelContainer(&isTop))) {
     if (isTop) {
@@ -238,29 +258,7 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
     }
   }
 
-  // Check if this is a new tab we are creating programmatically.
-  // If so redirect it to the correct URL.
-  std::wstring url(pURL->bstrVal, SysStringLen(pURL->bstrVal));
 
-  //TODO - use headers instead of url
-  size_t first = url.find_first_of(L'#');
-  size_t last = url.find_last_of(L'#');
-  if (first == std::wstring::npos || first == last) {
-    return;
-  }
-
-  std::wstring requestIDStr = url.substr(first+1, last - first - 1);
-  int requestID = _wtoi(requestIDStr.c_str());
-  url.erase(0, last+1);
-
-  CComVariant urlVar(url.c_str());
-  CComVariant vtEmpty;
-
-  *Cancel = TRUE;
-  pWebBrowser->Stop();
-  pWebBrowser->Navigate2(&urlVar, &vtEmpty, &vtEmpty, &vtEmpty, &vtEmpty);
-
-  m_pAnchoService->createTabNotification(m_TabID, requestID);
 }
 
 //----------------------------------------------------------------------------

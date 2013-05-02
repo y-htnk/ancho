@@ -23,7 +23,7 @@ struct WorkerThreadFunc
 
   void operator()()
   {
-    CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 
     try {
       while (true) {

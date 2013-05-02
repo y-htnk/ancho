@@ -36,6 +36,8 @@
 #include <KnownFolders.h>
 #include <ShlObj.h>
 
+#include <comutil.h>
+
 #include <anchocommons.h>
 
 using namespace ATL;
@@ -91,7 +93,10 @@ using namespace LIB_BhoHelper;
 #include <map>
 #include <vector>
 
+#include <boost/regex.hpp>
 #include <boost/bind.hpp>
+#include <boost/format.hpp>
+#include <boost/lexical_cast.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/make_shared.hpp>

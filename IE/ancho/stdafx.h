@@ -30,7 +30,6 @@
 #include <map>
 #include <string>
 
-
 #include <anchocommons.h>
 
 using namespace ATL;
@@ -100,3 +99,21 @@ using namespace LIB_BhoHelper;
 #include <Exceptions.h>
 #include <SimpleWrappers.h>
 #include <IPCHeartbeat.h>
+
+#include <boost/regex.hpp>
+#include <boost/bind.hpp>
+#include <boost/format.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/scoped_ptr.hpp>
+#include <boost/shared_ptr.hpp>
+#include <boost/make_shared.hpp>
+#include <boost/utility/result_of.hpp>
+#include <boost/utility.hpp>
+#include <boost/function.hpp>
+#include <boost/thread/future.hpp>
+#include <boost/thread.hpp>
+
+#include <boost/fusion/container/vector.hpp>
+#include <boost/fusion/support/is_sequence.hpp>
+#include <boost/fusion/algorithm/iteration/for_each.hpp>
+namespace fusion = boost::fusion;

@@ -51,6 +51,13 @@ HRESULT CAnchoAddonService::get_cookieManager(LPDISPATCH* ppRet)
 }
 //----------------------------------------------------------------------------
 //
+HRESULT CAnchoAddonService::get_tabManager(LPDISPATCH* ppRet)
+{
+  ENSURE_RETVAL(ppRet);
+  return mITabManager.QueryInterface(ppRet);
+}
+//----------------------------------------------------------------------------
+//
 HRESULT CAnchoAddonService::invokeExternalEventObject(BSTR aExtensionId, BSTR aEventName, LPDISPATCH aArgs, VARIANT* aRet)
 {
   ENSURE_RETVAL(aRet);
@@ -112,7 +119,7 @@ HRESULT CAnchoAddonService::createTabImpl(CIDispatchHelper &aProperties, ATabCre
     originalUrl = L"about:blank";
   }
   std::wstring url = std::wstring(originalUrl,SysStringLen(originalUrl));
-  if (aCallback) {
+  /*if (aCallback) {
     //TODO - use headers instead of url
     int requestID = m_NextRequestID++;
     std::wostringstream str;
@@ -120,7 +127,7 @@ HRESULT CAnchoAddonService::createTabImpl(CIDispatchHelper &aProperties, ATabCre
     url = str.str() + url;
 
     m_CreateTabCallbacks[requestID] = aCallback;
-  }
+  }*/
 
   LPUNKNOWN browser;
   IF_FAILED_RET(getActiveWebBrowser(&browser));
@@ -572,6 +579,11 @@ HRESULT CAnchoAddonService::FinalConstruct()
 
   IF_FAILED_RET(SimpleJSArray::createInstance(m_BrowserActionInfos));
 
+
+  CComObject<AnchoBackgroundServer::TabManager> *tabManager = NULL;
+  IF_FAILED_RET(CComObject<AnchoBackgroundServer::TabManager>::CreateInstance(&tabManager));
+  mTabManager = tabManager;
+  mITabManager = tabManager;
   return S_OK;
 }
 

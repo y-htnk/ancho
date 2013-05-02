@@ -37,6 +37,17 @@ typedef boost::make_recursive_variant<
                 std::map<std::wstring, boost::recursive_variant_>
             >::type JSVariant;
 
+enum JSTypeID {
+  jsNull   = 0,
+  jsBool   = 1,
+  jsInt    = 2,
+  jsDouble = 3,
+  jsString = 4,
+  jsArray  = 5,
+  jsObject = 6
+};
+
+
 //* Array of JSONable values
 typedef std::vector<JSVariant> JSArray;
 

@@ -19,6 +19,7 @@
 #include <IPCHeartbeat.h>
 
 #include "AnchoBackgroundServer/AsynchronousTaskManager.hpp"
+#include "AnchoBackgroundServer/TabManager.hpp"
 #include "AnchoBackgroundServer/COMConversions.hpp"
 #include "AnchoBackgroundServer/JavaScriptCallback.hpp"
 
@@ -204,6 +205,8 @@ public:
   // -------------------------------------------------------------------------
   // IAnchoServiceApi methods. See .idl for description.
   STDMETHOD(get_cookieManager)(LPDISPATCH* ppRet);
+  STDMETHOD(get_tabManager)(LPDISPATCH* ppRet);
+
   STDMETHOD(invokeExternalEventObject)(BSTR aExtensionId, BSTR aEventName, LPDISPATCH aArgs, VARIANT* aRet);
   STDMETHOD(createTab)(LPDISPATCH aProperties, LPDISPATCH aCreator, LPDISPATCH aCallback);
   STDMETHOD(reloadTab)(INT aTabId);
@@ -356,6 +359,9 @@ private:
   CString                       m_sThisPath;
 
   CComPtr<IIECookieManager>     m_Cookies;
+
+  AnchoBackgroundServer::TabManager *mTabManager;
+  CComPtr<ITabManager> mITabManager;
 
   int                           m_NextTabID;
   int                           m_NextRequestID;
