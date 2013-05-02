@@ -51,7 +51,7 @@ function RequestFilterHandler(aFilter) {
     return true;
   }
 }
-var JSON = require("JSON.js");
+
 /**
  * WebRequestListenerRecord - webRequest specialization of event listener wrapper
  * takes additional arguments - filter and opt_extraInfoSpec

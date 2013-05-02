@@ -77,7 +77,7 @@ public:
   // Free the memory associated with the params allocated when calling Switch().
   void FreeSwitchParams(BSTR* params);
 
-  std::wstring getUrl()const { return m_Url; }
+  std::wstring getUrl() const { return m_Url; }
 private:
   // -------------------------------------------------------------------------
   // Implementation
@@ -174,7 +174,7 @@ public:
   STDMETHOD(fireOnBeforeHeaders)(CComPtr<CAnchoProtocolSink> aSink, const CComBSTR &aUrl, CComPtr<IWebRequestReporter> aReporter);
 private:
 
-  STDMETHOD(getDocumentWindowFromSink)(CComPtr<CAnchoProtocolSink> aSink, HWND &aWinHWND);
+  STDMETHOD(getWindowFromSink)(CComPtr<CAnchoProtocolSink> aSink, HWND &aWinHWND);
   STDMETHOD(getEventsFromBrowser)(CComPtr<IWebBrowser2> aBrowser, CComPtr<DAnchoBrowserEvents> &aEvents);
 
   // -------------------------------------------------------------------------
