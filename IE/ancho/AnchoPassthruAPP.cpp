@@ -457,7 +457,7 @@ STDMETHODIMP CAnchoPassthruAPP::Continue(PROTOCOLDATA* data)
       IF_FAILED_RET(getBrowserForHTMLDocument(m_Doc, &browser));
 
       CComVariant tmp;
-      browser->GetProperty(CComBSTR(L"NavigateURL"), &tmp);
+      browser->GetProperty(CComBSTR(L"_anchoNavigateURL"), &tmp);
       std::wstring navigateUrl = tmp.bstrVal;
 
       CComBSTR topLevelUrl; // = var.bstrVal;
