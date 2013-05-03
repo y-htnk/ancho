@@ -484,7 +484,7 @@ STDMETHODIMP CAnchoPassthruAPP::Continue(PROTOCOLDATA* data)
 
     {
       CComVariant tmp;
-      browser->GetProperty(CComBSTR(L"_anchoNavigateURL"), &tmp);
+      m_DocumentRecord.topLevelBrowser->GetProperty(CComBSTR(L"_anchoNavigateURL"), &tmp);
       std::wstring navigateUrl = tmp.bstrVal;
 
       CComBSTR topLevelUrl; // = var.bstrVal;
