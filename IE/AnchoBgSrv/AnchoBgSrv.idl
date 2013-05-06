@@ -137,7 +137,7 @@ library AnchoBgSrvLib
     HRESULT setBrowserActionUpdateCallback([in] INT aTabId, [in] LPDISPATCH aBrowserActionUpdateCallback);
     HRESULT browserActionNotification();
 
-    HRESULT testFunction([out, retval] IDispatch** ppVal);
+    HRESULT testFunction([in] LPDISPATCH aObject, [in] LPDISPATCH aCallback);
   };
 
   /*==========================================================================*/

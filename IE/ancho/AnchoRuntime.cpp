@@ -6,7 +6,7 @@
 
 #include "stdafx.h"
 #include <map>
-
+#include "anchocommons.h"
 #include "AnchoRuntime.h"
 #include "AnchoAddon.h"
 #include "AnchoBrowserEvents.h"
@@ -212,7 +212,7 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
   removeUrlFragment(pURL->bstrVal, &bstrUrl);
   m_Frames[(BSTR) bstrUrl] = FrameRecord(pWebBrowser, isTop != VARIANT_FALSE, m_NextFrameId++);
 
-  pWebBrowser->PutProperty(CComBSTR(L"NavigateURL"), CComVariant(*pURL));
+  pWebBrowser->PutProperty(CComBSTR(L"_anchoNavigateURL"), CComVariant(*pURL));
 
   SHANDLE_PTR hwndBrowser = NULL;
   pWebBrowser->get_HWND(&hwndBrowser);
@@ -231,10 +231,10 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
       if (docWinHWND) {
         gWindowDocumentMap.put(WindowDocumentRecord(docWinHWND, m_TabID, m_pWebBrowser, pWebBrowser, doc));
       }
-      HWND tabWindow = getTabWindow();
-      if (tabWindow) {
-        gWindowDocumentMap.put(WindowDocumentRecord(tabWindow, m_TabID, m_pWebBrowser, pWebBrowser, doc));
-      }
+    }
+    HWND tabWindow = getTabWindow();
+    if (tabWindow) {
+      gWindowDocumentMap.put(WindowDocumentRecord(tabWindow, m_TabID, m_pWebBrowser, pWebBrowser, doc));
     }
   }
 
@@ -432,7 +432,9 @@ HRESULT CAnchoRuntime::fireOnBeforeSendHeaders(const std::wstring &aUrl, const s
   IF_FAILED_RET(SimpleJSObject::createInstance(info));
 
   fillRequestInfo(*info, aUrl, aMethod, aFrameRecord);
-  info->setProperty(L"requestHeaders", CComVariant());
+  CComPtr<ComSimpleJSArray> requestHeaders;
+  IF_FAILED_RET(SimpleJSArray::createInstance(requestHeaders));
+  info->setProperty(L"requestHeaders", CComVariant(requestHeaders.p));
 
   CComPtr<ComSimpleJSArray> argArray;
   IF_FAILED_RET(SimpleJSArray::createInstance(argArray));
@@ -643,18 +645,7 @@ HWND CAnchoRuntime::getTabWindow()
 //
 HWND CAnchoRuntime::findParentWindowByClass(std::wstring aClassName)
 {
-  HWND window = getTabWindow();
-  wchar_t className[256];
-  while (window) {
-    if (!GetClassName(window, className, 256)) {
-      return NULL;
-    }
-    if (aClassName == className) {
-      return window;
-    }
-    window = GetParent(window);
-  }
-  return NULL;
+  return ::findParentWindowByClass(getTabWindow(), aClassName);
 }
 //----------------------------------------------------------------------------
 //

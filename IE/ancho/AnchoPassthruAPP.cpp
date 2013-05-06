@@ -97,7 +97,9 @@ STDMETHODIMP CAnchoProtocolSink::BeginningTransaction(
     *pszAdditionalHeaders = 0;
   }
 
-  { // event firing
+  std::wstring additionalHeaders;
+  {
+    // event firing
     CAnchoPassthruAPP *protocol = CAnchoPassthruAPP::GetProtocol(this);
 
     CComBSTR method;
@@ -110,24 +112,20 @@ STDMETHODIMP CAnchoProtocolSink::BeginningTransaction(
       method = L"GET";
     }
 
+
     WebRequestReporterComObject * pNewObject = NULL;
     if (SUCCEEDED(WebRequestReporterComObject::CreateInstance(&pNewObject))) {
       CComPtr<IWebRequestReporter> reporter(pNewObject);
       if (reporter && SUCCEEDED(reporter->init(CComBSTR(szURL), method))) {
-        if (SUCCEEDED(protocol->fireOnBeforeHeaders(CComPtr<CAnchoProtocolSink>(this), CComBSTR(szURL), reporter))) {
+        if(SUCCEEDED(protocol->fireOnBeforeHeaders(CComPtr<CAnchoProtocolSink>(this), CComBSTR(szURL), reporter))) {
           if (pNewObject->mNewHeadersAdded) {
-            LPWSTR wszAdditionalHeaders = (LPWSTR) CoTaskMemAlloc((pNewObject->mNewHeaders.Length()+1)*sizeof(WCHAR));
-            if (!wszAdditionalHeaders) {
-              return E_OUTOFMEMORY;
-            }
-            wcscpy_s(wszAdditionalHeaders, pNewObject->mNewHeaders.Length()+1, pNewObject->mNewHeaders.m_str);
-            wszAdditionalHeaders[pNewObject->mNewHeaders.Length()] = 0;
-            *pszAdditionalHeaders = wszAdditionalHeaders;
+            additionalHeaders = pNewObject->mNewHeaders.m_str;
           }
         }
       }
     }
   }
+
   CComPtr<IHttpNegotiate> spHttpNegotiate;
   IF_FAILED_RET(QueryServiceFromClient(&spHttpNegotiate));
 
@@ -136,6 +134,23 @@ STDMETHODIMP CAnchoProtocolSink::BeginningTransaction(
       dwReserved, pszAdditionalHeaders) :
     S_OK;
   IF_FAILED_RET(hr);
+
+  //Adding headers
+  if (!additionalHeaders.empty()) {
+    ATLASSERT(pszAdditionalHeaders);
+    std::wstring tmp = std::wstring(*pszAdditionalHeaders) + additionalHeaders;
+    if (*pszAdditionalHeaders) {
+      CoTaskMemFree(*pszAdditionalHeaders);
+    }
+
+    LPWSTR wszAdditionalHeaders = (LPWSTR) CoTaskMemAlloc((tmp.size()+1)*sizeof(WCHAR));
+    if (!wszAdditionalHeaders) {
+      return E_OUTOFMEMORY;
+    }
+    wcscpy_s(wszAdditionalHeaders, tmp.size()+1, tmp.c_str());
+    //wszAdditionalHeaders[pNewObject->mNewHeaders.Length()] = 0;
+    *pszAdditionalHeaders = wszAdditionalHeaders;
+  }
 
   return S_OK;
 }
@@ -298,12 +313,11 @@ STDMETHODIMP CAnchoPassthruAPP::fireOnBeforeHeaders(CComPtr<CAnchoProtocolSink> 
   if (!m_BrowserEvents) {
     if (!m_DocumentRecord.window) {
       HWND hwnd = NULL;
-      HRESULT hr = getDocumentWindowFromSink(aSink, hwnd);
+      HRESULT hr = getWindowFromSink(aSink, hwnd);
       if (FAILED(hr)) {
         return hr;
       }
-      m_DocumentRecord = gWindowDocumentMap.get(hwnd);
-      m_Doc = m_DocumentRecord.document;
+      tryToFillDocumentRecord(hwnd);
     }
 
     if (m_DocumentRecord.window) {
@@ -318,7 +332,7 @@ STDMETHODIMP CAnchoPassthruAPP::fireOnBeforeHeaders(CComPtr<CAnchoProtocolSink> 
   return E_FAIL;
 }
 
-STDMETHODIMP CAnchoPassthruAPP::getDocumentWindowFromSink(CComPtr<CAnchoProtocolSink> aSink, HWND &aWinHWND)
+STDMETHODIMP CAnchoPassthruAPP::getWindowFromSink(CComPtr<CAnchoProtocolSink> aSink, HWND &aWinHWND)
 {
   CComPtr<IWindowForBindingUI> windowForBindingUI;
 
@@ -380,11 +394,10 @@ STDMETHODIMP CAnchoPassthruAPP::StartEx(
   if (!m_BrowserEvents) {
     if (!m_DocumentRecord.window) {
       HWND hwnd = NULL;
-      if FAILED(getDocumentWindowFromSink(pSink, hwnd)) {
+      if FAILED(getWindowFromSink(pSink, hwnd)) {
         return S_OK;
       }
-      m_DocumentRecord = gWindowDocumentMap.get(hwnd);
-      m_Doc = m_DocumentRecord.document;
+      tryToFillDocumentRecord(hwnd);
     }
 
     if (m_DocumentRecord.window) {
@@ -408,6 +421,20 @@ STDMETHODIMP CAnchoPassthruAPP::StartEx(
   }
 
   return S_OK;
+}
+
+void CAnchoPassthruAPP::tryToFillDocumentRecord(HWND aDocWindow)
+{
+  if (!aDocWindow) return;
+
+  m_DocumentRecord = gWindowDocumentMap.get(aDocWindow);
+  if (!m_DocumentRecord.window) {
+    aDocWindow = findParentWindowByClass(aDocWindow, L"TabWindowClass");
+    if (aDocWindow) {
+      m_DocumentRecord = gWindowDocumentMap.get(aDocWindow);
+    }
+  }
+  m_Doc = m_DocumentRecord.getDocument();
 }
 
 //----------------------------------------------------------------------------
@@ -435,7 +462,7 @@ STDMETHODIMP CAnchoPassthruAPP::Continue(PROTOCOLDATA* data)
     if (!m_BrowserEvents) {
       if (!m_DocumentRecord.window) {
         HWND hwnd = NULL;
-        HRESULT hr = getDocumentWindowFromSink(pSink, hwnd);
+        HRESULT hr = getWindowFromSink(pSink, hwnd);
         if (S_FALSE == hr) {
           // Not ready to get the window yet so we'll try again with the next notification.
           if (data->dwState == ANCHO_SWITCH_REDIRECT) {
@@ -444,8 +471,7 @@ STDMETHODIMP CAnchoPassthruAPP::Continue(PROTOCOLDATA* data)
           }
           return S_FALSE;
         }
-        m_DocumentRecord = gWindowDocumentMap.get(hwnd);
-        m_Doc = m_DocumentRecord.document;
+        tryToFillDocumentRecord(hwnd);
       }
 
       if (m_DocumentRecord.window) {
@@ -458,7 +484,7 @@ STDMETHODIMP CAnchoPassthruAPP::Continue(PROTOCOLDATA* data)
 
     {
       CComVariant tmp;
-      m_DocumentRecord.topLevelBrowser->GetProperty(CComBSTR(L"NavigateURL"), &tmp);
+      m_DocumentRecord.topLevelBrowser->GetProperty(CComBSTR(L"_anchoNavigateURL"), &tmp);
       std::wstring navigateUrl = tmp.bstrVal;
 
       CComBSTR topLevelUrl; // = var.bstrVal;
@@ -475,13 +501,11 @@ STDMETHODIMP CAnchoPassthruAPP::Continue(PROTOCOLDATA* data)
       // so we check if the URL of the request matches the URL of the browser to handle
       // that case.
       if (!(pSink->IsFrame()) && !m_IsRefreshingMainFrame) {
-        ATLTRACE(L"CAnchoPassthruAPP - %s is not a frame.\n", bstrUrl);
+        //ATLTRACE(L"CAnchoPassthruAPP - %s is not a frame.\n", bstrUrl);
         return S_OK;
       }
     }
     ATLTRACE(L"CAnchoPassthruAPP - %s is frame.\n", bstrUrl);
-
-    ATLASSERT(m_Doc != NULL);
 
     // Send the event for any redirects that occurred before we had access to the event sink.
     RedirectList::iterator it = m_Redirects.begin();
@@ -497,14 +521,16 @@ STDMETHODIMP CAnchoPassthruAPP::Continue(PROTOCOLDATA* data)
 
       IF_FAILED_RET(m_BrowserEvents->OnFrameStart(bstrUrl, m_IsRefreshingMainFrame ? VARIANT_TRUE : VARIANT_FALSE));
 
-      CComBSTR readyState;
-      m_Doc->get_readyState(&readyState);
-      if (wcscmp(readyState, L"complete") == 0) {
-        IF_FAILED_RET(m_BrowserEvents->OnFrameEnd(bstrUrl, m_IsRefreshingMainFrame ? VARIANT_TRUE : VARIANT_FALSE));
-      }
-      else {
-        m_DocSink = new DocumentSink(this, m_Doc, m_BrowserEvents, bstrUrl, m_IsRefreshingMainFrame);
-        m_DocSink->DispEventAdvise(m_Doc);
+      if (m_Doc) { //in few situations the document is not yet ready
+        CComBSTR readyState;
+        m_Doc->get_readyState(&readyState);
+        if (wcscmp(readyState, L"complete") == 0) {
+          IF_FAILED_RET(m_BrowserEvents->OnFrameEnd(bstrUrl, m_IsRefreshingMainFrame ? VARIANT_TRUE : VARIANT_FALSE));
+        }
+        else {
+          m_DocSink = new DocumentSink(this, m_Doc, m_BrowserEvents, bstrUrl, m_IsRefreshingMainFrame);
+          m_DocSink->DispEventAdvise(m_Doc);
+        }
       }
     }
     else if (data->dwState == ANCHO_SWITCH_REDIRECT) {

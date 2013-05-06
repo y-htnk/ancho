@@ -7,10 +7,12 @@
 struct EInvalidPointer: std::exception { };
 struct ECast: std::exception { };
 struct ENotAnObject: ECast { };
+struct ENotAnArray: ECast { };
 struct ENotAString: ECast { };
 struct ENotAnInt: ECast { };
 struct ENotADouble: ECast { };
 struct ENotABool: ECast { };
+struct ENotIDispatchEx: ECast { };
 struct EFail: std::exception { };
 struct EInvalidArgument: EFail { };
 

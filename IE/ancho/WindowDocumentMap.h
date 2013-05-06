@@ -15,6 +15,18 @@ struct WindowDocumentRecord
   CComPtr<IWebBrowser2> topLevelBrowser;
   CComPtr<IWebBrowser2> browser;
   CComPtr<IHTMLDocument2> document;
+
+
+  CComPtr<IHTMLDocument2> getDocument()
+  {
+    if (!document && topLevelBrowser) {
+      CComPtr<IDispatch> tmp;
+      topLevelBrowser->get_Document(&tmp);
+      CComQIPtr<IHTMLDocument2> doc = tmp;
+      document = doc;
+    }
+    return document;
+  }
 };
 
 
