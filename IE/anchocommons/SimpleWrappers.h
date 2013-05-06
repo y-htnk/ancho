@@ -3,6 +3,7 @@
 #include <map>
 #include <sstream>
 #include <algorithm>
+#include <iterator>
 
 class SimpleJSObject;
 typedef CComObject<SimpleJSObject>  ComSimpleJSObject;
@@ -228,6 +229,82 @@ protected:
 };
 
 //---------------------------------------------------------------------------------------------
+class MemberForwardIterator: public std::iterator<std::forward_iterator_tag, const std::wstring>
+{
+public:
+	static const DWORD ALLOWED_PROPERTY_MASK = fdexPropCanGet | fdexPropCannotCall | fdexPropCannotConstruct | fdexPropCannotSourceEvents;
+	friend class JSValue;
+
+	MemberForwardIterator():mIsValid(false), mObject(NULL){}
+
+	MemberForwardIterator end()const {	return MemberForwardIterator();	}
+	bool operator==(const MemberForwardIterator& aIterator) const
+	{
+		return ((mIsValid && aIterator.mIsValid) && (mCurrentDispid == aIterator.mCurrentDispid))
+			|| (!mIsValid && !aIterator.mIsValid);
+	}
+
+	bool operator!=(const MemberForwardIterator& aIterator) const {	return !(*this == aIterator);	}
+
+	MemberForwardIterator& operator++()
+	{
+    moveToNextMember();
+		return *this;
+	}
+
+	MemberForwardIterator operator++(int)
+	{
+		MemberForwardIterator tmp(*this);
+		operator++();
+		return tmp;
+	}
+
+	reference operator*()
+  {
+    ATLASSERT(mIsValid);
+    return mCurrentMember;
+  }
+
+
+protected:
+
+  void moveToNextMember()
+  {
+    ATLASSERT(mObject);
+    HRESULT hr = S_OK;
+    while (S_OK == (hr = mObject->GetNextDispID(fdexEnumAll, mCurrentDispid, &mCurrentDispid))) {
+			DWORD properties;
+			hr = mObject->GetMemberProperties(mCurrentDispid, grfdexPropAll, &properties);
+
+			//if (S_OK != hr || (ALLOWED_PROPERTY_MASK & properties)) { //properties are always 0 - WHY??
+				break;
+			//}
+		}
+		if (hr == S_OK) {
+			mIsValid = true;
+      CComBSTR name;
+      IF_FAILED_THROW(mObject->GetMemberName(mCurrentDispid, &name));
+      mCurrentMember = name;
+		} else {
+      mIsValid = false;
+    }
+  }
+
+  //Iterator doesn't "own" the object -> we use raw pointer
+	MemberForwardIterator(IDispatchEx *aObject): mCurrentDispid(DISPID_STARTENUM), mObject(aObject), mIsValid(false)
+	{
+		if (!mObject) { //This iterator will remain invalid
+			return;
+		}
+		moveToNextMember();
+	}
+	DISPID				mCurrentDispid;
+	std::wstring	mCurrentMember;
+	IDispatchEx 	*mObject;
+	bool					mIsValid;
+};
+
+
 #define JS_OBJECT_TO_TYPE(TYPENAME, NAME, VARTYPE, EXCEPTION)\
   TYPENAME to##NAME(){ \
     if (!is##NAME()) { \
@@ -254,6 +331,8 @@ class JSValue
 public:
   friend void swap(JSValue &aVal1, JSValue &aVal2);
 
+  typedef MemberForwardIterator NameIterator;
+
   JSValue() {}
 
   JSValue(const CComVariant &aVariant)
@@ -272,15 +351,34 @@ public:
 #pragma warning( pop )
   JS_OBJECT_TYPE_METHODS(int, Int, INT, VT_I4, ENotAnInt)
   JS_OBJECT_TYPE_METHODS(double, Double, double, VT_R8, ENotADouble)
+  //JS_OBJECT_TYPE_METHODS(CComPtr<IDispatch>, Object, IDispatch*, VT_DISPATCH, ENotAnObject)
 
   void attach(VARIANT &aVariant)
   {
     IF_FAILED_THROW(mCurrentValue.Attach(&aVariant));
   }
 
-  bool isNull()
+  bool isNull()const
   {
     return mCurrentValue.vt == VT_EMPTY;
+  }
+
+  bool isObject()
+  {
+    return mCurrentValue.vt == VT_DISPATCH && !isArray();
+  }
+
+  bool isArray()
+  {
+    if (mCurrentValue.vt != VT_DISPATCH) {
+      return false;
+    }
+    try {
+      length();
+      return true;
+    } catch (ENotAnArray &) {
+      return false;
+    }
   }
 
   JSValue & operator=(JSValue aVal)
@@ -300,6 +398,55 @@ public:
   JSValue
   operator[](const std::wstring &aProperty)
   {
+    return JSValue(getMember(aProperty));
+  }
+
+  NameIterator memberNames()
+  {
+    if (mCurrentValue.vt != VT_DISPATCH) {
+      ANCHO_THROW(ENotAnObject());
+    }
+    CComQIPtr<IDispatchEx> dispex = mCurrentValue.pdispVal;
+    if (!dispex) {
+      ANCHO_THROW(ENotIDispatchEx());
+    }
+    return NameIterator(dispex);
+  }
+
+  template<typename TVisitor>
+  typename TVisitor::result_type applyVisitor(TVisitor aVisitor)
+  {
+    switch (mCurrentValue.vt) {
+    case VT_BOOL:
+      return aVisitor(toBool());
+    case VT_I4:
+      return aVisitor(toInt());
+    case VT_R8:
+      return aVisitor(toDouble());
+    case VT_BSTR:
+      return aVisitor(toString());
+    default:
+      return aVisitor(*this);
+    }
+  }
+
+  size_t length()
+  {
+    CComVariant len = getMember(L"length");
+    HRESULT hr = len.ChangeType(VT_I4);
+    if (FAILED(hr)) {
+      ANCHO_THROW(ENotAnArray());
+    }
+    return static_cast<size_t>(len.lVal);
+  }
+
+  size_t size()
+  {
+    return length();
+  }
+protected:
+  CComVariant getMember(const std::wstring &aProperty)
+  {
     if (mCurrentValue.vt != VT_DISPATCH) {
       ANCHO_THROW(ENotAnObject());
     }
@@ -309,16 +456,16 @@ public:
     DISPID did = 0;
     LPOLESTR lpNames[] = {(LPOLESTR)aProperty.c_str()};
     if (FAILED(mCurrentValue.pdispVal->GetIDsOfNames(IID_NULL, lpNames, 1, LOCALE_USER_DEFAULT, &did))) {
-      return JSValue();
+      return CComVariant();
     }
 
     CComVariant result;
     DISPPARAMS params = {0};
     IF_FAILED_THROW(mCurrentValue.pdispVal->Invoke(did, IID_NULL, LOCALE_USER_DEFAULT, DISPATCH_PROPERTYGET, &params, &result, NULL, NULL));
 
-    return JSValue(result);
+    return result;
   }
-protected:
+
   CComVariant mCurrentValue;
 };
 
@@ -326,3 +473,4 @@ inline void swap(JSValue &aVal1, JSValue &aVal2)
 {
   std::swap(aVal1.mCurrentValue, aVal2.mCurrentValue);
 }
+

@@ -1,6 +1,11 @@
 (function() {
 
-  // TODO: implement me!
+/*
+   Client portion of Debugger API that provides access to events and methods.
+   The actual implementation runs in the background window of the extension and
+   fires the events. For the implementation, please see httpRequestObserver.js.
+*/
+
 
   var Cc = Components.classes;
   var Ci = Components.interfaces;
@@ -8,27 +13,46 @@
 
   Cu.import('resource://gre/modules/Services.jsm');
 
-  var Utils = require('./utils');
   var Event = require('./event');
+  var Utils = require('./utils');
+  var observer = require('./httpRequestObserver');
 
-  function DebuggerAPI(state, window) {
+  var DebuggerAPI = function(state, window) {
     this._state = state;
     this._tab = Utils.getWindowId(window);
-    // Event handlers
-    this.onEvent = new Event(window, this._tab, this._state, 'debugger.event');
+
+    this.onEvent  = new Event(window, this._tab, this._state, 'debugger.event');
     this.onDetach = new Event(window, this._tab, this._state, 'debugger.detach');
-  }
+  };
 
   DebuggerAPI.prototype = {
-    attach: function(target, requiredVersion, /* optional */ callback) {
+
+    attach: function(target, requiredVersion, callback) {
+      // notify observer
+      observer.debuggerAttach(target, requiredVersion);
+      if (callback) {
+        callback();
+      }
     },
 
-    detach: function(target, /* optional */ callback) {
+    detach: function(target, callback) {
+      // notify observer
+      observer.debuggerDetach(target);
+      if (callback) {
+        callback();
+      }
     },
 
-    sendCommand: function(target, method, /* optional */ commandParams,
-      /* optional */ callback) {
+    sendCommand: function(target, method, commandParams, callback) {
+      // shift args if commandParams skipped
+      if (typeof(commandParams) === 'function') {
+        callback = commandParams;
+        commandParams = null;
+      }
+      // notify observer
+      observer.debuggerSendCommand(target, method, commandParams, callback);
     }
+
   };
 
   module.exports = DebuggerAPI;

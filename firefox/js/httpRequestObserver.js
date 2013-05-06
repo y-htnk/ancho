@@ -15,14 +15,17 @@
 
   var HTTP_STATUS_NOT_MODIFIED = 304;
 
+  var DEBUGGER_SEND_ALL = -1;  // tab id in case we want to send notifications
+                               // regardless of tab id
+
   var BinaryInputStream = Components.Constructor('@mozilla.org/binaryinputstream;1', 'nsIBinaryInputStream');
   var StorageStream = Components.Constructor('@mozilla.org/storagestream;1', 'nsIStorageStream');
   var BinaryOutputStream = Components.Constructor('@mozilla.org/binaryoutputstream;1', 'nsIBinaryOutputStream');
 
 
-  /* Exported class: WebRequestSingleton */
+  /* Exported class: HttpRequestObserver */
 
-  function WebRequestSingleton(state, window) {
+  function HttpRequestObserver(state, window) {
     this._state = state;
     this._tab = Utils.getWindowId(window);
 
@@ -34,6 +37,7 @@
         Cc["@mozilla.org/network/http-activity-distributor;1"]
         .getService(Ci.nsIHttpActivityDistributor);
 
+    // webRequest API
     this.onCompleted = new Event(window, this._tab, this._state, 'webRequest.completed');
     this.onHeadersReceived = new Event(window, this._tab, this._state, 'webRequest.headersReceived');
     this.onBeforeRedirect = new Event(window, this._tab, this._state, 'webRequest.beforeRedirect');
@@ -44,6 +48,11 @@
     this.onSendHeaders = new Event(window, this._tab, this._state, 'webRequest.sendHeaders');
     this.onBeforeRequest = new Event(window, this._tab, this._state, 'webRequest.beforeRequest');
 
+    // debugger API
+    this.onEvent  = new Event(window, this._tab, this._state, 'debugger.event');
+    this.onDetach = new Event(window, this._tab, this._state, 'debugger.detach');
+
+    //
     Services.obs.addObserver(this, HTTP_ON_MODIFY_REQUEST, false);
     Services.obs.addObserver(this, HTTP_ON_EXAMINE_RESPONSE, false);
     Services.obs.addObserver(this, HTTP_ON_EXAMINE_CACHED_RESPONSE, false);
@@ -60,7 +69,7 @@
   };
 
   /* nsIObserver::observe() */
-  WebRequestSingleton.prototype.observe = function(aSubject, aTopic, aData) {
+  HttpRequestObserver.prototype.observe = function(aSubject, aTopic, aData) {
 
     var httpChannel = aSubject.QueryInterface(Ci.nsIHttpChannel);
 
@@ -78,7 +87,7 @@
     try {
       win = loadContext.associatedWindow;
     } catch (e) {
-      dump('Warning: ' + e + '\n');
+      dump('Warning: ' + JSON.stringify(e) + '\n');
       return;
     }
 
@@ -91,15 +100,95 @@
   };
 
   /* nsIHttpActivityObserver::observeActivity() */
-  WebRequestSingleton.prototype.observeActivity = function(aHttpChannel,
+  HttpRequestObserver.prototype.observeActivity = function(aHttpChannel,
       aActivityType, aActivitySubtype, aTimestampMicrosecs, aExtraSizeData,
       aExtraStringData) {
 
-    // FIXME TODO : implement me
-    // dump('WebRequestSingleton::observeActivity()\n');
+    var url = aHttpChannel.URI.spec;
+    var requestData = this._getRequestByUri(Utils.removeFragment(url));
+    if (!requestData) {
+      return;
+    }
+
+    var nsIHttpActivityObserver = Ci.nsIHttpActivityObserver;
+    var nsISocketTransport = Ci.nsISocketTransport;
+
+    // we want milliseconds, not microseconds
+    var aTimestamp = Math.round(aTimestampMicrosecs / 1000);
+
+    switch (aActivitySubtype) {
+      case nsISocketTransport.STATUS_RESOLVING:
+        requestData.timing.resolving = aTimestamp;
+        break;
+
+      case nsISocketTransport.STATUS_CONNECTING_TO:
+        requestData.timing.connecting = aTimestamp;
+        break;
+
+      case nsISocketTransport.STATUS_CONNECTED_TO:
+        requestData.timing.connected = aTimestamp;
+        break;
+
+      case nsISocketTransport.STATUS_SENDING_TO:
+        if (!requestData.timing.sending) {
+          requestData.timing.sending = aTimestamp;
+        }
+        break;
+
+      case nsISocketTransport.STATUS_WAITING_FOR:
+        requestData.timing.waiting = aTimestamp;
+        break;
+
+      case nsISocketTransport.STATUS_RECEIVING_FROM:
+        if (!requestData.timing.receiving) {
+          requestData.timing.receiving = aTimestamp;
+        }
+        break;
+
+      case nsIHttpActivityObserver.ACTIVITY_SUBTYPE_TRANSACTION_CLOSE:
+        requestData.timing.end = aTimestamp;
+        break;
+
+      case nsIHttpActivityObserver.ACTIVITY_SUBTYPE_REQUEST_HEADER:
+        var pos = aExtraStringData.indexOf('\n');
+        if (pos !== -1) {
+          requestData.requestLine = aExtraStringData.substr(0, pos-1);
+        } else {
+          requestData.requestLine = aExtraStringData;
+        }
+        break;
+
+      case nsIHttpActivityObserver.ACTIVITY_SUBTYPE_RESPONSE_HEADER:
+        var pos = aExtraStringData.indexOf('\n');
+        if (pos !== -1) {
+          requestData.responseLine = aExtraStringData.substr(0, pos-1);
+        } else {
+          requestData.responseLine = aExtraStringData;
+        }
+        break;
+
+      /*
+      case nsIHttpActivityObserver.ACTIVITY_SUBTYPE_RESPONSE_COMPLETE:
+        awlog.debug("ACTIVITY_SUBTYPE_RESPONSE_COMPLETE (" + request.URISpec
+            + "): " + aTimestamp);
+        // Received a complete HTTP response.
+        request.bytesReceived += aExtraSizeData;
+        request.data.top.bytesReceived += aExtraSizeData;
+        awlog.debug("EXTRA STRING DATA (resp complete): " + aExtraStringData);
+        break;
+
+
+      case nsIHttpActivityObserver.ACTIVITY_SUBTYPE_REQUEST_BODY_SENT:
+        awlog.debug("ACTIVITY_SUBTYPE_REQUEST_BODY_SENT (" + request.URISpec
+            + "): " + aTimestamp);
+        break;
+      */
+      default:
+        break;
+    }
   };
 
-  WebRequestSingleton.prototype._getFrameIds = function(win) {
+  HttpRequestObserver.prototype._getFrameIds = function(win) {
     var self = this;
     // helper functions
     // for inner window
@@ -108,7 +197,7 @@
         try {
           win.frameElement.__apicaWID = self._state.getGlobalId('webRequest.frameId');
         } catch (e) {
-          dump('' + e + '\n');
+          dump('Warning: ' + JSON.stringify(e) + '\n');
         }
       }
       return win.frameElement.__apicaWID;
@@ -133,7 +222,7 @@
     return res;
   };
 
-  WebRequestSingleton.prototype.handleOnModifyRequest = function(topic, httpChannel, win) {
+  HttpRequestObserver.prototype.handleOnModifyRequest = function(topic, httpChannel, win) {
     var url = httpChannel.URI.spec;
     var referrer  = httpChannel.referrer ? httpChannel.referrer.spec : '';
     var tabId = win.top ? Utils.getWindowId(win.top) : -1;
@@ -146,6 +235,13 @@
                     : this._state.getGlobalId('webRequest.requestId');
 
     var type = 'other';
+
+    // set extra headers (debugger API)
+    if (_ref = __debuggerGetProperty(tabId, 'Network.setExtraHTTPHeaders')) {
+      for (var key in _ref) {
+        httpChannel.setRequestHeader(key, _ref[key], false);
+      }
+    }
 
     // is it main request of the tab?
     if (loadFlags & Ci.nsIChannel.LOAD_DOCUMENT_URI) {
@@ -192,29 +288,57 @@
       frameId: frameIds.me,
       parentFrameId: frameIds.parent,
       type : type,
-      method: httpChannel.requestMethod
+      method: httpChannel.requestMethod,
+      timing: {}
     };
+
+    params.timing.started = params.timeStamp;
 
     // store the request
     this._setRequest(tabId, Utils.removeFragment(url), params);
 
     // helper function: test if the request should be cancelled,
     // if so: cancel and remove the request from the request list
-    function resultCancelledRequest(results) {
+    function resultCancelledRequest(results, context) {
       for (var i = 0; i < results.length; i++) {
         if (results[i] && results[i].cancel) {
           httpChannel.cancel(Cr.NS_BINDING_ABORTED);
-          this._setRequest(tabId, Utils.removeFragment(url), null);
-          // TODO: fire onErrorOccurred ?
+          context._setRequest(tabId, Utils.removeFragment(url), null);
+          params.error = 'REQUEST_CANCELLED_BY_EXTENSION';
+          context.onErrorOccurred.fire([ params ]);
+          if (__debuggerIsMonitored(tabId, url)) {
+            var data = {
+              timestamp: params.timeStamp / 1000,
+              requestId: params.requestId
+            };
+            context.onEvent.fire([ { tabId: tabId }, 'Network.loadingFailed', data ]);
+          }
           return true;
         }
       }
       return false;
     }
 
+    // fire "Network.requestWillBeSent"
+    if (__debuggerIsMonitored(tabId, url)) {
+      var data = {
+        timestamp: params.timeStamp / 1000,
+        requestId: params.requestId,
+        request: {
+          url: url,
+          method: params.method
+        },
+        // NON-STANDARD NOTIFICATION PROPERTIES BORROWED FROM onBeforeRequest
+        type: params.type,
+        parentFrameId: params.parentFrameId,
+        frameId: params.frameId
+      };
+      this.onEvent.fire([ { tabId: tabId }, 'Network.requestWillBeSent', data ]);
+    }
+
     // fire onBeforeRequest; TODO: implement redirection
     var results = this.onBeforeRequest.fire([ params ]);
-    if (resultCancelledRequest(results)) {
+    if (resultCancelledRequest(results, this)) {
       return;
     }
 
@@ -225,7 +349,7 @@
     params.timeStamp = (new Date()).getTime();
     params.requestHeaders = visitor.headers;
     results = this.onBeforeSendHeaders.fire([ params ]);
-    if (resultCancelledRequest(results)) {
+    if (resultCancelledRequest(results, this)) {
       return;
     }
 
@@ -252,8 +376,8 @@
       });
     }
 
-    // dispatching dedicated listening thread for in case the request
-    // will be served completely from cache
+    // dispatching dedicated listening thread for onStopRequest
+    // and onDataAvailable events
     var mainThread = Cc["@mozilla.org/thread-manager;1"].getService().mainThread;
     mainThread.dispatch(new ListenerThread({
         id: tabId,
@@ -264,7 +388,25 @@
     );
   };
 
-  WebRequestSingleton.prototype.handleOnExamineResponse = function(topic, httpChannel, win) {
+  HttpRequestObserver.prototype._transformHeaders = function(headers) {
+    var result = {};
+    for (var i = 0; i < headers.length; i++) {
+      var item = headers[i];
+      result[item.name] = item.value;
+    }
+    return result;
+  };
+
+  HttpRequestObserver.prototype._headers2line = function(firstLine, headers) {
+    var line = firstLine + '\r\n';
+    for (var i = 0; i < headers.length; i++) {
+      var item = headers[i];
+      line = line + item.name + ': ' + item.value + '\r\n';
+    }
+    return line + '\r\n';
+  };
+
+  HttpRequestObserver.prototype.handleOnExamineResponse = function(topic, httpChannel, win) {
     var url = httpChannel.URI.spec;
     var tabId = win.top ? Utils.getWindowId(win.top) : -1;
 
@@ -274,22 +416,108 @@
       return;
     }
 
-    var visitor = new HttpHeaderVisitor();
-    httpChannel.visitResponseHeaders(visitor);
+    var responseVisitor = new HttpHeaderVisitor();
+    httpChannel.visitResponseHeaders(responseVisitor);
+
+    var requestVisitor = new HttpHeaderVisitor();
+    httpChannel.visitRequestHeaders(requestVisitor);
 
     var statusCode = httpChannel.responseStatus;
     var statusText = httpChannel.responseStatusText;
 
     params.url = url;
     params.timeStamp = (new Date()).getTime();
-    params.responseHeaders = visitor.headers;
+    params.responseHeaders = responseVisitor.headers;
     params.statusLine = '' + statusCode + ' ' + statusText;
 
-    // fire onHeadersReceived; TODO: implement changing the response headers
+    // fire onHeadersReceived
     var results = this.onHeadersReceived.fire([ params ]);
 
     params.statusCode = statusCode;
     params.fromCache = (HTTP_ON_EXAMINE_CACHED_RESPONSE === topic);
+
+    if (__debuggerIsMonitored(tabId, url)) {
+      var data = {
+        timestamp: params.timeStamp / 1000,
+        requestId: params.requestId
+      };
+      if (params.fromCache) {
+        this.onEvent.fire([ { tabId: tabId }, 'Network.requestServedFromCache', data ]);
+      }
+      data.type = params.type;
+      if ('xmlhttprequest' === data.type) {
+        data.type = 'XHR';
+      }
+      data.response = {
+        requestHeaders: this._transformHeaders(requestVisitor.headers),
+        headers: this._transformHeaders(responseVisitor.headers),
+        mimeType: httpChannel.getResponseHeader('Content-Type') || 'text/html',
+        status: statusCode,
+        statusText: statusText,
+        timing: {
+          requestTime: params.timing.started / 1000,
+          dnsStart: -1,
+          dnsEnd: -1,
+          connectStart: -1,
+          connectEnd: -1,
+          sendStart: -1,
+          sendEnd: -1,
+          receiveHeadersEnd: -1,
+          // we don't use / set:
+          proxyStart: -1,
+          proxyEnd: -1,
+          sslStart: -1,
+          sslEnd: -1
+        },
+        connectionReused: true
+      };
+
+      // NON-STANDARD NOTIFICATION PROPERTIES:
+      data.request = {
+        url: params.url
+      };
+      // ---
+
+      if (params.timing.resolving || params.timing.connecting) {
+        data.response.connectionReused = false;
+      }
+
+      if (params.timing.resolving) {
+        data.response.timing.dnsStart = params.timing.resolving - params.timing.started;
+      }
+
+      if (params.timing.connecting) {
+        data.response.timing.dnsEnd = data.response.timing.connectStart =
+          params.timing.connecting - params.timing.started;
+      }
+
+      if (params.timing.connected) {
+        data.response.timing.connectEnd = params.timing.connected - params.timing.started;
+      }
+
+      if (params.timing.sending) {
+        data.response.timing.sendStart = params.timing.sending - params.timing.started;
+      }
+
+      if (params.timing.waiting) {
+        data.response.timing.sendEnd = params.timing.waiting - params.timing.started;
+      }
+
+      if (params.timing.receiving) {
+        data.response.timing.receiveHeadersEnd = params.timing.receiving - params.timing.started;
+      }
+
+      data.response.headersText = this._headers2line(
+        params.responseLine,
+        responseVisitor.headers
+      );
+      data.response.requestHeadersText = this._headers2line(
+        params.requestLine,
+        requestVisitor.headers
+      );
+
+      this.onEvent.fire([ { tabId: tabId }, 'Network.responseReceived', data ]);
+    }
 
     // TODO: get IP address of the remote server
     // params.ip = ???
@@ -316,15 +544,25 @@
   };
 
   // get request-related data
-  WebRequestSingleton.prototype._getRequest = function(tabId, uri) {
+  HttpRequestObserver.prototype._getRequest = function(tabId, uri) {
     if (!(tabId in this._requests)) {
       return null;
     }
     return this._requests[tabId][uri];
   };
 
+  // variation of _getRequest, just we don't know tabId here...
+  HttpRequestObserver.prototype._getRequestByUri = function(uri) {
+    for (var tabId in this._requests) {
+      if (uri in this._requests[tabId]) {
+        return this._requests[tabId][uri];
+      }
+    }
+    return null;
+  };
+
   // store or delete (request === null) request-related data
-  WebRequestSingleton.prototype._setRequest = function(tabId, uri, request) {
+  HttpRequestObserver.prototype._setRequest = function(tabId, uri, request) {
     var tab = this._requests[tabId];
     if (!tab) {
       tab = this._requests[tabId] = {};
@@ -338,7 +576,7 @@
   };
 
   // get (`flag` parameter missing) or set tab flag
-  WebRequestSingleton.prototype._flagTab = function(tabId, flag) {
+  HttpRequestObserver.prototype._flagTab = function(tabId, flag) {
     var tab = this._requests[tabId];
     if (!tab) {
       tab = this._requests[tabId] = {};
@@ -376,7 +614,7 @@
 
   /* ListenerThread */
 
-  // Thread listening on a request, created in WebRequestSingleton::handleOnModifyRequest().
+  // Thread listening on a request, created in HttpRequestObserver::handleOnModifyRequest().
   // It attaches an StreamListener (defined below) to provided HTTP `channel`.
 
   function ListenerThread(requestData, channel) {
@@ -436,6 +674,17 @@
         case Cr.NS_OK:
           // fire onCompleted
           this.requestData.monitor.onCompleted.fire([ data ]);
+          if (__debuggerIsMonitored(data.tabId, data.url)) {
+            var debuggerData = {
+              timestamp: data.timeStamp / 1000,
+              requestId: data.requestId
+            };
+            this.requestData.monitor.onEvent.fire([
+              { tabId: data.tabId },
+              'Network.loadingFinished',
+              debuggerData
+            ]);
+          }
           break;
 
         case Cr.NS_BINDING_REDIRECTED:
@@ -450,6 +699,17 @@
           // (b) how to cover the remaining ones we need.
           data.error = Utils.mapHttpError(statusCode);
           this.requestData.monitor.onErrorOccurred.fire([ data ]);
+          if (__debuggerIsMonitored(data.tabId, data.url)) {
+            var debuggerData = {
+              timestamp: data.timeStamp / 1000,
+              requestId: data.requestId
+            };
+            this.requestData.monitor.onEvent.fire([
+              { tabId: data.tabId },
+              'Network.loadingFailed',
+              debuggerData
+            ]);
+          }
           break;
       }
     }
@@ -460,8 +720,6 @@
   // nsIStreamListener::onDataAvailable
   StreamListener.prototype.onDataAvailable = function(request,
         context, stream, offset, count) {
-    /*
-    dump('+++ StreamListener.onDataAvailable()\n');
 
     var binaryInputStream = new BinaryInputStream();
     var storageStream = new StorageStream();
@@ -476,13 +734,114 @@
 
     this.receivedData.push(data);
 
+    // report count
+    var data = this.requestData.monitor._getRequest(
+        this.requestData.id,
+        this.requestData.uri
+      );
+    if (data) {
+      data.timeStamp = (new Date()).getTime();
+      if (__debuggerIsMonitored(data.tabId, data.url)) {
+        var debuggerData = {
+          timestamp: data.timeStamp / 1000,
+          requestId: data.requestId,
+          encodedDataLength: count
+        };
+        this.requestData.monitor.onEvent.fire([
+          { tabId: data.tabId },
+          'Network.dataReceived',
+          debuggerData
+        ]);
+      }
+    }
+
     // let other listeners use the stream
     var stream = storageStream.newInputStream(0);
-    */
+
     return this.originalListener.onDataAvailable(request, context, stream, offset, count);
   }
 
 
-  module.exports = WebRequestSingleton;
+  //--------------
+  // DEBUGGER API
+  //--------------
+
+  var __debuggerData = {};  // tab id --> debugger data
+
+  // HttpRequestObserver static methods: only for manipulating __debuggerData
+
+  HttpRequestObserver.debuggerAttach = function(target, version) {
+    __debuggerData[target.tabId] = {
+      protocol: version
+    };
+  };
+
+  HttpRequestObserver.debuggerDetach = function(target) {
+    delete __debuggerData[target.tabId];
+    // TODO: fire chrome.debugger.onDetach
+  };
+
+  HttpRequestObserver.debuggerSendCommand = function(target, method, commandParams, callback) {
+    var obj = __debuggerData[target.tabId];
+    if (!obj) {
+      return;  // not attached
+    }
+    var invokeCb = true;
+    switch (method) {
+      case 'Network.enable':
+        obj.networkMonitor = true;
+        if (commandParams && commandParams.exclude) {
+          obj.exclude = commandParams.exclude;
+        }
+        break;
+      case 'Network.disable':
+        obj.networkMonitor = false;
+        delete obj.exclude;
+        break;
+      case 'Network.setExtraHTTPHeaders':
+        obj.httpHeaders = commandParams;
+        break;
+      default:
+        invokeCb = false;
+        obj[method] = obj[method] || [];
+        obj[method].push({
+          data: commandParams,
+          cb: callback
+        });
+        break;
+    }
+    if (invokeCb && typeof(callback) === 'function') {
+      callback();
+    }
+  };
+
+  // helper functions (for DEBUGGER_SEND_ALL and exclude)
+
+  function __debuggerGetProperty(tabId, propertyName) {
+    var debuggerTabId = DEBUGGER_SEND_ALL in __debuggerData ?  DEBUGGER_SEND_ALL : tabId;
+    return (__debuggerData[debuggerTabId] && __debuggerData[debuggerTabId][propertyName]);
+  }
+
+  function __debuggerIsMonitored(tabId, url) {
+    var debuggerTabId = DEBUGGER_SEND_ALL in __debuggerData ?  DEBUGGER_SEND_ALL : tabId;
+    var _ref = __debuggerData[debuggerTabId];
+    if (!_ref || !_ref.networkMonitor) {
+      return false;
+    }
+    if (_ref.exclude) {
+      for (var i = 0; i < _ref.exclude.length; i++) {
+        if (0 === url.indexOf(_ref.exclude[i])) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  //-------------
+  // EXPORT PART
+  //-------------
+
+  module.exports = HttpRequestObserver;
 
 }).call(this);

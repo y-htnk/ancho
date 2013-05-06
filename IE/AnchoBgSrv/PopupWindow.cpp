@@ -114,28 +114,32 @@ struct OnClickFunctor
     if (FAILED(hr) || !htmlElement) {
       return;
     }
+    //check if we have anchor - if not try its parents
+    CComQIPtr<IHTMLAnchorElement> anchor = htmlElement;
+    while (htmlElement && !anchor) {
+      CComQIPtr<IHTMLElement> tmpElement;
+      hr = htmlElement->get_parentElement(&tmpElement);
+      if (FAILED(hr)) {
+        return;
+      }
+      anchor = htmlElement = tmpElement;
+    }
 
-    CComBSTR hrefAttr(L"href");
-    CComVariant attrValue;
-    hr = htmlElement->getAttribute(hrefAttr, 0, &attrValue);
+    if (!anchor) {
+        return;
+    }
+    CComBSTR hrefValue(L"href");
+    hr = anchor->get_href(&hrefValue);
     if (FAILED(hr)) {
       return;
     }
-    CComBSTR tagName;
-    hr = htmlElement->get_tagName(&tagName);
-    if (FAILED(hr)) {
-      return;
-    }
 
-    if ((tagName == L"A" || tagName == L"a") && attrValue.vt == VT_BSTR && attrValue.bstrVal) {
-      htmlEvent->put_returnValue(CComVariant(false));
-
-      //TODO - find better way to pass parameters after refactoring
-      CComPtr<ComSimpleJSObject> properties;
-      SimpleJSObject::createInstance(properties);
-      properties->setProperty(L"url", CComVariant(attrValue));
-      mWin->mService->createTabImpl(CIDispatchHelper(properties), CAnchoAddonService::ATabCreatedCallback::Ptr(), false);
-    }
+    htmlEvent->put_returnValue(CComVariant(false));
+    //TODO - find better way to pass parameters after refactoring
+    CComPtr<ComSimpleJSObject> properties;
+    SimpleJSObject::createInstance(properties);
+    properties->setProperty(L"url", CComVariant(hrefValue));
+    mWin->mService->createTabImpl(CIDispatchHelper(properties), CAnchoAddonService::ATabCreatedCallback::Ptr(), false);
   }
   CPopupWindow *mWin;
   //CComPtr<IWebBrowser2> mWebBrowser;

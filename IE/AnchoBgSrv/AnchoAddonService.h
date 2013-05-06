@@ -13,6 +13,51 @@
 #include "IECookieManager.h"
 #include "CommandQueue.h"
 
+
+#include <Exceptions.h>
+#include <SimpleWrappers.h>
+#include <IPCHeartbeat.h>
+
+#include "AnchoBackgroundServer/AsynchronousTaskManager.hpp"
+#include "AnchoBackgroundServer/COMConversions.hpp"
+#include "AnchoBackgroundServer/JavaScriptCallback.hpp"
+
+struct TestTask
+{
+	typedef int result_type;
+
+  TestTask()
+  {}
+
+	TestTask(AnchoBackgroundServer::JSVariant aObject, AnchoBackgroundServer::JavaScriptCallback<fusion::vector<std::wstring, int>,void> aCallback): mObject(aObject), mCallback(aCallback)
+	{
+		ATLTRACE("OK");
+	}
+
+  /*TestTask(TestTask &&aTask)
+  {
+    ATLTRACE("MOVE CONSTRUCTOR");
+  }*/
+
+	int operator()()
+	{
+    CoInitializeEx(NULL, COINIT_MULTITHREADED);
+		ATLTRACE(L"TEST TASK CALLED\n");
+		//CComBSTR pom;
+		//HRESULT hr = mObject.Get<CComBSTR, VT_BSTR, BSTR>(L"a", pom);
+    try {
+
+      mCallback(fusion::vector<std::wstring, int>(L"TEST",2));
+    } catch (...) {
+      ATLTRACE(L"TEST TASK FAILED\n");
+    }
+		return 0;
+	}
+	AnchoBackgroundServer::JSVariant mObject;
+	AnchoBackgroundServer::JavaScriptCallback<fusion::vector<std::wstring, int>,void> mCallback;
+};
+
+
 #if defined(_WIN32_WCE) && !defined(_CE_DCOM) && !defined(_CE_ALLOW_SINGLE_THREADED_OBJECTS_IN_MTA)
 #error "Single-threaded COM objects are not properly supported on Windows CE platform, such as the Windows Mobile platforms that do not include full DCOM support. Define _CE_ALLOW_SINGLE_THREADED_OBJECTS_IN_MTA to force ATL to support creating single-thread COM object's and allow use of it's single-threaded COM object implementations. The threading model in your rgs file was set to 'Free' as that is the only threading model supported in non DCOM Windows CE platforms."
 #endif
@@ -184,11 +229,18 @@ public:
   STDMETHOD(setBrowserActionUpdateCallback)(INT aTabId, LPDISPATCH aBrowserActionUpdateCallback);
   STDMETHOD(browserActionNotification)();
 
-  STDMETHOD(testFunction(IDispatch** ppVal))
+  STDMETHOD(testFunction)(LPDISPATCH aObject, LPDISPATCH aCallback)
   {
     //ATLTRACE(L"TEST FUNCTION -----------------\n");
-
+    BEGIN_TRY_BLOCK;
+    CComQIPtr<IDispatchEx> tmp(aObject);
+    if (tmp && aCallback) {
+      AnchoBackgroundServer::JSVariant object = AnchoBackgroundServer::convertToJSVariant(*tmp);
+      AnchoBackgroundServer::JavaScriptCallback<fusion::vector<std::wstring, int>, void> callback(aCallback);
+      mAsyncTaskManager.addTask(TestTask(object, callback));
+    }
     return S_OK;
+    END_TRY_BLOCK_CATCH_TO_HRESULT;
   }
   // -------------------------------------------------------------------------
   // IAnchoAddonService methods. See .idl for description.
@@ -297,6 +349,8 @@ private:
   FrameTabToTabIDMap            m_FrameTabIds;
   CommandQueue                  m_WebBrowserPostInitTasks;
   ServiceTimer                  mBHOHeartbeatTimer;
+
+  AnchoBackgroundServer::AsynchronousTaskManager mAsyncTaskManager;
 
   // Path to this exe and also to magpie.
   CString                       m_sThisPath;

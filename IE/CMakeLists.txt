@@ -4,11 +4,27 @@ project (AnchoFramework)
 add_definitions(-DUNICODE -D_UNICODE)
 option(DISABLE_REGISTRATION "Disable registration" OFF)
 
+#-----------------------------------------
+if(NOT BOOST_ROOT)
+  set(BOOST_ROOT "BOOST_ROOT-NOT_FOUND" CACHE PATH "Where you installed boost?")
+endif(NOT BOOST_ROOT)
+set(Boost_USE_STATIC_LIBS ON)
+set(Boost_USE_MULTITHREADED ON) 
+set(Boost_USE_STATIC_RUNTIME OFF)
+find_package(Boost REQUIRED COMPONENTS filesystem thread)
+
+if(Boost_FOUND)
+  include_directories(${Boost_INCLUDE_DIRS})
+  link_directories(${Boost_LIBRARY_DIRS})
+  add_definitions(-DBOOST_THREAD_VERSION=3 -DBOOST_RESULT_OF_USE_TR1 -DBOOST_NO_RVALUE_REFERENCES -DBOOST_NO_CXX11_RVALUE_REFERENCES)
+endif(Boost_FOUND)
+
 option(ANCHO_WTL_SEARCH "Whether cmake should look for the WTL" OFF)
 if(${ANCHO_WTL_SEARCH})
   find_path(WTL_INCLUDE_DIR "atlapp.h")
   include_directories(${WTL_INCLUDE_DIR})
 endif(${ANCHO_WTL_SEARCH})
+#-----------------------------------------
 
 
 add_subdirectory(libbhohelper)
