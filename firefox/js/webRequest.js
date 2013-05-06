@@ -3,7 +3,7 @@
 /*
    Client portion of WebRequest API that provides access to events and methods.
    The actual implementation runs in the background window of the extension and
-   fires the events. For the implementation, please see webRequestSingleton.js.
+   fires the events. For the implementation, please see httpRequestObserver.js.
 */
 
 

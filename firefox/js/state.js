@@ -4,7 +4,7 @@
   var Cu = Components.utils;
 
   var getWindowId = require('./utils').getWindowId;
-  var WebRequestSingleton = require('./webRequestSingleton');
+  var HttpRequestObserver = require('./httpRequestObserver');
 
   function EventDispatcher() {
     this._listeners = {};
@@ -98,7 +98,7 @@
 
     startSingletonAPIs: function(window) {
       this.backgroundWindow = window;
-      new WebRequestSingleton(this, window);
+      new HttpRequestObserver(this, window);
     }
   };
 
