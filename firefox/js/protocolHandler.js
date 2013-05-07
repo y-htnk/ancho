@@ -26,11 +26,6 @@
   }
 
   function AnchoProtocolHandler() {
-    this.privilegedURLs = ['/' + config.backgroundPage];
-    if (config.browser_action && config.browser_action.default_popup) {
-      this.privilegedURLs.push('/' + config.browser_action.default_popup);
-    }
-    // TODO: page action
   }
 
   AnchoProtocolHandler.prototype = {
@@ -55,8 +50,8 @@
       let channel = NetUtil.newChannel(this._mapToFileURI(aURI), null, null);
       channel.originalURI = aURI;
 
-      if (this.privilegedURLs.indexOf(aURI.path) !== -1) {
-        // Use the system principal for the channel.
+      if (/.[^?]\.html?(\?.*)?$/.test(aURI.path)) {
+        // Use the system principal for HTML pages.
         channel.owner = Services.scriptSecurityManager.getSystemPrincipal();
       }
       return channel;
