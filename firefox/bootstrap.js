@@ -69,6 +69,12 @@ function setResourceSubstitution(addon) {
   resourceProtocol.setSubstitution('ancho', addon.getResourceURI('/'));
 }
 
+function resetResourceSubstitution() {
+  var resourceProtocol = Services.io.getProtocolHandler('resource').
+    QueryInterface(Ci.nsIResProtocolHandler);
+  resourceProtocol.setSubstitution('ancho', null);
+}
+
 function loadConfig(addon, firstRun) {
   // Load the manifest
   Cu.import('resource://ancho/modules/Require.jsm');
@@ -184,6 +190,7 @@ function startup(data, reason) {
 // When the extension is deactivated:
 //
 function shutdown(data, reason) {
+  resetResourceSubstitution();
   closeStorageConnection();
   unregisterComponents();
   releaseBackground();
