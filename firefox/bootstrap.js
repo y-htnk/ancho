@@ -173,8 +173,6 @@ function closeStorageConnection() {
 // When the extension is activated:
 //
 function startup(data, reason) {
-  dump('\nAncho: starting up ...\n\n');
-
   AddonManager.getAddonByID(EXTENSION_ID, function(addon) {
     setResourceSubstitution(addon);
     loadConfig(addon, (reason === ADDON_INSTALL || reason === ADDON_ENABLE));
@@ -186,8 +184,6 @@ function startup(data, reason) {
 // When the extension is deactivated:
 //
 function shutdown(data, reason) {
-  dump('\nAncho: shutting down ...\n\n');
-
   closeStorageConnection();
   unregisterComponents();
   releaseBackground();

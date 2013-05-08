@@ -1,6 +1,18 @@
 (function() {
+  var Cc = Components.classes;
+  var Ci = Components.interfaces;
+  var Cu = Components.utils;
+
+  Cu.import('resource://gre/modules/Services.jsm');
 
   function ConsoleAPI(state, contentWindow) {
+    try {
+      this.debugEnabled = Services.prefs.getBoolPref('extensions.ancho@salsitasoft.com.loggingEnabled');
+    }
+    catch(e) {
+      this.debugEnabled = false;
+    }
+    // TODO: Preference observer.
   }
 
   ConsoleAPI.prototype = {
@@ -23,9 +35,11 @@
     },
 
     debug: function() {
-      dump('Debug: ');
-      dump(this._toString.apply(this, arguments));
-      dump('\n');
+      if (this.debugEnabled) {
+        dump('Debug: ');
+        dump(this._toString.apply(this, arguments));
+        dump('\n');
+      }
     },
 
     _toString: function(args) {
