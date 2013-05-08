@@ -6,7 +6,13 @@
   Cu.import('resource://gre/modules/Services.jsm');
 
   function ConsoleAPI(state, contentWindow) {
-    this.debugEnabled = true;
+    try {
+      this.debugEnabled = Services.prefs.getBoolPref('extensions.ancho@salsitasoft.com.loggingEnabled');
+    }
+    catch(e) {
+      this.debugEnabled = false;
+    }
+    // TODO: Preference observer.
   }
 
   ConsoleAPI.prototype = {
