@@ -111,6 +111,8 @@
       hbox.setAttribute('hidden', 'true');
       panel.appendChild(hbox);
 
+      // Catch keypresses that propagate up to the panel so that they don't get processed
+      // by the toolbar button.
       panel.addEventListener('keypress', function(event) {
         event.stopPropagation();
       }, false);
