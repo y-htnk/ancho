@@ -111,6 +111,10 @@
       hbox.setAttribute('hidden', 'true');
       panel.appendChild(hbox);
 
+      panel.addEventListener('keypress', function(event) {
+        event.stopPropagation();
+      }, false);
+
       var self = this;
       toolbarButton.addEventListener('click', function(event) { self.clickHandler(event); }, false);
       this.setIcon(window, { path: iconPath });
