@@ -173,7 +173,15 @@ function closeStorageConnection() {
   var extensionState = require('./js/state');
   if (extensionState.storageConnection) {
     extensionState.storageConnection.asyncClose();
+    extensionState.storageConnection = null;
   }
+}
+
+// Required functions for bootstrapped extensions.
+function install(data, reason) {
+}
+
+function uninstall(data, reason) {
 }
 
 // When the extension is activated:
@@ -190,7 +198,6 @@ function startup(data, reason) {
 // When the extension is deactivated:
 //
 function shutdown(data, reason) {
-  resetResourceSubstitution();
   closeStorageConnection();
   unregisterComponents();
   releaseBackground();
@@ -199,4 +206,7 @@ function shutdown(data, reason) {
   // Unload the modules so that we will load new versions if the add-on is installed again.
   Cu.unload('resource://ancho/modules/Require.jsm');
   Cu.unload('resource://ancho/modules/External.jsm');
+
+  // Get rid of the resource package substitution.
+  resetResourceSubstitution();
 }

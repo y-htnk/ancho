@@ -59,8 +59,7 @@
     this._httpActivityDistributor.addObserver(this);
 
     var self = this;
-    window.addEventListener('unload', function() {
-      window.removeEventListener('unload', arguments.callee, false);
+    state.registerUnloader(window, function() {
       Services.obs.removeObserver(self, HTTP_ON_MODIFY_REQUEST);
       Services.obs.removeObserver(self, HTTP_ON_EXAMINE_RESPONSE);
       Services.obs.removeObserver(self, HTTP_ON_EXAMINE_CACHED_RESPONSE);
