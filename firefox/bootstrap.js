@@ -158,11 +158,13 @@ function registerComponents(addon) {
   protocolHandler.registerExtensionURI('ancho', addon.getResourceURI('chrome-ext'));
 
   require('./js/contentPolicy').register();
+  require('./js/httpRequestObserver').register();
 }
 
 function unregisterComponents() {
   require('./js/protocolHandler').unregister();
   require('./js/contentPolicy').unregister();
+  require('./js/httpRequestObserver').unregister();
 }
 
 function unloadBackgroundScripts() {
