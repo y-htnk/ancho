@@ -23,19 +23,28 @@
   var BinaryOutputStream = Components.Constructor('@mozilla.org/binaryoutputstream;1', 'nsIBinaryOutputStream');
 
 
-  /* Exported class: HttpRequestObserver */
+  /* Exported: instance of HttpRequestObserver */
 
-  function HttpRequestObserver(state, window) {
-    this._state = state;
-    this._tab = Utils.getWindowId(window);
+  function HttpRequestObserver() {
+    this._state = null;
+    this._tab = null;
 
     // request map
     // tabId --> URI --> { request info }
     this._requests = {};
 
+    // debugger API support
+    // tab id --> debugger data
+    this._debuggerData = require('./debuggerData').data;
+
     this._httpActivityDistributor =
         Cc["@mozilla.org/network/http-activity-distributor;1"]
         .getService(Ci.nsIHttpActivityDistributor);
+  }
+
+  HttpRequestObserver.prototype.init = function(state, window) {
+    this._state = state;
+    this._tab = Utils.getWindowId(window);
 
     // webRequest API
     this.onCompleted = new Event(window, this._tab, this._state, 'webRequest.completed');
@@ -51,20 +60,20 @@
     // debugger API
     this.onEvent  = new Event(window, this._tab, this._state, 'debugger.event');
     this.onDetach = new Event(window, this._tab, this._state, 'debugger.detach');
+  };
 
-    //
+  HttpRequestObserver.prototype.register = function() {
     Services.obs.addObserver(this, HTTP_ON_MODIFY_REQUEST, false);
     Services.obs.addObserver(this, HTTP_ON_EXAMINE_RESPONSE, false);
     Services.obs.addObserver(this, HTTP_ON_EXAMINE_CACHED_RESPONSE, false);
     this._httpActivityDistributor.addObserver(this);
+  };
 
-    var self = this;
-    state.registerUnloader(window, function() {
-      Services.obs.removeObserver(self, HTTP_ON_MODIFY_REQUEST);
-      Services.obs.removeObserver(self, HTTP_ON_EXAMINE_RESPONSE);
-      Services.obs.removeObserver(self, HTTP_ON_EXAMINE_CACHED_RESPONSE);
-      self._httpActivityDistributor.removeObserver(self);
-    });
+  HttpRequestObserver.prototype.unregister = function() {
+    Services.obs.removeObserver(this, HTTP_ON_MODIFY_REQUEST);
+    Services.obs.removeObserver(this, HTTP_ON_EXAMINE_RESPONSE);
+    Services.obs.removeObserver(this, HTTP_ON_EXAMINE_CACHED_RESPONSE);
+    this._httpActivityDistributor.removeObserver(this);
   };
 
   /* nsIObserver::observe() */
@@ -236,7 +245,7 @@
     var type = 'other';
 
     // set extra headers (debugger API)
-    if (_ref = __debuggerGetProperty(tabId, 'Network.setExtraHTTPHeaders')) {
+    if (_ref = this._debuggerGetProperty(tabId, 'Network.setExtraHTTPHeaders')) {
       for (var key in _ref) {
         httpChannel.setRequestHeader(key, _ref[key], false);
       }
@@ -305,7 +314,7 @@
           context._setRequest(tabId, Utils.removeFragment(url), null);
           params.error = 'REQUEST_CANCELLED_BY_EXTENSION';
           context.onErrorOccurred.fire([ params ]);
-          if (__debuggerIsMonitored(tabId, url)) {
+          if (this._debuggerIsMonitored(tabId, url)) {
             var data = {
               timestamp: params.timeStamp / 1000,
               requestId: params.requestId
@@ -319,7 +328,7 @@
     }
 
     // fire "Network.requestWillBeSent"
-    if (__debuggerIsMonitored(tabId, url)) {
+    if (this._debuggerIsMonitored(tabId, url)) {
       var data = {
         timestamp: params.timeStamp / 1000,
         requestId: params.requestId,
@@ -435,7 +444,7 @@
     params.statusCode = statusCode;
     params.fromCache = (HTTP_ON_EXAMINE_CACHED_RESPONSE === topic);
 
-    if (__debuggerIsMonitored(tabId, url)) {
+    if (this._debuggerIsMonitored(tabId, url)) {
       var data = {
         timestamp: params.timeStamp / 1000,
         requestId: params.requestId
@@ -586,10 +595,31 @@
     return tab.flag;
   };
 
+  // two functions supporting debugger API
+  HttpRequestObserver.prototype._debuggerGetProperty = function(tabId, propertyName) {
+    var debuggerTabId = DEBUGGER_SEND_ALL in this._debuggerData ?  DEBUGGER_SEND_ALL : tabId;
+    return (this._debuggerData[debuggerTabId] && this._debuggerData[debuggerTabId][propertyName]);
+  }
 
-  //
+  HttpRequestObserver.prototype._debuggerIsMonitored = function(tabId, url) {
+    var debuggerTabId = DEBUGGER_SEND_ALL in this._debuggerData ?  DEBUGGER_SEND_ALL : tabId;
+    var _ref = this._debuggerData[debuggerTabId];
+    if (!_ref || !_ref.networkMonitor) {
+      return false;
+    }
+    if (_ref.exclude) {
+      for (var i = 0; i < _ref.exclude.length; i++) {
+        if (0 === url.indexOf(_ref.exclude[i])) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  // --------------
   // Helper classes
-  //
+  // --------------
 
 
   /* HttpHeaderVisitor */
@@ -673,7 +703,7 @@
         case Cr.NS_OK:
           // fire onCompleted
           this.requestData.monitor.onCompleted.fire([ data ]);
-          if (__debuggerIsMonitored(data.tabId, data.url)) {
+          if (this.requestData.monitor._debuggerIsMonitored(data.tabId, data.url)) {
             var debuggerData = {
               timestamp: data.timeStamp / 1000,
               requestId: data.requestId
@@ -698,7 +728,7 @@
           // (b) how to cover the remaining ones we need.
           data.error = Utils.mapHttpError(statusCode);
           this.requestData.monitor.onErrorOccurred.fire([ data ]);
-          if (__debuggerIsMonitored(data.tabId, data.url)) {
+          if (this.requestData.monitor._debuggerIsMonitored(data.tabId, data.url)) {
             var debuggerData = {
               timestamp: data.timeStamp / 1000,
               requestId: data.requestId
@@ -740,7 +770,7 @@
       );
     if (data) {
       data.timeStamp = (new Date()).getTime();
-      if (__debuggerIsMonitored(data.tabId, data.url)) {
+      if (this.requestData.monitor._debuggerIsMonitored(data.tabId, data.url)) {
         var debuggerData = {
           timestamp: data.timeStamp / 1000,
           requestId: data.requestId,
@@ -761,86 +791,12 @@
   }
 
 
-  //--------------
-  // DEBUGGER API
-  //--------------
-
-  var __debuggerData = {};  // tab id --> debugger data
-
-  // HttpRequestObserver static methods: only for manipulating __debuggerData
-
-  HttpRequestObserver.debuggerAttach = function(target, version) {
-    __debuggerData[target.tabId] = {
-      protocol: version
-    };
-  };
-
-  HttpRequestObserver.debuggerDetach = function(target) {
-    delete __debuggerData[target.tabId];
-    // TODO: fire chrome.debugger.onDetach
-  };
-
-  HttpRequestObserver.debuggerSendCommand = function(target, method, commandParams, callback) {
-    var obj = __debuggerData[target.tabId];
-    if (!obj) {
-      return;  // not attached
-    }
-    var invokeCb = true;
-    switch (method) {
-      case 'Network.enable':
-        obj.networkMonitor = true;
-        if (commandParams && commandParams.exclude) {
-          obj.exclude = commandParams.exclude;
-        }
-        break;
-      case 'Network.disable':
-        obj.networkMonitor = false;
-        delete obj.exclude;
-        break;
-      case 'Network.setExtraHTTPHeaders':
-        obj.httpHeaders = commandParams;
-        break;
-      default:
-        invokeCb = false;
-        obj[method] = obj[method] || [];
-        obj[method].push({
-          data: commandParams,
-          cb: callback
-        });
-        break;
-    }
-    if (invokeCb && typeof(callback) === 'function') {
-      callback();
-    }
-  };
-
-  // helper functions (for DEBUGGER_SEND_ALL and exclude)
-
-  function __debuggerGetProperty(tabId, propertyName) {
-    var debuggerTabId = DEBUGGER_SEND_ALL in __debuggerData ?  DEBUGGER_SEND_ALL : tabId;
-    return (__debuggerData[debuggerTabId] && __debuggerData[debuggerTabId][propertyName]);
-  }
-
-  function __debuggerIsMonitored(tabId, url) {
-    var debuggerTabId = DEBUGGER_SEND_ALL in __debuggerData ?  DEBUGGER_SEND_ALL : tabId;
-    var _ref = __debuggerData[debuggerTabId];
-    if (!_ref || !_ref.networkMonitor) {
-      return false;
-    }
-    if (_ref.exclude) {
-      for (var i = 0; i < _ref.exclude.length; i++) {
-        if (0 === url.indexOf(_ref.exclude[i])) {
-          return false;
-        }
-      }
-    }
-    return true;
-  }
 
   //-------------
   // EXPORT PART
   //-------------
 
-  module.exports = HttpRequestObserver;
+  var singleton = new HttpRequestObserver();
+  module.exports = singleton;
 
 }).call(this);

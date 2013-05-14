@@ -15,6 +15,7 @@ var loadHtml = require('./scripting').loadHtml;
 var BrowserEvents = require('./browserEvents');
 var Toolbar = require('./toolbarSingleton');
 var Config = require('./config');
+var httpObserver = require('./httpRequestObserver');
 
 function createWindowUnloader(win) {
   return function(event) {
@@ -89,7 +90,8 @@ function releaseWindowWatcher() {
 
 window.addEventListener('load', function(event) {
   window.removeEventListener('load', arguments.callee, false);
-  ExtensionState.startSingletonAPIs(window);
+  ExtensionState.backgroundWindow = window;
+  httpObserver.init(ExtensionState, window);
   createWindowWatcher();
   var spec = Config.backgroundPage
         ? "chrome-extension://ancho/" + Config.backgroundPage

@@ -4,7 +4,6 @@
   var Cu = Components.utils;
 
   var getWindowId = require('./utils').getWindowId;
-  var HttpRequestObserver = require('./httpRequestObserver');
 
   function EventDispatcher() {
     this._listeners = {};
@@ -52,8 +51,8 @@
   }
 
   var ExtensionState = {
-    id: null, // Set by bootstrap.js
-    backgroundWindow: null,
+    id: null,               // set by bootstrap.js
+    backgroundWindow: null, // set by backgroundPrivileged.js
     eventDispatcher: new EventDispatcher(),
     storageConnection: null,
     _unloaders: {},
@@ -94,11 +93,6 @@
         unloaders[i]();
       }
       delete this._unloaders[windowId];
-    },
-
-    startSingletonAPIs: function(window) {
-      this.backgroundWindow = window;
-      new HttpRequestObserver(this, window);
     }
   };
 
