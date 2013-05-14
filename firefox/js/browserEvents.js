@@ -28,9 +28,6 @@
   var progressListener = {
     // nsIWebProgressListener
     onLocationChange: function(aProgress, aRequest, aURI) {
-      if (aURI.schemeIs('chrome-extension')) {
-        prepareWindow(aProgress.DOMWindow.wrappedJSObject);
-      }
       var document = aProgress.DOMWindow.document;
       var self = this;
       // The callback may be expecting DOMContentLoaded to be called, so we want to
@@ -79,6 +76,7 @@
 
       function unload() {
         tabbrowser.removeProgressListener(progressListener);
+        tabbrowser.removeEventListener('DOMWindowCreated', onWindowCreated, false);
         container.removeEventListener('TabOpen', onTabOpen, false);
         container.removeEventListener('TabClose', onTabClose, false);
         container.removeEventListener('TabSelect', onTabSelect, false);
@@ -101,6 +99,14 @@
         extensionState.eventDispatcher.notifyListeners('tab.activated', null,
           [ { tabId: Utils.getWindowId(tabbrowser.selectedBrowser.contentWindow) } ]);
       }
+
+      function onWindowCreated(event) {
+        if ('chrome-extension:' === event.target.location.protocol) {
+          prepareWindow(event.target.defaultView.wrappedJSObject);
+        }
+      }
+
+      tabbrowser.addEventListener('DOMWindowCreated', onWindowCreated, false);
 
       var container = tabbrowser.tabContainer;
       container.addEventListener('TabOpen', onTabOpen, false);
