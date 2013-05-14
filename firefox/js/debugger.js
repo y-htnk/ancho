@@ -15,11 +15,18 @@
 
   var Event = require('./event');
   var Utils = require('./utils');
-  var observer = require('./httpRequestObserver');
+  var debugData = require('./debuggerData');
+
+  // register debugger protocol handlers (one for each domain):
+  require('./debuggerNetwork').register();
+  // add more...
+
 
   var DebuggerAPI = function(state, window) {
     this._state = state;
     this._tab = Utils.getWindowId(window);
+    this._data = debugData.data;
+    this._handlers = debugData.handlers;
 
     this.onEvent  = new Event(window, this._tab, this._state, 'debugger.event');
     this.onDetach = new Event(window, this._tab, this._state, 'debugger.detach');
@@ -28,16 +35,19 @@
   DebuggerAPI.prototype = {
 
     attach: function(target, requiredVersion, callback) {
-      // notify observer
-      observer.debuggerAttach(target, requiredVersion);
+      this._data[target.tabId] = {
+        protocol: requiredVersion
+      };
       if (callback) {
         callback();
       }
     },
 
     detach: function(target, callback) {
-      // notify observer
-      observer.debuggerDetach(target);
+      if (target.tabId in this._data) {
+        delete this._data[target.tabId];
+        this.onDetach.fire([ { tabId: target.tabId }, 'canceled_by_user' ]);
+      }
       if (callback) {
         callback();
       }
@@ -49,8 +59,18 @@
         callback = commandParams;
         commandParams = null;
       }
-      // notify observer
-      observer.debuggerSendCommand(target, method, commandParams, callback);
+
+      var parsed = method.split('.');
+      if (!parsed || parsed.length !== 2) {
+        dump('ERROR: unsupported debugger method "' + method + '".\n');
+        return;
+      }
+
+      if (parsed[0] in this._handlers) {
+        this._handlers[parsed[0]](target, parsed[1], commandParams, callback);
+      } else {
+        dump('ERROR: unsupported debugger domain "' + parsed[0] +'"\n');
+      }
     }
 
   };

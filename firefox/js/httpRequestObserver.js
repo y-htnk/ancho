@@ -35,7 +35,7 @@
 
     // debugger API support
     // tab id --> debugger data
-    this._debuggerData = {};
+    this._debuggerData = require('./debuggerData').data;
 
     this._httpActivityDistributor =
         Cc["@mozilla.org/network/http-activity-distributor;1"]
@@ -595,57 +595,7 @@
     return tab.flag;
   };
 
-  //--------------
-  // DEBUGGER API
-  //--------------
-
-  HttpRequestObserver.prototype.debuggerAttach = function(target, version) {
-    this._debuggerData[target.tabId] = {
-      protocol: version
-    };
-  };
-
-  HttpRequestObserver.prototype.debuggerDetach = function(target) {
-    delete this._debuggerData[target.tabId];
-    // TODO: fire chrome.debugger.onDetach
-  };
-
-  HttpRequestObserver.prototype.debuggerSendCommand =
-      function(target, method, commandParams, callback) {
-
-    var obj = this._debuggerData[target.tabId];
-    if (!obj) {
-      return;  // not attached
-    }
-    var invokeCb = true;
-    switch (method) {
-      case 'Network.enable':
-        obj.networkMonitor = true;
-        if (commandParams && commandParams.exclude) {
-          obj.exclude = commandParams.exclude;
-        }
-        break;
-      case 'Network.disable':
-        obj.networkMonitor = false;
-        delete obj.exclude;
-        break;
-      case 'Network.setExtraHTTPHeaders':
-        obj.httpHeaders = commandParams;
-        break;
-      default:
-        invokeCb = false;
-        obj[method] = obj[method] || [];
-        obj[method].push({
-          data: commandParams,
-          cb: callback
-        });
-        break;
-    }
-    if (invokeCb && typeof(callback) === 'function') {
-      callback();
-    }
-  };
-
+  // two functions supporting debugger API
   HttpRequestObserver.prototype._debuggerGetProperty = function(tabId, propertyName) {
     var debuggerTabId = DEBUGGER_SEND_ALL in this._debuggerData ?  DEBUGGER_SEND_ALL : tabId;
     return (this._debuggerData[debuggerTabId] && this._debuggerData[debuggerTabId][propertyName]);
