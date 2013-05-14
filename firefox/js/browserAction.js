@@ -259,7 +259,7 @@
 
     shutdown: function(window) {
       if (this.iconEnabled) {
-        document = window.document;
+        var document = window.document;
         var toolbarButton = document.getElementById(this.buttonId);
         var toolbar = document.getElementById(TOOLBAR_ID);
         if (toolbar.contains(toolbarButton)) {
