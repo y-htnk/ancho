@@ -774,7 +774,7 @@
         var debuggerData = {
           timestamp: data.timeStamp / 1000,
           requestId: data.requestId,
-          encodedDataLength: count
+          dataLength: count
         };
         this.requestData.monitor.onEvent.fire([
           { tabId: data.tabId },
