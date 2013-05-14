@@ -26,6 +26,8 @@
   }
 
   var progressListener = {
+    callback: null,
+
     // nsIWebProgressListener
     onLocationChange: function(aProgress, aRequest, aURI) {
       var document = aProgress.DOMWindow.document;
@@ -38,7 +40,9 @@
         document.addEventListener('readystatechange', function(event) {
           if ('interactive' === document.readyState) {
             document.removeEventListener('readystatechange', arguments.callee, false);
-            self.callback(document);
+            if (self.callback) {
+              self.callback(document);
+            }
           }
         }, false);
       }
