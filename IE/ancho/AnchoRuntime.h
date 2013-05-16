@@ -164,6 +164,7 @@ private:
   typedef std::map<std::wstring, CComPtr<IAnchoAddon> > AddonMap;
   CComQIPtr<IWebBrowser2>                 m_pWebBrowser;
   CComPtr<IAnchoAddonService>             m_pAnchoService;
+  CComPtr<IAnchoTabManagerInternal>       mTabManager;
   AddonMap                                m_Addons;
   int                                     m_TabID;
   CComPtr<DAnchoBrowserEvents>            m_pBrowserEventSource;

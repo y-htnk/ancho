@@ -5,7 +5,63 @@
 #include <boost/variant.hpp>
 #include <SimpleWrappers.h>
 
-namespace AnchoBackgroundServer {
+namespace Ancho {
+namespace Utils {
+
+template <typename TInterface>
+class ObjectMarshaller: public boost::noncopyable
+{
+public:
+  typedef boost::shared_ptr<ObjectMarshaller<TInterface> > Ptr;
+
+  ObjectMarshaller(): mCookie(0)
+  { /*empty*/ }
+
+  ObjectMarshaller(CComPtr<TInterface> aPtr): mCookie(0)
+  {
+    ATLASSERT(aPtr);
+    //IF_FAILED_THROW(CoMarshalInterThreadInterfaceInStream(__uuidof(TInterface), aPtr.p, &mStream));
+
+    IF_FAILED_THROW(::CoCreateInstance(CLSID_StdGlobalInterfaceTable, NULL, CLSCTX_INPROC_SERVER, IID_IGlobalInterfaceTable, (void **)&mIGlobalInterfaceTable));
+    if (mIGlobalInterfaceTable) {
+      CComPtr<IUnknown> pIUnknown = aPtr;
+      if (pIUnknown) {
+        IF_FAILED_THROW(mIGlobalInterfaceTable->RegisterInterfaceInGlobal(pIUnknown, __uuidof(TInterface), &mCookie));
+      } else {
+        ANCHO_THROW(EFail());
+      }
+    } else {
+      ANCHO_THROW(EFail());
+    }
+  }
+
+  ~ObjectMarshaller()
+  {
+    if (mCookie && mIGlobalInterfaceTable) {
+      mIGlobalInterfaceTable->RevokeInterfaceFromGlobal(mCookie);
+      mCookie = 0;
+    }
+  }
+
+  CComPtr<TInterface> get()
+  {
+    if (mCookie == 0) {
+      ANCHO_THROW(EFail());
+    }
+    CComQIPtr<TInterface> ptr;
+    IF_FAILED_THROW(mIGlobalInterfaceTable->GetInterfaceFromGlobal(mCookie, __uuidof(TInterface), (void**)&ptr));
+
+    //IF_FAILED_THROW(CoUnmarshalInterface(mStream, __uuidof(TInterface), (LPVOID *) &ptr));
+    return ptr;
+  }
+
+  bool empty() const
+  { return mCookie == 0; }
+protected:
+  CComPtr<IGlobalInterfaceTable> mIGlobalInterfaceTable;
+  DWORD mCookie;
+  //CComPtr<IStream> mStream;
+};
 
 struct Empty {};
 
@@ -175,6 +231,13 @@ struct ConversionTraits<bool, CComVariant>
   { aTo = CComVariant(aFrom); }
 };
 
+template<typename TInterface>
+struct ConversionTraits<CComPtr<TInterface>, CComVariant>
+{
+  static void convert(CComPtr<TInterface> &aFrom, CComVariant &aTo)
+  { aTo = CComVariant(aFrom.p); }
+};
+
 template<typename TFrom>
 struct ConversionTraits<TFrom, Empty>
 {
@@ -247,4 +310,5 @@ TTo convert(TFrom &aFrom)
   return tmp;
 }
 
-}
+} //namespace Utils
+} //namespace Ancho

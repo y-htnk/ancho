@@ -91,7 +91,9 @@ using namespace LIB_BhoHelper;
 #include <deque>
 #include <string>
 #include <map>
+#include <set>
 #include <vector>
+#include <algorithm>
 
 #include <boost/regex.hpp>
 #include <boost/bind.hpp>
@@ -105,6 +107,10 @@ using namespace LIB_BhoHelper;
 #include <boost/function.hpp>
 #include <boost/thread/future.hpp>
 #include <boost/thread.hpp>
+#include <boost/atomic.hpp>
+#include <boost/foreach.hpp>
+#include <boost/asio.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 #include <boost/fusion/container/vector.hpp>
 #include <boost/fusion/support/is_sequence.hpp>

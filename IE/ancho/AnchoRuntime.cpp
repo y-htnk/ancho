@@ -74,9 +74,10 @@ void CAnchoRuntime::DestroyAddons()
   }
   m_Addons.clear();
 
-  if(m_pAnchoService) {
-    m_pAnchoService->unregisterRuntime(m_TabID);
+  if(mTabManager) {
+    mTabManager->unregisterRuntime(m_TabID);
   }
+  mTabManager.Release();
   m_pAnchoService.Release();
   if (m_pWebBrowser)
   {
@@ -120,8 +121,23 @@ HRESULT CAnchoRuntime::Init()
   // create addon service object
   IF_FAILED_RET(m_pAnchoService.CoCreateInstance(CLSID_AnchoAddonService));
 
+  //get access to the tabmanager
+  CComQIPtr<IAnchoTabManagerInternal> tabManager;
+  CComQIPtr<IAnchoServiceApi> serviceApi = m_pAnchoService;
+  if (!serviceApi) {
+    return E_NOINTERFACE;
+  }
+  CComQIPtr<IDispatch> dispatch;
+  IF_FAILED_RET(serviceApi->get_tabManager(&dispatch));
+  tabManager = dispatch;
+  if (!tabManager) {
+    return E_NOINTERFACE;
+  }
+  mTabManager = tabManager;
+
+
   // Registering tab in service - obtains tab id and assigns it to the tab as property
-  IF_FAILED_RET(m_pAnchoService->registerRuntime((INT)getFrameTabWindow(), this, m_HeartbeatSlave.id(), &m_TabID));
+  IF_FAILED_RET(mTabManager->registerRuntime((OLE_HANDLE)getFrameTabWindow(), this, m_HeartbeatSlave.id(), &m_TabID));
   HWND hwnd;
   m_pWebBrowser->get_HWND((SHANDLE_PTR*)&hwnd);
   ::SetProp(hwnd, s_AnchoTabIDPropertyName, (HANDLE)m_TabID);
@@ -215,7 +231,7 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
     *Cancel = TRUE;
     pWebBrowser->Stop();
     pWebBrowser->Navigate2(&vtUrl.GetVARIANT(), Flags, TargetFrameName, PostData, Headers);
-    //m_pAnchoService->createTabNotification(m_TabID, requestID);
+    mTabManager->createTabNotification(m_TabID, requestId);
     return;
   }
 
@@ -609,13 +625,13 @@ STDMETHODIMP CAnchoRuntime::fillTabInfo(VARIANT* aInfo)
   obj.SetProperty(L"url", CComVariant(locationUrl));
 
   m_pWebBrowser->get_Name(&name);
-  obj.SetProperty(L"title", CComVariant(name));
+  IF_FAILED_RET(obj.SetProperty(L"title", CComVariant(name)));
 
-  obj.SetProperty(L"id", CComVariant(m_TabID));
+  IF_FAILED_RET(obj.SetProperty(L"id", CComVariant(m_TabID)));
 
-  obj.SetProperty(L"active", CComVariant(isTabActive()));
+  IF_FAILED_RET(obj.SetProperty(L"active", CComVariant(isTabActive())));
 
-  obj.SetProperty(L"windowId", reinterpret_cast<INT>(getMainWindow()));
+  IF_FAILED_RET(obj.SetProperty(L"windowId", reinterpret_cast<INT>(getMainWindow())));
   return S_OK;
 }
 

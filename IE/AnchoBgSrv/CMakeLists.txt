@@ -27,6 +27,7 @@ set(${PROJECT_NAME}_HEADERS
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/AsynchronousTaskManager.hpp"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/COMConversions.hpp"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/JavaScriptCallback.hpp"
+  "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/PeriodicTimer.hpp"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/TabManager.hpp"
   "${${PROJECT_NAME}_INC_DIR}/AnchoAddonService.h"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackgroundAPI.h"

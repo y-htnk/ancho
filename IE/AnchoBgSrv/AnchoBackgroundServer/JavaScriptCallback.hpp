@@ -1,56 +1,98 @@
 #pragma once
 
-namespace AnchoBackgroundServer {
+namespace Ancho {
+namespace Utils {
 
-template<typename TArguments, typename TReturnValue = void>
-class JavaScriptCallback
+namespace detail {
+
+class JavaScriptCallbackBase
+{
+public:
+  JavaScriptCallbackBase() {}
+
+  JavaScriptCallbackBase(CComPtr<IDispatch> aCallback): mCallbackMarshaller(boost::make_shared<ObjectMarshaller<IDispatch> >(aCallback))
+  { /*empty*/ }
+
+  bool empty()const
+  { return mCallbackMarshaller->empty(); }
+protected:
+  void call(DISPPARAMS &aParams, variant_t &aReturnValue)
+  {
+    ATLASSERT(!empty());
+
+    CComQIPtr<IDispatch> callback = mCallbackMarshaller->get();
+    if (!callback) {
+      ANCHO_THROW(EFail());
+    }
+    IF_FAILED_THROW(callback->Invoke((DISPID)0, IID_NULL, LOCALE_USER_DEFAULT, DISPATCH_METHOD, &aParams, aReturnValue.GetAddress(), NULL, NULL));
+  }
+
+  JavaScriptCallbackBase(JavaScriptCallbackBase&& aCallback);
+
+  ObjectMarshaller<IDispatch>::Ptr mCallbackMarshaller;
+};
+} //namespace detail
+
+
+template<typename TArguments, typename TReturnValue>
+class JavaScriptCallback: public detail::JavaScriptCallbackBase
 {
 public:
   typedef TArguments Arguments;
   //This is a workaround for isssue with 'void' type
   //- it is incoplete type and we cannot instantiate it.
   //The 'Empty' type will be used instead of void.
-  typedef typename AnchoBackgroundServer::SafeVoidTraits<TReturnValue>::type ReturnValue;
+  typedef typename Ancho::Utils::SafeVoidTraits<TReturnValue>::type ReturnValue;
 
   JavaScriptCallback() {}
 
-  JavaScriptCallback(CComPtr<IDispatch> aCallback)//: mStream(NULL)
-  {
-    ATLASSERT(aCallback);
-    IF_FAILED_THROW(CoMarshalInterThreadInterfaceInStream(IID_IDispatch, aCallback.p, &mStream));
-  }
+  JavaScriptCallback(CComPtr<IDispatch> aCallback): detail::JavaScriptCallbackBase(aCallback)
+  { /*empty*/ }
 
   ReturnValue operator()(Arguments aArguments)
   {
-    //TODO - ATLASSERT(... && "CoInitializeEx() not called in this thread");
-    ATLASSERT(mStream.p);
+    std::vector<CComVariant> parameters;
+    DISPPARAMS params = {0};
+    Utils::convert(aArguments, parameters);
+    if (!parameters.empty()) {
+      std::reverse(parameters.begin(), parameters.end());
 
-    CComQIPtr<IDispatch> callback;
-    IF_FAILED_THROW(CoUnmarshalInterface(mStream, IID_IDispatch, (LPVOID *) &callback));
-    if (callback) {
-      std::vector<CComVariant> parameters;
-
-      DISPPARAMS params = {0};
-      AnchoBackgroundServer::convert(aArguments, parameters);
-      if (!parameters.empty()) {
-        std::reverse(parameters.begin(), parameters.end());
-
-        params.rgvarg = &(parameters[0]);
-        params.cArgs = parameters.size();
-      }
-
-      CComVariant vtResult;
-      IF_FAILED_THROW(callback->Invoke((DISPID)0, IID_NULL, LOCALE_USER_DEFAULT, DISPATCH_METHOD, &params, &vtResult, NULL, NULL));
-      return AnchoBackgroundServer::convert<CComVariant, ReturnValue>(vtResult);
+      params.rgvarg = &(parameters[0]);
+      params.cArgs = parameters.size();
     }
+
+    variant_t vtResult;
+    this->call(params, vtResult);
+    return Utils::convert<variant_t, ReturnValue>(vtResult);
+  }
+
+};
+
+template<typename TReturnValue>
+class JavaScriptCallback<void, TReturnValue>: public detail::JavaScriptCallbackBase
+{
+public:
+  //This is a workaround for isssue with 'void' type
+  //- it is incoplete type and we cannot instantiate it.
+  //The 'Empty' type will be used instead of void.
+  typedef typename Ancho::Utils::SafeVoidTraits<TReturnValue>::type ReturnValue;
+
+  JavaScriptCallback() {}
+
+  JavaScriptCallback(CComPtr<IDispatch> aCallback): detail::JavaScriptCallbackBase(aCallback)
+  { /*empty*/ }
+
+  ReturnValue operator()()
+  {
+    DISPPARAMS params = {0};
+
+    variant_t vtResult;
+    this->call(params, vtResult);
+    return Utils::convert<variant_t, ReturnValue>(vtResult);
     return ReturnValue();
   }
 
-  bool empty()const
-  { return mStream.p != NULL; }
-protected:
-  JavaScriptCallback(JavaScriptCallback&& aCallback);
-  CComPtr<IStream> mStream;
 };
 
-} //namespace AnchoBackgroundServer
+} //namespace Utils
+} //namespace Ancho

@@ -10,7 +10,7 @@
 var Event = require("events.js").Event;
 var EventFactory = require("utils.js").EventFactory;
 
-var windows = require("windows.js").windows;
+var windows = require("windows.js");
 require("tabs_spec.js");
 var preprocessArguments = require("typeChecking.js").preprocessArguments;
 var notImplemented = require("typeChecking.js").notImplemented;
@@ -28,7 +28,6 @@ var MessageSender = require("extension.js").MessageSender;
 var CallbackWrapper = require("extension.js").CallbackWrapper;
 var PortPair = require("extension.js").PortPair;
 var addPortPair = require("extension.js").addPortPair;
-var windows = require("windows.js");
 //Used for gathering callbacks from removeTabs
 //singleTabRemoveCallback is called from even if the tab was already removed
 var removeCallbackWrapper = function(aTabs, aCallback) {
@@ -128,7 +127,7 @@ var Tabs = function(instanceID) {
   // chrome.tabs.create
   this.create = function(createProperties, callback) {
     var args = preprocessArguments('chrome.tabs.create', arguments);
-    serviceAPI.tabManager.createTab(args.createProperties, args.callback, _instanceID);
+    serviceAPI.tabManager.createTab(args.createProperties, args.callback, addonAPI.id, _instanceID);
   };
 
   //----------------------------------------------------------------------------
@@ -168,8 +167,16 @@ var Tabs = function(instanceID) {
   this.get = function(tabId, callback) {
     var args = preprocessArguments('chrome.tabs.get', arguments);
     console.debug("tabs.get(..) called");
-    var tab = serviceAPI.getTabInfo(args['tabId'], Object); //Pass reference to Object - used to create tab info
-    args['callback'](tab);
+
+    var helperCallback = function (aTabs) {
+      //TODO - error handling in callback
+      if (aTabs) {
+        args.callback(aTabs[0]);
+      } else {
+        args.callback(undefined);
+      }
+    }
+    serviceAPI.tabManager.queryTabs({tabId : args.tabId}, helperCallback, addonAPI.id, _instanceID);
   };
 
   //----------------------------------------------------------------------------
@@ -177,13 +184,11 @@ var Tabs = function(instanceID) {
   this.getCurrent = function(callback) {
     var args = preprocessArguments('chrome.tabs.getCurrent', arguments);
     //if we are not running in tab context - return undefined
-    if (instanceID <= 0) {
-      if (args['callback']) {
-        args['callback'](undefined);
-      }
+    if (_instanceID <= 0) {
+      args.callback(undefined);
       return;
     }
-    this.get(instanceID, args['callback']);
+    this.get(instanceID, args.callback);
   };
 
   //----------------------------------------------------------------------------
@@ -209,7 +214,14 @@ var Tabs = function(instanceID) {
   this.query = function(queryInfo, callback) {
     var args = preprocessArguments('chrome.tabs.query', arguments);
 
-    function checkTabForQueryInfo(aTab, aQueryInfo) {
+    var winId = args.queryInfo.windowId;
+    if (windows.WINDOW_ID_CURRENT == winId) {
+      args.queryInfo.windowId = _currentWindowID || serviceAPI.getCurrentWindowId();
+    }
+
+    serviceAPI.tabManager.queryTabs(args.queryInfo, args.callback, addonAPI.id, _instanceID);
+
+    /*function checkTabForQueryInfo(aTab, aQueryInfo) {
       var retVal = true;
       if (aQueryInfo.url) {
         retVal = retVal && (aTab.url == aQueryInfo.url);
@@ -239,17 +251,14 @@ var Tabs = function(instanceID) {
         filteredTabs.push(tabs[i]);
       }
     }
-    args['callback'](filteredTabs);
+    args['callback'](filteredTabs);*/
   };
 
   //----------------------------------------------------------------------------
   // chrome.tabs.reload
   this.reload = function(tabId, reloadProperties, callback) {
     var args = preprocessArguments('chrome.tabs.reload', arguments);
-    serviceAPI.reloadTab(args['tabId']);
-    if (args['callback']) {
-      args['callback']();
-    }
+    serviceAPI.tabManager.reloadTab(args.tabId, args.reloadProperties, args.callback, addonAPI.id, _instanceID);
   };
 
   //----------------------------------------------------------------------------
@@ -257,18 +266,19 @@ var Tabs = function(instanceID) {
   this.remove = function(tabIds, callback) {
     var args = preprocessArguments('chrome.tabs.remove', arguments);
     var tabs;
-    if (typeof (args['tabIds']) === 'number') {
-      tabs = [args['tabIds']];
+    if (typeof (args.tabIds) === 'number') {
+      tabs = [args.tabIds];
     } else {
-      tabs = args['tabIds'];
+      tabs = args.tabIds;
     }
-    var callbackWrapper = new removeCallbackWrapper(tabs, args['callback']);
+    serviceAPI.tabManager.removeTabs(tabs, args.callback, addonAPI.id, _instanceID);
+    /*var callbackWrapper = new removeCallbackWrapper(tabs, args.callback);
     try {
       serviceAPI.removeTabs(tabs, callbackWrapper.singleTabRemoveCallback);
     } catch (e) {
       console.error("Error while removing tabs [" + tabs + "] " + typeof (callbackWrapper.singleTabRemoveCallback) + " : " + e.message);
       throw e;
-    }
+    }*/
   };
 
   //----------------------------------------------------------------------------
@@ -314,11 +324,7 @@ var Tabs = function(instanceID) {
   // chrome.tabs.update
   this.update = function(tabId, updateProperties, callback) {
     var args = preprocessArguments('chrome.tabs.update', arguments);
-    serviceAPI.updateTab(args['tabId'], args['updateProperties']);
-
-    if (args['callback']) {
-      this.get(args['tabId'], args['callback']);
-    }
+    serviceAPI.tabManager.updateTab(args.tabId, args.updateProperties, args.callback, addonAPI.id, _instanceID);
   };
 
   //============================================================================

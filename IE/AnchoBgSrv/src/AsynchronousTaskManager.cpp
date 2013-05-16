@@ -2,7 +2,8 @@
 #include "AnchoBackgroundServer/AsynchronousTaskManager.hpp"
 
 
-namespace AnchoBackgroundServer {
+namespace Ancho {
+namespace Utils {
 
 namespace detail {
 typedef std::deque<boost::function<void()> > TaskQueue;
@@ -87,4 +88,5 @@ void AsynchronousTaskManager::addPackagedTask(boost::function<void()> aTask)
   mPimpl->mCondVariable.notify_one();
 }
 
-} //namespace AnchoBackgroundServer
+} //namespace Utils
+} //namespace Ancho

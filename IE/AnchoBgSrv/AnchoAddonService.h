@@ -23,42 +23,6 @@
 #include "AnchoBackgroundServer/COMConversions.hpp"
 #include "AnchoBackgroundServer/JavaScriptCallback.hpp"
 
-struct TestTask
-{
-	typedef int result_type;
-
-  TestTask()
-  {}
-
-	TestTask(AnchoBackgroundServer::JSVariant aObject, AnchoBackgroundServer::JavaScriptCallback<fusion::vector<std::wstring, int>,void> aCallback): mObject(aObject), mCallback(aCallback)
-	{
-		ATLTRACE("OK");
-	}
-
-  /*TestTask(TestTask &&aTask)
-  {
-    ATLTRACE("MOVE CONSTRUCTOR");
-  }*/
-
-	int operator()()
-	{
-    CoInitializeEx(NULL, COINIT_MULTITHREADED);
-		ATLTRACE(L"TEST TASK CALLED\n");
-		//CComBSTR pom;
-		//HRESULT hr = mObject.Get<CComBSTR, VT_BSTR, BSTR>(L"a", pom);
-    try {
-
-      mCallback(fusion::vector<std::wstring, int>(L"TEST",2));
-    } catch (...) {
-      ATLTRACE(L"TEST TASK FAILED\n");
-    }
-		return 0;
-	}
-	AnchoBackgroundServer::JSVariant mObject;
-	AnchoBackgroundServer::JavaScriptCallback<fusion::vector<std::wstring, int>,void> mCallback;
-};
-
-
 #if defined(_WIN32_WCE) && !defined(_CE_DCOM) && !defined(_CE_ALLOW_SINGLE_THREADED_OBJECTS_IN_MTA)
 #error "Single-threaded COM objects are not properly supported on Windows CE platform, such as the Windows Mobile platforms that do not include full DCOM support. Define _CE_ALLOW_SINGLE_THREADED_OBJECTS_IN_MTA to force ATL to support creating single-thread COM object's and allow use of it's single-threaded COM object implementations. The threading model in your rgs file was set to 'Free' as that is the only threading model supported in non DCOM Windows CE platforms."
 #endif
@@ -73,85 +37,6 @@ struct CAnchoAddonServiceCallback
 };
 
 /*============================================================================
- * class ServiceTimer
- */
-struct ServiceTimer
-{
-  typedef void (CAnchoAddonService::*ServiceMethod)();
-  struct ETimerFailure : EFail { };
-
-  static void CALLBACK callback(void *aParameter, BOOLEAN aTimerOrWaitFired)
-  {
-    ServiceTimer *timer = reinterpret_cast<ServiceTimer*>(aParameter);
-    if (timer) {
-      ATLASSERT(timer->mServiceInstance);
-      ATLASSERT(timer->mMethod);
-
-      (timer->mServiceInstance->*(timer->mMethod))();
-    }
-  }
-
-  ServiceTimer()
-    : mTimerHandle(NULL), mTimerQueue(NULL), mPeriod(0), mMethod(NULL), mServiceInstance(NULL)
-  {}
-
-  ~ServiceTimer()
-  {
-    stop();
-  }
-
-  void initialize(ServiceMethod aMethod, CAnchoAddonService *aInstance, unsigned long aPeriodMS, HANDLE aTimerQueue = NULL)
-  {
-    stop();
-
-    if (!aMethod || !aInstance) {
-      ANCHO_THROW(EInvalidArgument());
-    }
-    mMethod = aMethod;
-    mServiceInstance = aInstance;
-
-    mTimerQueue = aTimerQueue;
-    mPeriod = aPeriodMS;
-  }
-
-  void start()
-  {
-    if (!CreateTimerQueueTimer(
-      &mTimerHandle,
-      mTimerQueue,
-      (WAITORTIMERCALLBACK) &ServiceTimer::callback,
-      (void*) this,
-      mPeriod,
-      mPeriod,
-      WT_EXECUTEDEFAULT
-      ))
-    {
-      ANCHO_THROW(ETimerFailure());
-    }
-  }
-
-  bool isRunning() const
-  {
-    return mTimerHandle != NULL;
-  }
-
-  void stop()
-  {
-    if (isRunning()) {
-      DeleteTimerQueueTimer(mTimerQueue, mTimerHandle, NULL);
-    }
-  }
-
-  HANDLE mTimerHandle;
-  HANDLE mTimerQueue;
-  unsigned long mPeriod;
-
-  ServiceMethod mMethod;
-  CAnchoAddonService *mServiceInstance;
-};
-
-
-/*============================================================================
  * class CAnchoAddonService
  */
 class ATL_NO_VTABLE CAnchoAddonService :
@@ -164,7 +49,7 @@ class ATL_NO_VTABLE CAnchoAddonService :
 public:
   // -------------------------------------------------------------------------
   // ctor
-  CAnchoAddonService(): m_NextTabID(1), m_NextRequestID(1), mHeartbeatActive(false)
+  CAnchoAddonService()
   {
   }
 
@@ -208,12 +93,6 @@ public:
   STDMETHOD(get_tabManager)(LPDISPATCH* ppRet);
 
   STDMETHOD(invokeExternalEventObject)(BSTR aExtensionId, BSTR aEventName, LPDISPATCH aArgs, VARIANT* aRet);
-  STDMETHOD(createTab)(LPDISPATCH aProperties, LPDISPATCH aCreator, LPDISPATCH aCallback);
-  STDMETHOD(reloadTab)(INT aTabId);
-  STDMETHOD(updateTab)(INT aTabId, LPDISPATCH aProperties);
-  STDMETHOD(getTabInfo)(INT aTabId, LPDISPATCH aCreator, VARIANT* aRet);
-  STDMETHOD(removeTabs)(LPDISPATCH aTabs, LPDISPATCH aCallback);
-  STDMETHOD(queryTabs)(LPDISPATCH aQueryInfo, LPDISPATCH aCreator, VARIANT* aRet);
 
   STDMETHOD(getWindow)(INT aWindowId, LPDISPATCH aCreator, BOOL aPopulate, VARIANT* aRet);
   STDMETHOD(getAllWindows)(LPDISPATCH aCreator, BOOL aPopulate, VARIANT* aRet);
@@ -224,8 +103,6 @@ public:
   STDMETHOD(getCurrentWindowId)(INT *aWinId);
 
 
-  STDMETHOD(executeScript)(BSTR aExtensionID, INT aTabID, BSTR aCode, BOOL aFileSpecified, BOOL aInAllFrames);
-
   //STDMETHOD(get_browserActionInfos)(VARIANT* aBrowserActionInfos);
   STDMETHOD(getBrowserActions)(VARIANT* aBrowserActionsArray);
   STDMETHOD(addBrowserActionInfo)(LPDISPATCH aBrowserActionInfo);
@@ -234,14 +111,8 @@ public:
 
   STDMETHOD(testFunction)(LPDISPATCH aObject, LPDISPATCH aCallback)
   {
-    //ATLTRACE(L"TEST FUNCTION -----------------\n");
+    ATLTRACE(L"TEST FUNCTION -----------------\n");
     BEGIN_TRY_BLOCK;
-    CComQIPtr<IDispatchEx> tmp(aObject);
-    if (tmp && aCallback) {
-      AnchoBackgroundServer::JSVariant object = AnchoBackgroundServer::convertToJSVariant(*tmp);
-      AnchoBackgroundServer::JavaScriptCallback<fusion::vector<std::wstring, int>, void> callback(aCallback);
-      mAsyncTaskManager.addTask(TestTask(object, callback));
-    }
     return S_OK;
     END_TRY_BLOCK_CATCH_TO_HRESULT;
   }
@@ -250,19 +121,15 @@ public:
   STDMETHOD(GetAddonBackground)(BSTR bsID, IAnchoAddonBackground ** ppRet);
   STDMETHOD(GetModulePath)(BSTR * pbsPath);
   STDMETHOD(getInternalProtocolParameters)(BSTR * aServiceHost, BSTR * aServicePath);
-  STDMETHOD(registerRuntime)(INT aFrameTab, IAnchoRuntime * aRuntime, ULONG aHeartBeat, INT *aTabID);
-  STDMETHOD(unregisterRuntime)(INT aTabID);
-  STDMETHOD(createTabNotification)(INT aTabID, INT aRequestID);
   STDMETHOD(invokeEventObjectInAllExtensions)(BSTR aEventName, LPDISPATCH aArgs, VARIANT* aRet);
   STDMETHOD(invokeEventObjectInAllExtensionsWithIDispatchArgument)(BSTR aEventName, LPDISPATCH aArg);
 
   STDMETHOD(webBrowserReady)();
 
-  STDMETHOD(registerBrowserActionToolbar)(INT aFrameTab, BSTR * aUrl, INT*aTabId);
+  STDMETHOD(registerBrowserActionToolbar)(OLE_HANDLE aFrameTab, BSTR * aUrl, INT*aTabId);
   STDMETHOD(unregisterBrowserActionToolbar)(INT aTabId);
   STDMETHOD(getDispatchObject)(IDispatch **aRet);
 private:
-  int getFrameTabID(int aFrameTab);
 
   void fillWindowInfo(HWND aWndHandle, CIDispatchHelper &aInfo);
   HWND getCurrentWindowHWND();
@@ -275,7 +142,7 @@ private:
   { return reinterpret_cast<HWND>(aWinId); }
 
 public:
-  class ATabCreatedCallback: public ACommand
+  /*class ATabCreatedCallback: public ACommand
   {
   public:
 #if _HAS_CPP0X
@@ -287,35 +154,18 @@ public:
     void operator()(INT aTabID)
     { execute(aTabID); }
     virtual void execute(INT aTabID) = 0;
-  };
-  class TabCreatedCallback;
+  };*/
+  //class TabCreatedCallback;
   class WindowCreatedCallback;
 
-  typedef std::map<int, ATabCreatedCallback::Ptr> CreateTabCallbackMap;
+  //typedef std::map<int, ATabCreatedCallback::Ptr> CreateTabCallbackMap;
 
-  HRESULT createTabImpl(CIDispatchHelper &aProperties, ATabCreatedCallback::Ptr aCallback, bool aInNewWindow);
-  HRESULT createWindowImpl(CIDispatchHelper &aProperties, ATabCreatedCallback::Ptr aCallback);
-
-  HRESULT removeTab(INT aTabId, LPDISPATCH aCallback);
-  HRESULT executeScriptInTab(BSTR aExtensionID, INT aTabID, BSTR aCode, BOOL aFileSpecified);
+  //HRESULT createTabImpl(CIDispatchHelper &aProperties, ATabCreatedCallback::Ptr aCallback, bool aInNewWindow);
+//  HRESULT createWindowImpl(CIDispatchHelper &aProperties, ATabCreatedCallback::Ptr aCallback);
 
   HRESULT FindActiveBrowser(IWebBrowser2** webBrowser);
 private:
     //Private type declarations
-  struct RuntimeRecord {
-    RuntimeRecord(IAnchoRuntime *aRuntime = NULL, unsigned long aHeartbeatId = 0)
-      : runtime(aRuntime), hearbeatMaster(aHeartbeatId) {}
-
-    CComPtr<IAnchoRuntime> runtime;
-    CIDispatchHelper callback;
-    HeartbeatMaster hearbeatMaster;
-  };
-  typedef std::map<int, RuntimeRecord> RuntimeMap;
-
-  class CreateTabCommand;
-  class CreateWindowCommand;
-
-  typedef std::map<int, int> FrameTabToTabIDMap;
 
   // a map containing all addon background objects - one per addon
   typedef std::map<std::wstring, CAnchoAddonBackgroundComObject*> BackgroundObjectsMap;
@@ -324,17 +174,6 @@ private:
   typedef CComCritSecLock<CComAutoCriticalSection> CSLock;
 private:
   //private methods
-  void checkBHOHeartbeat();
-
-  IAnchoRuntime &getRuntime(int aTabId)
-  {
-    RuntimeMap::iterator it = m_Runtimes.find(aTabId);
-    if (it == m_Runtimes.end()) {
-      throw std::runtime_error("Runtime not found");
-    }
-    return *(it->second.runtime);
-  }
-
 
 private:
   // -------------------------------------------------------------------------
@@ -342,36 +181,26 @@ private:
 
 
   BackgroundObjectsMap          m_BackgroundObjects;
-  RuntimeMap                    m_Runtimes;
-  CComAutoCriticalSection       mRuntimesCriticalSection;
-  volatile bool                 mHeartbeatActive; //whether we are we checking BHO heartbeat - remove all records if it crashed
 
-  CreateTabCallbackMap          m_CreateTabCallbacks;
   CComPtr<ComSimpleJSArray>     m_BrowserActionInfos;
   BrowserActionCallbackMap      m_BrowserActionCallbacks;
-  FrameTabToTabIDMap            m_FrameTabIds;
   CommandQueue                  m_WebBrowserPostInitTasks;
-  ServiceTimer                  mBHOHeartbeatTimer;
 
-  AnchoBackgroundServer::AsynchronousTaskManager mAsyncTaskManager;
+  Ancho::Utils::AsynchronousTaskManager mAsyncTaskManager;
 
   // Path to this exe and also to magpie.
   CString                       m_sThisPath;
 
   CComPtr<IIECookieManager>     m_Cookies;
 
-  AnchoBackgroundServer::TabManager *mTabManager;
-  CComPtr<ITabManager> mITabManager;
-
-  int                           m_NextTabID;
-  int                           m_NextRequestID;
+  CComPtr<ITabManager>          mITabManager;
 };
 
 OBJECT_ENTRY_AUTO(__uuidof(AnchoAddonService), CAnchoAddonService)
 
 //--------------------------------------------------------------------
 
-class CAnchoAddonService::TabCreatedCallback: public ATabCreatedCallback
+/*class CAnchoAddonService::TabCreatedCallback: public ATabCreatedCallback
 {
 public:
   TabCreatedCallback(CAnchoAddonService &aService, LPDISPATCH aCreator, LPDISPATCH aCallback)
@@ -425,23 +254,6 @@ protected:
 };
 
 
-class CAnchoAddonService::CreateTabCommand: public AQueuedCommand
-{
-public:
-  CreateTabCommand(CAnchoAddonService &aService, LPDISPATCH aProperties, LPDISPATCH aCreator, LPDISPATCH aCallback)
-    : mService(aService), mProperties(aProperties), mCreator(aCreator), mCallback(aCallback)
-  {}
-  void execute()
-  {
-    mService.createTabImpl(mProperties, ATabCreatedCallback::Ptr(new TabCreatedCallback(mService, mCreator, mCallback)), false);
-  }
-protected:
-  CAnchoAddonService &mService;
-  CIDispatchHelper mProperties;
-  CIDispatchHelper mCreator;
-  CIDispatchHelper mCallback;
-};
-
 class CAnchoAddonService::CreateWindowCommand: public AQueuedCommand
 {
 public:
@@ -457,5 +269,5 @@ protected:
   CIDispatchHelper mProperties;
   CIDispatchHelper mCreator;
   CIDispatchHelper mCallback;
-};
+};*/
 

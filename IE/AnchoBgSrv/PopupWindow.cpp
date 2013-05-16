@@ -5,6 +5,10 @@
 #include "AnchoShared_i.h"
 #include "AnchoShared/AnchoShared.h"
 
+#include "AnchoBackgroundServer/TabManager.hpp"
+#include "AnchoBackgroundServer/COMConversions.hpp"
+#include "AnchoBackgroundServer/JavaScriptCallback.hpp"
+
 //class CPopupResizeEventHandler;
 //typedef CComObject<CPopupResizeEventHandler> CPopupResizeEventHandlerComObject;
 
@@ -131,10 +135,11 @@ struct OnClickFunctor
       htmlEvent->put_returnValue(CComVariant(false));
 
       //TODO - find better way to pass parameters after refactoring
-      CComPtr<ComSimpleJSObject> properties;
-      SimpleJSObject::createInstance(properties);
-      properties->setProperty(L"url", CComVariant(attrValue));
-      mWin->mService->createTabImpl(CIDispatchHelper(properties), CAnchoAddonService::ATabCreatedCallback::Ptr(), false);
+
+      Ancho::Utils::JSObject properties;
+      properties[L"url"] = std::wstring(attrValue.bstrVal);
+
+      Ancho::Service::TabManager::instance().createTab(properties);
     }
   }
   CPopupWindow *mWin;
