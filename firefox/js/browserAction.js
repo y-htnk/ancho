@@ -123,10 +123,15 @@
     },
 
     showPopup: function(panel, iframe, document) {
+      panel.style.visibility = 'hidden';
       // Deferred loading of scripting.js since we have a circular reference that causes
       // problems if we load it earlier.
       var loadHtml = require('./scripting').loadHtml;
       loadHtml(document, iframe, "chrome-extension://ancho/" + Config.browser_action.default_popup, function() {
+        iframe.contentDocument.addEventListener('readystatechange', function(event) {
+          iframe.contentDocument.removeEventListener('readystatechange', arguments.callee, false);
+          panel.style.removeProperty('visibility');
+        }, false);
         var body = iframe.contentDocument.body;
         // Need to float the body so that it will resize to the contents of its children.
         if (!body.style.cssFloat) {
@@ -139,7 +144,7 @@
             event.preventDefault();
             var browser = document.getElementById("content");
             if ('_newtab' === link.target) {
-              browser.addTab(link.href);
+              browser.selectedTab = browser.addTab(link.href);
             }
             else {
               browser.contentWindow.open(link.href, link.target);
@@ -184,8 +189,8 @@
       var iframe = panel.firstChild;
       var document = event.target.ownerDocument;
       iframe.setAttribute('src', 'about:blank');
-      panel.addEventListener('popupshown', function(event) {
-        panel.removeEventListener('popupshown', arguments.callee, false);
+      panel.addEventListener('popupshowing', function(event) {
+        panel.removeEventListener('popupshowing', arguments.callee, false);
         self.showPopup(panel, iframe, document);
       }, false);
       panel.openPopup(toolbarButton, "after_start", 0, 0, false, false);
