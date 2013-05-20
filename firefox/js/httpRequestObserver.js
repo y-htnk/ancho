@@ -158,6 +158,7 @@
         break;
 
       case nsIHttpActivityObserver.ACTIVITY_SUBTYPE_REQUEST_HEADER:
+        requestData.timing.started = aTimestamp;
         var pos = aExtraStringData.indexOf('\n');
         if (pos !== -1) {
           requestData.requestLine = aExtraStringData.substr(0, pos-1);
@@ -459,7 +460,7 @@
       data.response = {
         requestHeaders: this._transformHeaders(requestVisitor.headers),
         headers: this._transformHeaders(responseVisitor.headers),
-        mimeType: httpChannel.getResponseHeader('Content-Type') || 'text/html',
+        mimeType: 'n/a',
         status: statusCode,
         statusText: statusText,
         timing: {
@@ -485,6 +486,12 @@
         url: params.url
       };
       // ---
+
+      try {
+        data.response.mimeType = httpChannel.getResponseHeader('Content-Type');
+      } catch (e) {
+        // pass, the Content-Type header not set, using default value 'n/a'
+      }
 
       if (params.timing.resolving || params.timing.connecting) {
         data.response.connectionReused = false;
