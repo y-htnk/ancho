@@ -389,6 +389,12 @@ STDMETHODIMP CAnchoPassthruAPP::StartEx(
     method = L"GET";
   }
   ATLTRACE(L"CAnchoPassthruAPP - processing %s\n", rawUri);
+  if (std::wstring(L"http:///") == std::wstring(rawUri.m_str)) {
+    //Hack used for connecting browser navigate call and actual tab (request ID passed in url)
+    //creation causes "http:///" being passed to PAPP - we can ignore it
+    //TODO - remove after we also remove the hack (if even possible)
+    return S_FALSE;
+  }
   IF_FAILED_RET(__super::StartEx(pUri, pOIProtSink, pOIBindInfo, grfPI, dwReserved));
 
   if (!m_BrowserEvents) {
