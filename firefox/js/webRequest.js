@@ -53,12 +53,12 @@
           }
         }
         // TODO: Implement filter.windowId
-        callback();
+        return callback();
       }
 
       var self = this;
       this.sink = function(details, callback) {
-        checkFilter(details, self.listener.bind(this, details, callback));
+        return checkFilter(details, self.listener.bind(this, details, callback));
       };
     }
 

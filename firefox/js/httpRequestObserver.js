@@ -315,7 +315,7 @@
           context._setRequest(tabId, Utils.removeFragment(url), null);
           params.error = 'REQUEST_CANCELLED_BY_EXTENSION';
           context.onErrorOccurred.fire([ params ]);
-          if (this._debuggerIsMonitored(tabId, url)) {
+          if (context._debuggerIsMonitored(tabId, url)) {
             var data = {
               timestamp: params.timeStamp / 1000,
               requestId: params.requestId
