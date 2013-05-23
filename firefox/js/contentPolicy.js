@@ -1,13 +1,13 @@
 (function() {
   const { classes: Cc, interfaces: Ci, utils: Cu, manager: Cm } = Components;
 
-  Cu.import("resource://gre/modules/NetUtil.jsm");
-  Cu.import("resource://gre/modules/XPCOMUtils.jsm");
-  Cu.import("resource://gre/modules/Services.jsm");
+  Cu.import('resource://gre/modules/NetUtil.jsm');
+  Cu.import('resource://gre/modules/XPCOMUtils.jsm');
+  Cu.import('resource://gre/modules/Services.jsm');
 
   var config = require('./config');
 
-  var classID = Components.ID("{d60ca65e-2ab6-4909-9d61-d7ac337a7056}");
+  var classID = Components.ID('{d60ca65e-2ab6-4909-9d61-d7ac337a7056}');
   var contractID = '@salsitasoft.com/ancho/content-policy;1';
   var className = 'com.salsitasoft.ancho.contentPolicy';
 

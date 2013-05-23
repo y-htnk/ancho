@@ -50,7 +50,7 @@
         (queryInfo.windowId && queryInfo.windowId === chrome.windows.WINDOW_ID_CURRENT)) {
         // Just the current window.
         let chromeWindow = Utils.getChromeWindow(this._window);
-        let windowType = chromeWindow.document.documentElement.getAttribute("windowtype");
+        let windowType = chromeWindow.document.documentElement.getAttribute('windowtype');
         if ('ancho-hidden' === windowType) {
           // We're in the background window, so use the most recent browser window.
           chromeWindow = Services.wm.getMostRecentWindow('navigator:browser');

@@ -23,7 +23,7 @@
     iconEnabled: false,
     buttonId: null,
     badgeText: null,
-    badgeBackgroundColor: "#f00",
+    badgeBackgroundColor: '#f00',
     tabBadgeText: {},
     tabBadgeBackgroundColor: {},
 
@@ -62,27 +62,27 @@
         // No toolbar in this window so we're done.
         return;
       }
-      var toolbarButton = document.createElement("toolbarbutton");
-      toolbarButton.setAttribute("id", id);
-      toolbarButton.setAttribute("type", "button");
-      toolbarButton.setAttribute("removable", "true");
-      toolbarButton.setAttribute("class", "toolbarbutton-1 chromeclass-toolbar-additional");
-      toolbarButton.setAttribute("label", Config.extensionName);
+      var toolbarButton = document.createElement('toolbarbutton');
+      toolbarButton.setAttribute('id', id);
+      toolbarButton.setAttribute('type', 'button');
+      toolbarButton.setAttribute('removable', 'true');
+      toolbarButton.setAttribute('class', 'toolbarbutton-1 chromeclass-toolbar-additional');
+      toolbarButton.setAttribute('label', Config.extensionName);
 
       var iconPath = this.iconEnabled ? Config.hostExtensionRoot + Config.browser_action.default_icon : '';
-      toolbarButton.style.listStyleImage = "url(" + iconPath + ")";
+      toolbarButton.style.listStyleImage = 'url(' + iconPath + ')';
 
       var palette = document.getElementById(NAVIGATOR_TOOLBOX).palette;
       palette.appendChild(toolbarButton);
 
-      var currentset = toolbar.getAttribute("currentset").split(",");
+      var currentset = toolbar.getAttribute('currentset').split(',');
       var index = currentset.indexOf(id);
       if (index === -1) {
         if (Config.firstRun) {
           // No button yet so add it to the toolbar.
           toolbar.appendChild(toolbarButton);
-          toolbar.setAttribute("currentset", toolbar.currentSet);
-          document.persist(toolbar.id, "currentset");
+          toolbar.setAttribute('currentset', toolbar.currentSet);
+          document.persist(toolbar.id, 'currentset');
         }
       }
       else {
@@ -99,14 +99,14 @@
         }
       }
 
-      var panel = document.createElement("panel");
-      var iframe = document.createElement("iframe");
+      var panel = document.createElement('panel');
+      var iframe = document.createElement('iframe');
       iframe.setAttribute('type', 'chrome');
 
       toolbarButton.appendChild(panel);
       panel.appendChild(iframe);
 
-      var hbox = document.createElement("hbox");
+      var hbox = document.createElement('hbox');
       hbox.id = HBOX_ID;
       hbox.setAttribute('hidden', 'true');
       panel.appendChild(hbox);
@@ -127,7 +127,7 @@
       // Deferred loading of scripting.js since we have a circular reference that causes
       // problems if we load it earlier.
       var loadHtml = require('./scripting').loadHtml;
-      loadHtml(document, iframe, "chrome-extension://ancho/" + Config.browser_action.default_popup, function() {
+      loadHtml(document, iframe, 'chrome-extension://ancho/' + Config.browser_action.default_popup, function() {
         iframe.contentDocument.addEventListener('readystatechange', function(event) {
           iframe.contentDocument.removeEventListener('readystatechange', arguments.callee, false);
           panel.style.removeProperty('visibility');
@@ -138,11 +138,11 @@
           body.style.cssFloat = 'left';
         }
         // We need to intercept link clicks and open them in the current browser window.
-        body.addEventListener("click", function(event) {
+        body.addEventListener('click', function(event) {
           var link = event.target;
           if (link.href) {
             event.preventDefault();
-            var browser = document.getElementById("content");
+            var browser = document.getElementById('content');
             if ('_newtab' === link.target) {
               browser.selectedTab = browser.addTab(link.href);
             }
@@ -179,7 +179,7 @@
     },
 
     clickHandler: function(event) {
-      if (!event.target || event.target.tagName !== "toolbarbutton") {
+      if (!event.target || event.target.tagName !== 'toolbarbutton') {
         // Only react when button itself is clicked (i.e. not the panel).
         return;
       }
@@ -193,13 +193,13 @@
         panel.removeEventListener('popupshowing', arguments.callee, false);
         self.showPopup(panel, iframe, document);
       }, false);
-      panel.openPopup(toolbarButton, "after_start", 0, 0, false, false);
+      panel.openPopup(toolbarButton, 'after_start', 0, 0, false, false);
     },
 
     _drawButton: function(tabId, button, canvas) {
-      var ctx = canvas.getContext("2d");
-      ctx.textBaseline = "top";
-      ctx.font = "bold 9px sans-serif";
+      var ctx = canvas.getContext('2d');
+      ctx.textBaseline = 'top';
+      ctx.font = 'bold 9px sans-serif';
 
       var text = this.getBadgeText(tabId);
       if (text)
@@ -214,11 +214,11 @@
         var color = this.getBadgeBackgroundColor(tabId);
         ctx.fillStyle = color;
         ctx.fillRect(x-rp, y-1, w+rp+rp, h+2);
-        ctx.fillStyle = "#fff"; // text color
+        ctx.fillStyle = '#fff'; // text color
         ctx.fillText(text, x, y);
       }
 
-      button.image = canvas.toDataURL("image/png", "");  // set new toolbar image
+      button.image = canvas.toDataURL('image/png', '');  // set new toolbar image
     },
 
     setIcon: function(window, details) {
@@ -237,12 +237,12 @@
         hbox.appendChild(img);
       }
 
-      canvas.setAttribute("width", BROWSER_ACTION_ICON_WIDTH);
-      canvas.setAttribute("height", BROWSER_ACTION_ICON_HEIGHT);
-      var ctx = canvas.getContext("2d");
+      canvas.setAttribute('width', BROWSER_ACTION_ICON_WIDTH);
+      canvas.setAttribute('height', BROWSER_ACTION_ICON_HEIGHT);
+      var ctx = canvas.getContext('2d');
 
       var button = document.getElementById(this.buttonId);
-      var browser = document.getElementById("content");
+      var browser = document.getElementById('content');
       var tabId = Utils.getWindowId(browser.contentWindow);
 
       var self = this;

@@ -48,7 +48,7 @@
           return info.message.replace(/\$\$/g, '$');
         }
       }
-      return "";
+      return '';
     }
   };
 

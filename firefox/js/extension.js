@@ -5,7 +5,7 @@
   var Cu = Components.utils;
 
   Cu.import('resource://gre/modules/Services.jsm');
-  Cu.import("resource://gre/modules/NetUtil.jsm");
+  Cu.import('resource://gre/modules/NetUtil.jsm');
 
   var Utils = require('./utils');
   var Event = require('./event');

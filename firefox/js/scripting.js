@@ -33,7 +33,7 @@
     var baseUrl = Services.io.newURI(spec, '', null);
     var principal;
     // Preserving backwards compatibility with FF18 and older.
-    if (Cc["@mozilla.org/xre/app-info;1"].getService(Ci.nsIXULAppInfo).version.split('.')[0] >= 19) {
+    if (Cc['@mozilla.org/xre/app-info;1'].getService(Ci.nsIXULAppInfo).version.split('.')[0] >= 19) {
       principal = CC('@mozilla.org/systemprincipal;1', 'nsIPrincipal')();
     }
     else {

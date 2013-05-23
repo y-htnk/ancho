@@ -4,8 +4,8 @@
   var Ci = Components.interfaces;
   var Cu = Components.utils;
 
-  Cu.import("resource://gre/modules/Services.jsm");
-  Cu.import("resource://gre/modules/FileUtils.jsm");
+  Cu.import('resource://gre/modules/Services.jsm');
+  Cu.import('resource://gre/modules/FileUtils.jsm');
 
   var StorageAPI = function(extensionState, contentWindow, storageSpace) {
     var dbFile = FileUtils.getFile('ProfD', ['ancho_storage.sqlite3']);
@@ -47,7 +47,7 @@
         var results = {};
         var myKeys = _prepareArrayArgument(keys, results);
         if (!myKeys) {
-          throw new Error("Invocation of method get doesn't match definition");
+          throw new Error('Invocation of method get does not match definition');
         }
 
         var callCallback = true;
@@ -128,7 +128,7 @@
         });
 
       } else {
-        throw new Error("Invocation of set doesn't match definition");
+        throw new Error('Invocation of set does not match definition');
       }
     },
 
@@ -137,7 +137,7 @@
         var results = {};
         var myKeys = _prepareArrayArgument(keys, results);
         if (!myKeys) {
-          throw new Error("Invocation of method remove doesn't match definition");
+          throw new Error('Invocation of method remove does not match definition');
         }
         var statement =
           this._connection.createStatement('DELETE FROM '+this._tableName+' WHERE key IN (:key)');

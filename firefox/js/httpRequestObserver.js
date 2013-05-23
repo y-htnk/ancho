@@ -38,7 +38,7 @@
     this._debuggerData = require('./debuggerData').data;
 
     this._httpActivityDistributor =
-        Cc["@mozilla.org/network/http-activity-distributor;1"]
+        Cc['@mozilla.org/network/http-activity-distributor;1']
         .getService(Ci.nsIHttpActivityDistributor);
   }
 
@@ -177,18 +177,18 @@
 
       /*
       case nsIHttpActivityObserver.ACTIVITY_SUBTYPE_RESPONSE_COMPLETE:
-        awlog.debug("ACTIVITY_SUBTYPE_RESPONSE_COMPLETE (" + request.URISpec
-            + "): " + aTimestamp);
+        awlog.debug('ACTIVITY_SUBTYPE_RESPONSE_COMPLETE (' + request.URISpec
+            + '): ' + aTimestamp);
         // Received a complete HTTP response.
         request.bytesReceived += aExtraSizeData;
         request.data.top.bytesReceived += aExtraSizeData;
-        awlog.debug("EXTRA STRING DATA (resp complete): " + aExtraStringData);
+        awlog.debug('EXTRA STRING DATA (resp complete): ' + aExtraStringData);
         break;
 
 
       case nsIHttpActivityObserver.ACTIVITY_SUBTYPE_REQUEST_BODY_SENT:
-        awlog.debug("ACTIVITY_SUBTYPE_REQUEST_BODY_SENT (" + request.URISpec
-            + "): " + aTimestamp);
+        awlog.debug('ACTIVITY_SUBTYPE_REQUEST_BODY_SENT (' + request.URISpec
+            + '): ' + aTimestamp);
         break;
       */
       default:
@@ -327,7 +327,7 @@
       return false;
     }
 
-    // fire "Network.requestWillBeSent"
+    // fire 'Network.requestWillBeSent'
     if (this._debuggerIsMonitored(tabId, url)) {
       var data = {
         timestamp: params.timeStamp / 1000,
@@ -386,7 +386,7 @@
 
     // dispatching dedicated listening thread for onStopRequest
     // and onDataAvailable events
-    var mainThread = Cc["@mozilla.org/thread-manager;1"].getService().mainThread;
+    var mainThread = Cc['@mozilla.org/thread-manager;1'].getService().mainThread;
     mainThread.dispatch(new ListenerThread({
         id: tabId,
         uri: Utils.removeFragment(url),
@@ -723,7 +723,7 @@
         default:
           // TODO:
           // this code is not invoked in some cases, e.g. for <script> tags
-          // with invalid "src".  so need to investigate:
+          // with invalid 'src'.  so need to investigate:
           // (a) what errors are covered here, and
           // (b) how to cover the remaining ones we need.
           data.error = Utils.mapHttpError(statusCode);

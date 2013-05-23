@@ -80,7 +80,7 @@
   };
 
   WindowWatcherImpl.prototype.forAllWindows = function(callback) {
-    var browserWindows = Services.wm.getEnumerator("navigator:browser");
+    var browserWindows = Services.wm.getEnumerator('navigator:browser');
 
     while (browserWindows.hasMoreElements()) {
       var browserWindow = browserWindows.getNext();
@@ -89,7 +89,7 @@
   };
 
   WindowWatcherImpl.prototype.isActiveBrowserWindow = function(browserWindow) {
-    return browserWindow === Services.wm.getMostRecentWindow("navigator:browser");
+    return browserWindow === Services.wm.getMostRecentWindow('navigator:browser');
   };
 
   WindowWatcherImpl.prototype.isActiveTab = function(browserWindow, tab) {
@@ -98,7 +98,7 @@
 
   WindowWatcherImpl.prototype.observe = function(subject, topic, data) {
     var browserWindow = subject;
-    if (topic === "domwindowopened") {
+    if (topic === 'domwindowopened') {
       if ('complete' === browserWindow.document.readyState && _isBrowserWindow(browserWindow)) {
         this.fire(true, browserWindow);
       } else {
@@ -111,7 +111,7 @@
         });
       }
     }
-    if (topic === "domwindowclosed") {
+    if (topic === 'domwindowclosed') {
       if (_isBrowserWindow(browserWindow)) {
         this.fire(false, browserWindow);
       }

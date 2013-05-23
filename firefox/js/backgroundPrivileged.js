@@ -94,7 +94,7 @@ window.addEventListener('load', function(event) {
   httpObserver.init(ExtensionState, window);
   createWindowWatcher();
   var spec = Config.backgroundPage
-        ? "chrome-extension://ancho/" + Config.backgroundPage
+        ? 'chrome-extension://ancho/' + Config.backgroundPage
         // Cannot use 'about:blank' here, because DOM for 'about:blank'
         // is inappropriate for script inserting: neither 'document.head'
         // nor 'document.body' are defined.

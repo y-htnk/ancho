@@ -1,15 +1,15 @@
 (function() {
   const { classes: Cc, interfaces: Ci, utils: Cu, manager: Cm } = Components;
 
-  Cu.import("resource://gre/modules/NetUtil.jsm");
-  Cu.import("resource://gre/modules/XPCOMUtils.jsm");
-  Cu.import("resource://gre/modules/Services.jsm");
+  Cu.import('resource://gre/modules/NetUtil.jsm');
+  Cu.import('resource://gre/modules/XPCOMUtils.jsm');
+  Cu.import('resource://gre/modules/Services.jsm');
 
   var config = require('./config');
 
-  const SCHEME = "chrome-extension";
+  const SCHEME = 'chrome-extension';
 
-  var classID = Components.ID("{b0a95b24-4270-4e74-8179-f170d6dab4a1}");
+  var classID = Components.ID('{b0a95b24-4270-4e74-8179-f170d6dab4a1}');
 
   var extensionURIs = {};
 
@@ -35,13 +35,13 @@
       Ci.nsIProtocolHandler.URI_IS_LOCAL_RESOURCE,
 
     newURI: function(aSpec, aOriginCharset, aBaseURI) {
-      let uri = Cc["@mozilla.org/network/standard-url;1"].createInstance(Ci.nsIStandardURL);
+      let uri = Cc['@mozilla.org/network/standard-url;1'].createInstance(Ci.nsIStandardURL);
       uri.init(Ci.nsIStandardURL.URLTYPE_STANDARD, null, aSpec, aOriginCharset, aBaseURI);
       return uri.QueryInterface(Ci.nsIURI);
     },
 
     _mapToFileURI: function(aURI) {
-      var path = "." + aURI.path;
+      var path = '.' + aURI.path;
       let baseURI = extensionURIs[aURI.host];
       return NetUtil.newURI(path, null, baseURI);
     },

@@ -68,10 +68,10 @@
     this.addListener = function(listener, filter) {
       // TODO: Use generic code for checking parameters.
       if (!filter) {
-        throw "No filter provided to addListener";
+        throw 'No filter provided to addListener';
       }
       if (!filter.urls) {
-        throw "No urls property provided to filter in addListener";
+        throw 'No urls property provided to filter in addListener';
       }
       var proxy = new ListenerProxy(listener, filter);
       superAddListener.call(this, proxy.sink);
