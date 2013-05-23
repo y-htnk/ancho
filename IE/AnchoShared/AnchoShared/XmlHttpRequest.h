@@ -99,6 +99,7 @@ public:
   HRESULT STDMETHODCALLTYPE open(BSTR bstrMethod, BSTR bstrUrl, VARIANT varAsync, VARIANT bstrUser, VARIANT bstrPassword)
   {
     mUrl = (wchar_t *)bstrUrl;
+    mAsync = varAsync;
     return mRequest->open(bstrMethod, bstrUrl, varAsync, bstrUser, bstrPassword);
   }
 
@@ -121,6 +122,19 @@ public:
   {
     HRESULT hr = mRequest->get_status(plStatus);
     if (hr == S_OK && *plStatus == 0 && isExtensionPage(mUrl)) { //Workaround - local file request returns 0
+      *plStatus = 200;
+      return hr;
+    }
+    long state;
+    CComBSTR tmp;
+    //Workaround - Check if we completed the request and we have response text
+    if (
+      *plStatus == 0 &&
+      SUCCEEDED(get_readyState(&state)) &&
+      state == 4 &&
+      SUCCEEDED(get_responseText(&tmp))
+      )
+    {
       *plStatus = 200;
     }
     return hr;
