@@ -138,6 +138,10 @@ struct OnClickFunctor
       return;
     }
 
+    if (hrefValue.Length() == 0) {
+      return;
+    }
+
     htmlEvent->put_returnValue(CComVariant(false));
 
     Ancho::Utils::JSObject properties;
