@@ -58,6 +58,9 @@ var CONTENT_API_NAMES = [
 
 
 function createChromeAPISubset(chrome, aInstanceID, aAPINames) {
+  //TODO - use constructors from right context - these are from Magpie
+  serviceAPI.tabManager.registerConstructors(function(){ return new Object; }, function(){ return new Array; }, addonAPI.id, aInstanceID);
+
   for (var i = 0; i < aAPINames.length; ++i) {
     console.debug("Creating chrome." + aAPINames[i] + " API instance n. " + aInstanceID);
     chrome[aAPINames[i]] = require(aAPINames[i] + ".js").createAPI(aInstanceID);

@@ -12,6 +12,7 @@ import "ocidl.idl";
 interface IAnchoAddonBackground;
 interface IAnchoRuntime;
 interface IAnchoServiceApi;
+interface IAnchoTabManagerInternal;
 
 /*==========================================================================*/
 [
@@ -27,19 +28,15 @@ interface IAnchoAddonService : IUnknown
   HRESULT GetAddonBackground([in] BSTR bsID, [out, retval] IAnchoAddonBackground ** ppRet);
   HRESULT GetModulePath([out, retval] BSTR * pbsPath);
 
-  HRESULT registerRuntime([in] INT aFrameTab, [in] IAnchoRuntime * aRuntime, [in] ULONG aHeartBeat, [out, retval] INT *aTabID);
-  HRESULT unregisterRuntime([in] INT aTabID);
-  HRESULT createTabNotification([in] INT aTabID, [in] INT aRequestID);
   HRESULT invokeEventObjectInAllExtensions([in] BSTR aEventName, [in] LPDISPATCH aArgs, [out] VARIANT* aRet);
 
   HRESULT webBrowserReady();
 
   HRESULT getInternalProtocolParameters([out] BSTR * aServiceHost, [out] BSTR * aServicePath);
-  HRESULT registerBrowserActionToolbar([in] INT aFrameTab, [out] BSTR * aUrl, [out] INT*aTabId);
+  HRESULT registerBrowserActionToolbar([in] OLE_HANDLE aFrameTab, [out] BSTR * aUrl, [out] INT*aTabId);
   HRESULT unregisterBrowserActionToolbar([in] INT aTabId);
   HRESULT getDispatchObject([out, retval] IDispatch **aRet);
 };
-
 
 
 
@@ -115,11 +112,8 @@ library AnchoBgSrvLib
     [propget, id(1)]
     HRESULT cookieManager([out, retval] LPDISPATCH* ppRet);
 
-    HRESULT createTab([in] LPDISPATCH aProperties, [in] LPDISPATCH aCreator, [in] LPDISPATCH aCallback);
-    HRESULT updateTab([in] INT aTabId, [in] LPDISPATCH aProperties);
-    HRESULT getTabInfo([in] INT aTabId, [in] LPDISPATCH aCreator, [out, retval] VARIANT* aRet);
-    HRESULT removeTabs([in] LPDISPATCH aTabs, [in] LPDISPATCH aCallback);
-    HRESULT queryTabs([in] LPDISPATCH aQueryInfo, [in] LPDISPATCH aCreator, [out, retval] VARIANT* aRet);
+    [propget, id(2)]
+    HRESULT tabManager([out, retval] LPDISPATCH* ppRet);
 
     HRESULT getWindow([in] INT aWindowId, [in] LPDISPATCH aCreator, [in] BOOL aPopulate, [out, retval] VARIANT* aRet);
     HRESULT getAllWindows([in] LPDISPATCH aCreator, [in] BOOL aPopulate, [out, retval] VARIANT* aRet);
@@ -129,7 +123,7 @@ library AnchoBgSrvLib
     HRESULT createPopupWindow([in] BSTR aUrl, INT aX, INT aY, [in] LPDISPATCH aInjectedData, [in] LPDISPATCH aCloseCallback);
     HRESULT getCurrentWindowId([out, retval] INT *aWinId);
 
-    HRESULT executeScript([in] BSTR aExtensionId, [in] INT aTabID, [in] BSTR aCode, [in] BOOL aFileSpecified, [in] BOOL aInAllFrames);
+    //HRESULT executeScript([in] BSTR aExtensionId, [in] INT aTabID, [in] BSTR aCode, [in] BOOL aFileSpecified, [in] BOOL aInAllFrames);
     HRESULT invokeExternalEventObject([in] BSTR aExtensionId, [in] BSTR aEventName, [in] LPDISPATCH aArgs, [out, retval] VARIANT* aRet);
 
     HRESULT getBrowserActions([out, retval] VARIANT* aBrowserActionsArray);
@@ -139,6 +133,49 @@ library AnchoBgSrvLib
 
     HRESULT testFunction([in] LPDISPATCH aObject, [in] LPDISPATCH aCallback);
   };
+  /*==========================================================================*/
+  [
+	  object,
+	  uuid(FE4E5D80-04A1-428C-8A0C-0E789E6D6B13),
+	  dual,
+	  nonextensible,
+	  helpstring("IAnchoBackgroundAPI Interface"),
+	  pointer_default(unique)
+  ]
+  interface ITabManager : IDispatch
+  {
+    [id(1), helpstring("createTab - asynchronous call")]
+    HRESULT createTab([in] LPDISPATCH aProperties, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+    [id(2), helpstring("reloadTab - asynchronous call")]
+    HRESULT reloadTab([in] INT aTabId, [in] LPDISPATCH aReloadProperties, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+    [id(3), helpstring("queryTabs - asynchronous call")]
+    HRESULT queryTabs([in] LPDISPATCH aProperties, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+    [id(4), helpstring("updateTab - asynchronous call")]
+    HRESULT updateTab([in] INT aTabId, [in] LPDISPATCH aUpdateProperties, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+    [id(5), helpstring("removeTabs - asynchronous call")]
+    HRESULT removeTabs([in] LPDISPATCH aTabs, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+
+    HRESULT registerConstructors([in] LPDISPATCH aObjectConstructor, [in] LPDISPATCH aArrayConstructor, [in] BSTR aExtensionId, [in] INT aApiId);
+    HRESULT getTabInfo([in] INT aTabId, [in] BSTR aExtensionId, [in] INT aApiId, [out, retval] VARIANT* aRet);
+  };
+
+  /*==========================================================================*/
+  [
+	  object,
+	  uuid(080226F2-41BE-4745-AABE-E7763AB5435F),
+	  oleautomation,
+	  nonextensible,
+	  helpstring("IAnchoTabManagerInternal Interface"),
+	  pointer_default(unique)
+  ]
+  interface IAnchoTabManagerInternal : IUnknown
+  {
+    HRESULT registerRuntime([in] OLE_HANDLE aFrameTab, [in] IAnchoRuntime * aRuntime, [in] ULONG aHeartBeat, [out, retval] INT *aTabID);
+    HRESULT unregisterRuntime([in] INT aTabID);
+
+    HRESULT createTabNotification([in] INT aTabId, [in] ULONG aRequestID);
+  };
+
 
   /*==========================================================================*/
   [

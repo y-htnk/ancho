@@ -279,7 +279,7 @@ HRESULT CAnchoBackgroundAPI::appendJSONFileToVariableAssignment(CString aFileNam
   if (f.tellg() > 0x00000000ffffffff) { //limit to 4gb
     return E_OUTOFMEMORY;
   }
-  loadedCode.reserve(f.tellg());
+  loadedCode.reserve(static_cast<size_t>(f.tellg()));
   f.seekg(0, std::ios::beg);
   loadedCode.assign((std::istreambuf_iterator<char>(f)),
                      std::istreambuf_iterator<char>());

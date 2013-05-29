@@ -12,6 +12,7 @@
 #include "AnchoBrowserEvents.h"
 #include "AnchoPassthruAPP.h"
 #include "dllmain.h"
+#include <AnchoCommons/JSValueWrapper.hpp>
 
 #include <string>
 #include <ctime>
@@ -74,9 +75,10 @@ void CAnchoRuntime::DestroyAddons()
   }
   m_Addons.clear();
 
-  if(m_pAnchoService) {
-    m_pAnchoService->unregisterRuntime(m_TabID);
+  if(mTabManager) {
+    mTabManager->unregisterRuntime(m_TabID);
   }
+  mTabManager.Release();
   m_pAnchoService.Release();
   if (m_pWebBrowser)
   {
@@ -120,8 +122,23 @@ HRESULT CAnchoRuntime::Init()
   // create addon service object
   IF_FAILED_RET(m_pAnchoService.CoCreateInstance(CLSID_AnchoAddonService));
 
+  //get access to the tabmanager
+  CComQIPtr<IAnchoTabManagerInternal> tabManager;
+  CComQIPtr<IAnchoServiceApi> serviceApi = m_pAnchoService;
+  if (!serviceApi) {
+    return E_NOINTERFACE;
+  }
+  CComQIPtr<IDispatch> dispatch;
+  IF_FAILED_RET(serviceApi->get_tabManager(&dispatch));
+  tabManager = dispatch;
+  if (!tabManager) {
+    return E_NOINTERFACE;
+  }
+  mTabManager = tabManager;
+
+
   // Registering tab in service - obtains tab id and assigns it to the tab as property
-  IF_FAILED_RET(m_pAnchoService->registerRuntime((INT)getFrameTabWindow(), this, m_HeartbeatSlave.id(), &m_TabID));
+  IF_FAILED_RET(mTabManager->registerRuntime((OLE_HANDLE)getFrameTabWindow(), this, m_HeartbeatSlave.id(), &m_TabID));
   HWND hwnd;
   m_pWebBrowser->get_HWND((SHANDLE_PTR*)&hwnd);
   ::SetProp(hwnd, s_AnchoTabIDPropertyName, (HANDLE)m_TabID);
@@ -203,25 +220,22 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
   // Check if this is a new tab we are creating programmatically.
   // If so redirect it to the correct URL.
   std::wstring url(pURL->bstrVal, SysStringLen(pURL->bstrVal));
-  {
-    //TODO - use headers instead of url
-    size_t first = url.find_first_of(L'#');
-    size_t last = url.find_last_of(L'#');
-    if (first != std::wstring::npos && first != last) {
-      std::wstring requestIDStr = url.substr(first+1, last - first - 1);
-      int requestID = _wtoi(requestIDStr.c_str());
-      url.erase(0, last+1);
 
-      CComVariant urlVar(url.c_str());
-      CComVariant vtEmpty;
+  boost::wregex expression(L"(.*)://\\$\\$([0-9]+)\\$\\$(.*)");
+  boost::wsmatch what;
+  //TODO - find a better way
+  if (boost::regex_match(url, what, expression)) {
+    int requestId = boost::lexical_cast<int>(what[2].str());
+    url = boost::str(boost::wformat(L"%1%://%2%") % what[1] % what[3]);
 
-      *Cancel = TRUE;
-      pWebBrowser->Stop();
-      pWebBrowser->Navigate2(&urlVar, Flags, TargetFrameName, PostData, Headers);
-      m_pAnchoService->createTabNotification(m_TabID, requestID);
-      return;
-    }
+    _variant_t vtUrl(url.c_str());
+    *Cancel = TRUE;
+    pWebBrowser->Stop();
+    pWebBrowser->Navigate2(&vtUrl.GetVARIANT(), Flags, TargetFrameName, PostData, Headers);
+    mTabManager->createTabNotification(m_TabID, requestId);
+    return;
   }
+
 
   VARIANT_BOOL isTop;
   if (SUCCEEDED(pWebBrowser->get_TopLevelContainer(&isTop))) {
@@ -405,14 +419,14 @@ HRESULT CAnchoRuntime::fireOnBeforeRequest(const std::wstring &aUrl, const std::
     BEGIN_TRY_BLOCK
       aOutInfo.cancel = false;
       for (ULONG i = 0; i < arr.GetCount(); ++i) {
-        JSValue item(arr.GetAt(i));
+        Ancho::Utils::JSObjectWrapperConst item = Ancho::Utils::JSValueWrapperConst(arr.GetAt(i)).toObject();
 
-        JSValue cancel = item[L"cancel"];
+        Ancho::Utils::JSValueWrapperConst cancel = item[L"cancel"];
         if (!cancel.isNull()) {
           aOutInfo.cancel = aOutInfo.cancel || cancel.toBool();
         }
 
-        JSValue redirectUrl = item[L"redirectUrl"];
+        Ancho::Utils::JSValueWrapperConst redirectUrl = item[L"redirectUrl"];
         if (!redirectUrl.isNull()) {
           aOutInfo.redirect = true;
           aOutInfo.newUrl = redirectUrl.toString();
@@ -449,15 +463,19 @@ HRESULT CAnchoRuntime::fireOnBeforeSendHeaders(const std::wstring &aUrl, const s
     VARIANT tmp = {0}; HRESULT hr = result.Detach(&tmp);
     BEGIN_TRY_BLOCK
       for (ULONG i = 0; i < arr.GetCount(); ++i) {
-        JSValue item(arr.GetAt(i));
-        JSValue requestHeaders = item[L"requestHeaders"];
+        Ancho::Utils::JSObjectWrapperConst item = Ancho::Utils::JSValueWrapperConst(arr.GetAt(i)).toObject();
+        Ancho::Utils::JSValueWrapperConst requestHeaders = item[L"requestHeaders"];
         if (!requestHeaders.isNull()) {
+          Ancho::Utils::JSArrayWrapperConst headersArray = requestHeaders.toArray();
           std::wostringstream oss;
-          int headerCount = requestHeaders[L"length"].toInt();
+          int headerCount = headersArray.size();
           for (int i = 0; i < headerCount; ++i) {
-            JSValue headerRecord = requestHeaders[i];
+            Ancho::Utils::JSValueWrapperConst headerRecord = headersArray[i];
             //TODO handle headerRecord[L"binaryValue"]
-            std::wstring headerText = headerRecord[L"name"].toString() + std::wstring(L": ") + headerRecord[L"value"].toString();
+            if (headerRecord.isNull()) {
+              continue;
+            }
+            std::wstring headerText = headerRecord.toObject()[L"name"].toString() + std::wstring(L": ") + headerRecord.toObject()[L"value"].toString();
             oss << headerText << L"\r\n";
           }
           aOutInfo.modifyHeaders = true;
@@ -611,13 +629,13 @@ STDMETHODIMP CAnchoRuntime::fillTabInfo(VARIANT* aInfo)
   obj.SetProperty(L"url", CComVariant(locationUrl));
 
   m_pWebBrowser->get_Name(&name);
-  obj.SetProperty(L"title", CComVariant(name));
+  IF_FAILED_RET(obj.SetProperty(L"title", CComVariant(name)));
 
-  obj.SetProperty(L"id", CComVariant(m_TabID));
+  IF_FAILED_RET(obj.SetProperty(L"id", CComVariant(m_TabID)));
 
-  obj.SetProperty(L"active", CComVariant(isTabActive()));
+  IF_FAILED_RET(obj.SetProperty(L"active", CComVariant(isTabActive())));
 
-  obj.SetProperty(L"windowId", reinterpret_cast<INT>(getMainWindow()));
+  IF_FAILED_RET(obj.SetProperty(L"windowId", reinterpret_cast<INT>(getMainWindow())));
   return S_OK;
 }
 

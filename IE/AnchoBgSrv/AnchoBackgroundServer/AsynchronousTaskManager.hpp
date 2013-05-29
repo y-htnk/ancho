@@ -1,6 +1,7 @@
 #pragma once
 
-namespace AnchoBackgroundServer {
+namespace Ancho {
+namespace Utils {
 
 class AsynchronousTaskManager: public boost::noncopyable
 {
@@ -40,4 +41,5 @@ AsynchronousTaskManager::addTask(TTask aTask)
   return boost::move(f);
 }
 
-} //namespace AnchoBackgroundServer
+} //namespace Utils
+} //namespace Ancho

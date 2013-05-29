@@ -122,7 +122,7 @@ var MessageSender = function(aInstanceId) {
 
   if (aInstanceId > 0) { //we are in tab context
     try {
-      this.tab = serviceAPI.getTabInfo(aInstanceId, Object);
+      this.tab = serviceAPI.tabManager.getTabInfo(aInstanceId, addonAPI.id, aInstanceId);
     } catch (e) {
       console.error("Internal error: getTabInfo() failed! " + e.description + "; error code = " + e.number);
       this.tab = { "id": aInstanceId };

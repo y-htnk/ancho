@@ -4,8 +4,10 @@
 #include <atltrace.h>
 
 //TODO - create proper exception hierarchy
-struct EInvalidPointer: std::exception { };
-struct ECast: std::exception { };
+struct EAnchoException : std::exception { };
+
+struct EInvalidPointer: EAnchoException { };
+struct ECast: EAnchoException { };
 struct ENotAnObject: ECast { };
 struct ENotAnArray: ECast { };
 struct ENotAString: ECast { };
@@ -13,10 +15,11 @@ struct ENotAnInt: ECast { };
 struct ENotADouble: ECast { };
 struct ENotABool: ECast { };
 struct ENotIDispatchEx: ECast { };
-struct EFail: std::exception { };
+struct EFail: EAnchoException { };
 struct EInvalidArgument: EFail { };
+struct EInvalidId: EInvalidArgument { };
 
-struct EHResult: std::exception
+struct EHResult: EAnchoException
 {
   EHResult(HRESULT hr): mHResult(hr) {}
   HRESULT mHResult;
@@ -72,7 +75,9 @@ hresultToException(HRESULT hr)
 }
 
 #define IF_FAILED_THROW(...) \
-  HRESULT _hr__ = __VA_ARGS__;\
-  if (FAILED(_hr__)) {\
-    hresultToException(_hr__);\
+  {\
+    HRESULT _hr__ = __VA_ARGS__;\
+    if (FAILED(_hr__)) {\
+      hresultToException(_hr__);\
+    }\
   }

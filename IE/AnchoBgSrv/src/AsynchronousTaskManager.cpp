@@ -2,7 +2,8 @@
 #include "AnchoBackgroundServer/AsynchronousTaskManager.hpp"
 
 
-namespace AnchoBackgroundServer {
+namespace Ancho {
+namespace Utils {
 
 namespace detail {
 typedef std::deque<boost::function<void()> > TaskQueue;
@@ -23,7 +24,7 @@ struct WorkerThreadFunc
 
   void operator()()
   {
-    CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 
     try {
       while (true) {
@@ -33,18 +34,26 @@ struct WorkerThreadFunc
         {//synchronize only queue management
           boost::unique_lock<boost::mutex> lock(mMutex);
           while (mQueue.empty()) {
+              ATLTRACE(L"ASYNC TASK MANAGER - Waiting\n");
               mCondVariable.wait(lock);
+              ATLTRACE(L"ASYNC TASK MANAGER - Finished waiting\n");
           }
           task = mQueue.front();
           mQueue.pop_front();
         }
         //Allow thread interruption before processing the task
         boost::this_thread::interruption_point();
-
-        task();
+        ATLTRACE(L"ASYNC TASK MANAGER - Starting the task\n");
+        try {
+          task();
+          ATLTRACE(L"ASYNC TASK MANAGER - Finishing the task\n");
+        } catch (std::exception &e) {
+          ATLTRACE(L"ASYNC TASK MANAGER - Caught an exception: %s\n", e.what());
+        }
       }
     } catch (boost::thread_interrupted &) {
       //Thread execution was properly ended.
+      ATLTRACE(L"ASYNC TASK MANAGER - Worker thread interrupted\n");
       return;
     }
   }
@@ -87,4 +96,5 @@ void AsynchronousTaskManager::addPackagedTask(boost::function<void()> aTask)
   mPimpl->mCondVariable.notify_one();
 }
 
-} //namespace AnchoBackgroundServer
+} //namespace Utils
+} //namespace Ancho

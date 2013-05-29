@@ -36,6 +36,8 @@
 #include <KnownFolders.h>
 #include <ShlObj.h>
 
+#include <comutil.h>
+
 #include <anchocommons.h>
 
 using namespace ATL;
@@ -89,9 +91,14 @@ using namespace LIB_BhoHelper;
 #include <deque>
 #include <string>
 #include <map>
+#include <set>
 #include <vector>
+#include <algorithm>
 
+#include <boost/regex.hpp>
 #include <boost/bind.hpp>
+#include <boost/format.hpp>
+#include <boost/lexical_cast.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/make_shared.hpp>
@@ -100,6 +107,13 @@ using namespace LIB_BhoHelper;
 #include <boost/function.hpp>
 #include <boost/thread/future.hpp>
 #include <boost/thread.hpp>
+#include <boost/atomic.hpp>
+#include <boost/foreach.hpp>
+#include <boost/asio.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+
+#include <boost/tuple/tuple.hpp>
+#include <boost/tuple/tuple_comparison.hpp>
 
 #include <boost/fusion/container/vector.hpp>
 #include <boost/fusion/support/is_sequence.hpp>

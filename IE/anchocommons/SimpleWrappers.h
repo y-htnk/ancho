@@ -4,6 +4,7 @@
 #include <sstream>
 #include <algorithm>
 #include <iterator>
+#include <Exceptions.h>
 
 class SimpleJSObject;
 typedef CComObject<SimpleJSObject>  ComSimpleJSObject;
@@ -15,23 +16,29 @@ typedef CComObject<SimpleJSArray>  ComSimpleJSArray;
 // TODO - extend and move to more suitable place (some utility library)
 class ATL_NO_VTABLE SimpleJSObject :
   public CComObjectRootEx<CComSingleThreadModel>,
-  public IDispatch
+  public IDispatchEx
 {
 public:
 
-  static HRESULT createInstance(CComPtr<ComSimpleJSObject> & aRet)
+  static CComPtr<ComSimpleJSObject> createInstance()
   {
     ComSimpleJSObject * newObject = NULL;
-    IF_FAILED_RET(ComSimpleJSObject::CreateInstance(&newObject));
-    CComPtr<ComSimpleJSObject> objectRet(newObject);  // to have a refcount of 1
-    aRet = objectRet;
+    IF_FAILED_THROW(ComSimpleJSObject::CreateInstance(&newObject));
+    return CComPtr<ComSimpleJSObject>(newObject);  // to have a refcount of 1
+  }
+  static HRESULT createInstance(CComPtr<ComSimpleJSObject> & aRet)
+  {
+    BEGIN_TRY_BLOCK;
+    aRet = SimpleJSObject::createInstance();
     return S_OK;
+    END_TRY_BLOCK_CATCH_TO_HRESULT;
   }
 
   // -------------------------------------------------------------------------
   // COM interface map
   BEGIN_COM_MAP(SimpleJSObject)
     COM_INTERFACE_ENTRY(IDispatch)
+    COM_INTERFACE_ENTRY(IDispatchEx)
   END_COM_MAP()
 
   // -------------------------------------------------------------------------
@@ -55,13 +62,7 @@ public:
     ENSURE_RETVAL(rgDispId);
     HRESULT hr = S_OK;
     for (size_t i = 0; i < cNames; ++i) {
-      MapDISPID::const_iterator it = mNameToID.find(std::wstring(rgszNames[i]));
-      if (it != mNameToID.end()) {
-        rgDispId[i] = it->second+1;
-      } else {
-        hr = DISP_E_UNKNOWNNAME;
-        rgDispId[i] = DISPID_UNKNOWN;
-      }
+      hr = GetDispID(rgszNames[i], fdexNameCaseSensitive, &(rgDispId[i]));
     }
     return hr;
   }
@@ -70,19 +71,96 @@ public:
                                   DISPPARAMS *pDispParams, VARIANT *pVarResult,
                                   EXCEPINFO *pExcepInfo, UINT *puArgErr)
   {
-    ENSURE_RETVAL(pVarResult);
-    if (dispIdMember > (int)mProperties.size() || dispIdMember == 0) {
-      VariantClear(pVarResult);
+    return InvokeEx(dispIdMember, lcid, wFlags, pDispParams, pVarResult, pExcepInfo, NULL);
+  }
+    // -------------------------------------------------------------------------
+  // IDispatchEx methods
+  STDMETHOD(GetDispID)(BSTR bstrName, DWORD grfdex, DISPID *pid)
+  {
+    ENSURE_RETVAL(pid);
+    HRESULT hr = S_OK;
+    *pid = getDispId(std::wstring(bstrName));
+    if (*pid == DISPID_UNKNOWN && (grfdex & fdexNameEnsure) ) {
+      *pid = (DISPID)mProperties.size() + 1;
+      mNameToID[std::wstring(bstrName)] = *pid - 1;
+      mProperties.push_back(CComVariant());
+    }
+    return *pid == DISPID_UNKNOWN ? DISP_E_UNKNOWNNAME : S_OK;
+  }
+
+  STDMETHOD(InvokeEx)(DISPID id, LCID lcid, WORD wFlags, DISPPARAMS *pdp,
+                      VARIANT *pvarRes, EXCEPINFO *pei,
+                      IServiceProvider *pspCaller)
+  {
+    if (id > (int)mProperties.size() || id == 0) {
+      if (pvarRes) {
+        VariantClear(pvarRes);
+      }
       return DISP_E_MEMBERNOTFOUND;
     }
-    //Read-only access
-    if (wFlags != DISPATCH_PROPERTYGET) {
+
+    if (wFlags & DISPATCH_PROPERTYGET) {
+      ENSURE_RETVAL(pvarRes);
+      return VariantCopy(pvarRes, &(mProperties[id-1]));
+    }
+
+    if (wFlags & DISPATCH_PROPERTYPUT || wFlags & DISPATCH_PROPERTYPUTREF) {
+      if (!pdp || pdp->cArgs == 0 || pdp->cArgs > 1) {
+        return E_INVALIDARG;
+      }
+      ATLASSERT(pdp->rgvarg != NULL);
+      mProperties[id-1] = CComVariant(pdp->rgvarg[0]);
+      if (pvarRes) {
+        VariantClear(pvarRes);
+      }
+      return S_OK;
+    }
       /*if (pExcepInfo) {
         pExcepInfo->bstrDescription
       }*/
-      return DISP_E_EXCEPTION;
+    return DISP_E_EXCEPTION;
+  }
+
+  STDMETHOD(DeleteMemberByName)(BSTR bstrName,DWORD grfdex)
+  {
+    DISPID did = getDispId(std::wstring(bstrName));
+    return DeleteMemberByDispID(did);
+  }
+
+  STDMETHOD(DeleteMemberByDispID)(DISPID id)
+  {
+    return E_NOTIMPL;
+  }
+  STDMETHOD(GetMemberProperties)(DISPID id, DWORD grfdexFetch, DWORD *pgrfdex)
+  {
+    return E_NOTIMPL;
+  }
+
+  STDMETHOD(GetMemberName)(DISPID id, BSTR *pbstrName)
+  {
+    return E_NOTIMPL;
+  }
+
+  STDMETHOD(GetNextDispID)(DWORD grfdex, DISPID id, DISPID *pid)
+  {
+    ENSURE_RETVAL(pid);
+    if (id == DISPID_STARTENUM) {
+      if (mProperties.empty()) {
+        return S_FALSE;
+      }
+      *pid = 1;
+      return S_OK;
     }
-    return VariantCopy(pVarResult, &(mProperties[dispIdMember-1]));
+    if (*pid == mNameToID.size()-1) {
+      return S_FALSE;
+    }
+    *pid += 1;
+    return S_OK;
+  }
+
+  STDMETHOD(GetNameSpaceParent)(IUnknown **ppunk)
+  {
+    return E_NOTIMPL;
   }
 
   HRESULT setProperty(const std::wstring &aName, CComVariant &aValue)
@@ -97,6 +175,14 @@ public:
     return S_OK;
   }
 
+  DISPID getDispId(const std::wstring &aName)
+  {
+    MapDISPID::const_iterator it = mNameToID.find(aName);
+    if (it != mNameToID.end()) {
+      return it->second+1;
+    }
+    return DISPID_UNKNOWN;
+  }
 protected:
   SimpleJSObject() {}
 
@@ -121,23 +207,27 @@ public:
     INDEX_START = 3
   };
 
-  static HRESULT createInstance(CComPtr<ComSimpleJSArray> & aRet)
+  static CComPtr<ComSimpleJSArray> createInstance()
   {
     ComSimpleJSArray * newObject = NULL;
-    IF_FAILED_RET(ComSimpleJSArray::CreateInstance(&newObject));
-    CComPtr<ComSimpleJSArray> objectRet(newObject);  // to have a refcount of 1
-    aRet = objectRet;
+    IF_FAILED_THROW(ComSimpleJSArray::CreateInstance(&newObject));
+    return CComPtr<ComSimpleJSArray>(newObject);  // to have a refcount of 1
+  }
+  static HRESULT createInstance(CComPtr<ComSimpleJSArray> & aRet)
+  {
+    BEGIN_TRY_BLOCK;
+    aRet = SimpleJSArray::createInstance();
     return S_OK;
+    END_TRY_BLOCK_CATCH_TO_HRESULT;
   }
 
   static HRESULT createInstance(const VariantVector &aVector, CComPtr<ComSimpleJSArray> & aRet)
   {
-    ComSimpleJSArray * newObject = NULL;
-    IF_FAILED_RET(ComSimpleJSArray::CreateInstance(&newObject));
-    CComPtr<ComSimpleJSArray> objectRet(newObject);  // to have a refcount of 1
-    std::copy(aVector.begin(), aVector.end(), newObject->begin());
-    aRet = objectRet;
+    BEGIN_TRY_BLOCK;
+    aRet = SimpleJSArray::createInstance();
+    std::copy(aVector.begin(), aVector.end(), aRet->begin());
     return S_OK;
+    END_TRY_BLOCK_CATCH_TO_HRESULT;
   }
 
   // -------------------------------------------------------------------------
@@ -227,250 +317,4 @@ public:
 protected:
   SimpleJSArray() {}
 };
-
-//---------------------------------------------------------------------------------------------
-class MemberForwardIterator: public std::iterator<std::forward_iterator_tag, const std::wstring>
-{
-public:
-	static const DWORD ALLOWED_PROPERTY_MASK = fdexPropCanGet | fdexPropCannotCall | fdexPropCannotConstruct | fdexPropCannotSourceEvents;
-	friend class JSValue;
-
-	MemberForwardIterator():mIsValid(false), mObject(NULL){}
-
-	MemberForwardIterator end()const {	return MemberForwardIterator();	}
-	bool operator==(const MemberForwardIterator& aIterator) const
-	{
-		return ((mIsValid && aIterator.mIsValid) && (mCurrentDispid == aIterator.mCurrentDispid))
-			|| (!mIsValid && !aIterator.mIsValid);
-	}
-
-	bool operator!=(const MemberForwardIterator& aIterator) const {	return !(*this == aIterator);	}
-
-	MemberForwardIterator& operator++()
-	{
-    moveToNextMember();
-		return *this;
-	}
-
-	MemberForwardIterator operator++(int)
-	{
-		MemberForwardIterator tmp(*this);
-		operator++();
-		return tmp;
-	}
-
-	reference operator*()
-  {
-    ATLASSERT(mIsValid);
-    return mCurrentMember;
-  }
-
-
-protected:
-
-  void moveToNextMember()
-  {
-    ATLASSERT(mObject);
-    HRESULT hr = S_OK;
-    while (S_OK == (hr = mObject->GetNextDispID(fdexEnumAll, mCurrentDispid, &mCurrentDispid))) {
-			DWORD properties;
-			hr = mObject->GetMemberProperties(mCurrentDispid, grfdexPropAll, &properties);
-
-			//if (S_OK != hr || (ALLOWED_PROPERTY_MASK & properties)) { //properties are always 0 - WHY??
-				break;
-			//}
-		}
-		if (hr == S_OK) {
-			mIsValid = true;
-      CComBSTR name;
-      IF_FAILED_THROW(mObject->GetMemberName(mCurrentDispid, &name));
-      mCurrentMember = name;
-		} else {
-      mIsValid = false;
-    }
-  }
-
-  //Iterator doesn't "own" the object -> we use raw pointer
-	MemberForwardIterator(IDispatchEx *aObject): mCurrentDispid(DISPID_STARTENUM), mObject(aObject), mIsValid(false)
-	{
-		if (!mObject) { //This iterator will remain invalid
-			return;
-		}
-		moveToNextMember();
-	}
-	DISPID				mCurrentDispid;
-	std::wstring	mCurrentMember;
-	IDispatchEx 	*mObject;
-	bool					mIsValid;
-};
-
-
-#define JS_OBJECT_TO_TYPE(TYPENAME, NAME, VARTYPE, EXCEPTION)\
-  TYPENAME to##NAME(){ \
-    if (!is##NAME()) { \
-      ANCHO_THROW(EXCEPTION()); \
-    } \
-    return TYPENAME((VARTYPE)(mCurrentValue.llVal));\
-  }
-#define JS_OBJECT_IS_TYPE(NAME, VT)\
-  bool is##NAME(){ \
-      HRESULT hr = mCurrentValue.ChangeType(VT);\
-      if (FAILED(hr)) {\
-        return false;\
-      }\
-      return true;\
-  }
-
-#define JS_OBJECT_TYPE_METHODS(TYPENAME, NAME, VARTYPE, VT, EXCEPTION)\
-  JS_OBJECT_IS_TYPE(NAME, VT)\
-  JS_OBJECT_TO_TYPE(TYPENAME, NAME, VARTYPE, EXCEPTION)
-
-//Wrapper for JS objects - currently read-only access
-class JSValue
-{
-public:
-  friend void swap(JSValue &aVal1, JSValue &aVal2);
-
-  typedef MemberForwardIterator NameIterator;
-
-  JSValue() {}
-
-  JSValue(const CComVariant &aVariant)
-    : mCurrentValue(aVariant) {}
-
-  JSValue(const VARIANT &aVariant)
-    : mCurrentValue(aVariant) {}
-
-  JSValue(const JSValue &aVariant)
-    : mCurrentValue(aVariant.mCurrentValue) {}
-
-  JS_OBJECT_TYPE_METHODS(std::wstring, String, BSTR, VT_BSTR, ENotAString)
-#pragma warning( push )
-#pragma warning( disable : 4800 )
-  JS_OBJECT_TYPE_METHODS(bool, Bool, BOOL, VT_BOOL, ENotABool)
-#pragma warning( pop )
-  JS_OBJECT_TYPE_METHODS(int, Int, INT, VT_I4, ENotAnInt)
-  JS_OBJECT_TYPE_METHODS(double, Double, double, VT_R8, ENotADouble)
-  //JS_OBJECT_TYPE_METHODS(CComPtr<IDispatch>, Object, IDispatch*, VT_DISPATCH, ENotAnObject)
-
-  void attach(VARIANT &aVariant)
-  {
-    IF_FAILED_THROW(mCurrentValue.Attach(&aVariant));
-  }
-
-  bool isNull()const
-  {
-    return mCurrentValue.vt == VT_EMPTY;
-  }
-
-  bool isObject()
-  {
-    return mCurrentValue.vt == VT_DISPATCH && !isArray();
-  }
-
-  bool isArray()
-  {
-    if (mCurrentValue.vt != VT_DISPATCH) {
-      return false;
-    }
-    try {
-      length();
-      return true;
-    } catch (ENotAnArray &) {
-      return false;
-    }
-  }
-
-  JSValue & operator=(JSValue aVal)
-  {
-    swap(*this, aVal);
-    return *this;
-  }
-
-  JSValue
-  operator[](int aIdx)
-  {
-    std::wostringstream oss;
-    oss << aIdx;
-    return operator[](oss.str());
-  }
-
-  JSValue
-  operator[](const std::wstring &aProperty)
-  {
-    return JSValue(getMember(aProperty));
-  }
-
-  NameIterator memberNames()
-  {
-    if (mCurrentValue.vt != VT_DISPATCH) {
-      ANCHO_THROW(ENotAnObject());
-    }
-    CComQIPtr<IDispatchEx> dispex = mCurrentValue.pdispVal;
-    if (!dispex) {
-      ANCHO_THROW(ENotIDispatchEx());
-    }
-    return NameIterator(dispex);
-  }
-
-  template<typename TVisitor>
-  typename TVisitor::result_type applyVisitor(TVisitor aVisitor)
-  {
-    switch (mCurrentValue.vt) {
-    case VT_BOOL:
-      return aVisitor(toBool());
-    case VT_I4:
-      return aVisitor(toInt());
-    case VT_R8:
-      return aVisitor(toDouble());
-    case VT_BSTR:
-      return aVisitor(toString());
-    default:
-      return aVisitor(*this);
-    }
-  }
-
-  size_t length()
-  {
-    CComVariant len = getMember(L"length");
-    HRESULT hr = len.ChangeType(VT_I4);
-    if (FAILED(hr)) {
-      ANCHO_THROW(ENotAnArray());
-    }
-    return static_cast<size_t>(len.lVal);
-  }
-
-  size_t size()
-  {
-    return length();
-  }
-protected:
-  CComVariant getMember(const std::wstring &aProperty)
-  {
-    if (mCurrentValue.vt != VT_DISPATCH) {
-      ANCHO_THROW(ENotAnObject());
-    }
-
-    CIDispatchHelper helper(mCurrentValue.pdispVal);
-
-    DISPID did = 0;
-    LPOLESTR lpNames[] = {(LPOLESTR)aProperty.c_str()};
-    if (FAILED(mCurrentValue.pdispVal->GetIDsOfNames(IID_NULL, lpNames, 1, LOCALE_USER_DEFAULT, &did))) {
-      return CComVariant();
-    }
-
-    CComVariant result;
-    DISPPARAMS params = {0};
-    IF_FAILED_THROW(mCurrentValue.pdispVal->Invoke(did, IID_NULL, LOCALE_USER_DEFAULT, DISPATCH_PROPERTYGET, &params, &result, NULL, NULL));
-
-    return result;
-  }
-
-  CComVariant mCurrentValue;
-};
-
-inline void swap(JSValue &aVal1, JSValue &aVal2)
-{
-  std::swap(aVal1.mCurrentValue, aVal2.mCurrentValue);
-}
 

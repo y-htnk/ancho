@@ -3,10 +3,73 @@
 #include <map>
 #include <vector>
 #include <boost/variant.hpp>
-#include <SimpleWrappers.h>
+#include <AnchoCommons/JSValueWrapper.hpp>
 
-namespace AnchoBackgroundServer {
+namespace Ancho {
+namespace Utils {
 
+/**
+ * Hides marshalling of COM interfaces between threads.
+ */
+template <typename TInterface>
+class ObjectMarshaller: public boost::noncopyable
+{
+public:
+  typedef boost::shared_ptr<ObjectMarshaller<TInterface> > Ptr;
+
+  ObjectMarshaller(): mCookie(0)
+  { /*empty*/ }
+
+  ObjectMarshaller(CComPtr<TInterface> aPtr): mCookie(0)
+  {
+    ATLASSERT(aPtr);
+    //IF_FAILED_THROW(CoMarshalInterThreadInterfaceInStream(__uuidof(TInterface), aPtr.p, &mStream));
+
+    IF_FAILED_THROW(::CoCreateInstance(CLSID_StdGlobalInterfaceTable, NULL, CLSCTX_INPROC_SERVER, IID_IGlobalInterfaceTable, (void **)&mIGlobalInterfaceTable));
+    if (mIGlobalInterfaceTable) {
+      CComPtr<IUnknown> pIUnknown = aPtr;
+      if (pIUnknown) {
+        IF_FAILED_THROW(mIGlobalInterfaceTable->RegisterInterfaceInGlobal(pIUnknown, __uuidof(TInterface), &mCookie));
+      } else {
+        ANCHO_THROW(EFail());
+      }
+    } else {
+      ANCHO_THROW(EFail());
+    }
+  }
+
+  ~ObjectMarshaller()
+  {
+    if (mCookie && mIGlobalInterfaceTable) {
+      mIGlobalInterfaceTable->RevokeInterfaceFromGlobal(mCookie);
+      mCookie = 0;
+    }
+  }
+
+  /**
+   * Can be called multiple times - unmarshalled from global table.
+   **/
+  CComPtr<TInterface> get()
+  {
+    if (mCookie == 0) {
+      ANCHO_THROW(EFail());
+    }
+    CComQIPtr<TInterface> ptr;
+    IF_FAILED_THROW(mIGlobalInterfaceTable->GetInterfaceFromGlobal(mCookie, __uuidof(TInterface), (void**)&ptr));
+
+    //IF_FAILED_THROW(CoUnmarshalInterface(mStream, __uuidof(TInterface), (LPVOID *) &ptr));
+    return ptr;
+  }
+
+  bool empty() const
+  { return mCookie == 0; }
+protected:
+  CComPtr<IGlobalInterfaceTable> mIGlobalInterfaceTable;
+  DWORD mCookie;
+  //CComPtr<IStream> mStream;
+};
+
+//void is incomplete type, so this is the replacement for void template specialization
 struct Empty {};
 
 template<typename TType>
@@ -21,10 +84,6 @@ struct SafeVoidTraits<void>
   typedef Empty type;
 };
 
-//* Representation of null value
-struct null_t{null_t(){}};
-inline bool operator==(const null_t &, const null_t &) { return true; }
-inline bool operator!=(const null_t &, const null_t &) { return false; }
 
 //* Variant which can contain arbitrary JSONable value (no functions)
 typedef boost::make_recursive_variant<
@@ -37,6 +96,17 @@ typedef boost::make_recursive_variant<
                 std::map<std::wstring, boost::recursive_variant_>
             >::type JSVariant;
 
+enum JSTypeID {
+  jsNull   = 0,
+  jsBool   = 1,
+  jsInt    = 2,
+  jsDouble = 3,
+  jsString = 4,
+  jsArray  = 5,
+  jsObject = 6
+};
+
+
 //* Array of JSONable values
 typedef std::vector<JSVariant> JSArray;
 
@@ -44,14 +114,14 @@ typedef std::vector<JSVariant> JSArray;
 typedef std::map<std::wstring, JSVariant> JSObject;
 
 
-JSVariant convertToJSVariant(JSValue &aValue);
+JSVariant convertToJSVariant(const Ancho::Utils::JSValueWrapperConst &aValue);
 JSVariant convertToJSVariant(IDispatchEx &aDispatch);
 
 namespace detail {
 //forward declarations
-JSObject convertObject(JSValue &aValue);
-JSArray convertArray(JSValue &aValue);
-JSVariant convert(JSValue &aValue);
+JSObject convert(const Ancho::Utils::JSObjectWrapperConst &aValue);
+JSArray convert(const Ancho::Utils::JSArrayWrapperConst &aValue);
+JSVariant convert(const Ancho::Utils::JSValueWrapperConst &aValue);
 
 struct ConvertToVariantVisitor
 {
@@ -61,31 +131,31 @@ struct ConvertToVariantVisitor
   result_type operator()(const TType &aValue) const
   { return result_type(aValue); }
 
-  result_type operator()(JSValue &aValue) const
+  result_type operator()(const Ancho::Utils::JSObjectWrapperConst &aObject) const
   {
-    if (aValue.isNull()) {
-      return result_type(null_t());
-    }
-    ATLASSERT(aValue.isObject() || aValue.isArray());
-    return convert(aValue);
+    return convert(aObject);
+  }
+
+  result_type operator()(const Ancho::Utils::JSArrayWrapperConst &aArray) const
+  {
+    return convert(aArray);
   }
 };
 
-inline JSObject convertObject(JSValue &aValue)
+inline JSObject convert(const Ancho::Utils::JSObjectWrapperConst &aValue)
 {
   JSObject result;
 
-  JSValue::NameIterator namesIterator = aValue.memberNames();
-  JSValue::NameIterator namesEnd;
+  Ancho::Utils::JSObjectWrapperConst::NameIterator namesIterator = aValue.memberNames();
+  Ancho::Utils::JSObjectWrapperConst::NameIterator namesEnd;
   for (; namesIterator != namesEnd; ++namesIterator) {
     result[*namesIterator] = convertToJSVariant(aValue[*namesIterator]);
   }
   return result;
 }
 
-inline JSArray convertArray(JSValue &aValue)
+inline JSArray convert(const Ancho::Utils::JSArrayWrapperConst &aValue)
 {
-  ATLASSERT(aValue.isArray());
   JSArray result;
   size_t len = aValue.length();
   result.reserve(len);
@@ -95,13 +165,13 @@ inline JSArray convertArray(JSValue &aValue)
   return result;
 }
 
-inline JSVariant convert(JSValue &aValue)
+inline JSVariant convert(const Ancho::Utils::JSValueWrapperConst &aValue)
 {
   if (aValue.isObject()) {
-    return convertObject(aValue);
+    return convert(aValue.toObject());
   }
   if (aValue.isArray()) {
-    return convertArray(aValue);
+    return convert(aValue.toArray());
   }
 
   ANCHO_THROW(EInvalidArgument());
@@ -110,7 +180,7 @@ inline JSVariant convert(JSValue &aValue)
 
 inline JSVariant convert(IDispatchEx &aDispatch)
 {
-  JSValue jsvalue((CComVariant(&aDispatch)));//Double parenthese because of the "most vexing parse"
+  Ancho::Utils::JSValueWrapperConst jsvalue((CComVariant(&aDispatch)));//Double parenthese because of the "most vexing parse"
   return convert(jsvalue);
 }
 
@@ -118,7 +188,7 @@ inline JSVariant convert(IDispatchEx &aDispatch)
 
 /** This will convert JavaScript value wrapper into native C++ representation
  **/
-inline JSVariant convertToJSVariant(JSValue &aValue)
+inline JSVariant convertToJSVariant(const Ancho::Utils::JSValueWrapperConst &aValue)
 {
   return aValue.applyVisitor(detail::ConvertToVariantVisitor());
 }
@@ -162,6 +232,13 @@ struct ConversionTraits<bool, CComVariant>
 {
   static void convert(bool &aFrom, CComVariant &aTo)
   { aTo = CComVariant(aFrom); }
+};
+
+template<typename TInterface>
+struct ConversionTraits<CComPtr<TInterface>, CComVariant>
+{
+  static void convert(CComPtr<TInterface> &aFrom, CComVariant &aTo)
+  { aTo = CComVariant(aFrom.p); }
 };
 
 template<typename TFrom>
@@ -222,12 +299,14 @@ struct ConversionTraits<TFrom, std::vector<CComVariant> >
 
 } //namespace detail
 
+//Generic conversions between types.
 template<typename TFrom, typename TTo >
 void convert(TFrom &aFrom, TTo &aTo)
 {
   detail::ConversionTraits<TFrom, TTo>::convert(aFrom, aTo);
 }
 
+//Generic conversions between types.
 template<typename TFrom, typename TTo >
 TTo convert(TFrom &aFrom)
 {
@@ -236,4 +315,5 @@ TTo convert(TFrom &aFrom)
   return tmp;
 }
 
-}
+} //namespace Utils
+} //namespace Ancho
