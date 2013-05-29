@@ -12,6 +12,7 @@
 #include "AnchoBrowserEvents.h"
 #include "AnchoPassthruAPP.h"
 #include "dllmain.h"
+#include <AnchoCommons/JSValueWrapper.hpp>
 
 #include <string>
 #include <ctime>
@@ -419,14 +420,14 @@ HRESULT CAnchoRuntime::fireOnBeforeRequest(const std::wstring &aUrl, const std::
     BEGIN_TRY_BLOCK
       aOutInfo.cancel = false;
       for (ULONG i = 0; i < arr.GetCount(); ++i) {
-        JSValue item(arr.GetAt(i));
+        Ancho::Utils::JSObjectWrapperConst item = Ancho::Utils::JSValueWrapperConst(arr.GetAt(i)).toObject();
 
-        JSValue cancel = item[L"cancel"];
+        Ancho::Utils::JSValueWrapperConst cancel = item[L"cancel"];
         if (!cancel.isNull()) {
           aOutInfo.cancel = aOutInfo.cancel || cancel.toBool();
         }
 
-        JSValue redirectUrl = item[L"redirectUrl"];
+        Ancho::Utils::JSValueWrapperConst redirectUrl = item[L"redirectUrl"];
         if (!redirectUrl.isNull()) {
           aOutInfo.redirect = true;
           aOutInfo.newUrl = redirectUrl.toString();
@@ -463,15 +464,19 @@ HRESULT CAnchoRuntime::fireOnBeforeSendHeaders(const std::wstring &aUrl, const s
     VARIANT tmp = {0}; HRESULT hr = result.Detach(&tmp);
     BEGIN_TRY_BLOCK
       for (ULONG i = 0; i < arr.GetCount(); ++i) {
-        JSValue item(arr.GetAt(i));
-        JSValue requestHeaders = item[L"requestHeaders"];
+        Ancho::Utils::JSObjectWrapperConst item = Ancho::Utils::JSValueWrapperConst(arr.GetAt(i)).toObject();
+        Ancho::Utils::JSValueWrapperConst requestHeaders = item[L"requestHeaders"];
         if (!requestHeaders.isNull()) {
+          Ancho::Utils::JSArrayWrapperConst headersArray = requestHeaders.toArray();
           std::wostringstream oss;
-          int headerCount = requestHeaders[L"length"].toInt();
+          int headerCount = headersArray.size();
           for (int i = 0; i < headerCount; ++i) {
-            JSValue headerRecord = requestHeaders[i];
+            Ancho::Utils::JSValueWrapperConst headerRecord = headersArray[i];
             //TODO handle headerRecord[L"binaryValue"]
-            std::wstring headerText = headerRecord[L"name"].toString() + std::wstring(L": ") + headerRecord[L"value"].toString();
+            if (headerRecord.isNull()) {
+              continue;
+            }
+            std::wstring headerText = headerRecord.toObject()[L"name"].toString() + std::wstring(L": ") + headerRecord.toObject()[L"value"].toString();
             oss << headerText << L"\r\n";
           }
           aOutInfo.modifyHeaders = true;

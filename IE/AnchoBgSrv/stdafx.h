@@ -112,6 +112,9 @@ using namespace LIB_BhoHelper;
 #include <boost/asio.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 
+#include <boost/tuple/tuple.hpp>
+#include <boost/tuple/tuple_comparison.hpp>
+
 #include <boost/fusion/container/vector.hpp>
 #include <boost/fusion/support/is_sequence.hpp>
 #include <boost/fusion/algorithm/iteration/for_each.hpp>

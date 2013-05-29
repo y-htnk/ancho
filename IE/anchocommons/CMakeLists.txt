@@ -8,6 +8,7 @@ include_directories(${${PROJECT_NAME}_INC_DIR})
 
 set(${PROJECT_NAME}_HEADERS
   "${${PROJECT_NAME}_INC_DIR}/anchocommons.h"
+  "${${PROJECT_NAME}_INC_DIR}/AnchoCommons/JSValueWrapper.hpp"
   "${${PROJECT_NAME}_INC_DIR}/Exceptions.h"
   "${${PROJECT_NAME}_INC_DIR}/SimpleWrappers.h"
   "${${PROJECT_NAME}_INC_DIR}/IPCHeartbeat.h"

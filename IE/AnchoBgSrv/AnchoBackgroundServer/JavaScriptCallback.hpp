@@ -5,10 +5,15 @@ namespace Utils {
 
 namespace detail {
 
+/**
+ * Base class for JS callbacks - provides callback instance marshalling between threads.
+ */
 class JavaScriptCallbackBase
 {
 public:
   JavaScriptCallbackBase() {}
+
+  virtual ~JavaScriptCallbackBase() {}
 
   JavaScriptCallbackBase(CComPtr<IDispatch> aCallback): mCallbackMarshaller(boost::make_shared<ObjectMarshaller<IDispatch> >(aCallback))
   { /*empty*/ }
@@ -33,7 +38,9 @@ protected:
 };
 } //namespace detail
 
-
+/**
+ * JS callback
+ **/
 template<typename TArguments, typename TReturnValue>
 class JavaScriptCallback: public detail::JavaScriptCallbackBase
 {
@@ -68,6 +75,9 @@ public:
 
 };
 
+/**
+ * JS callback specialization for paremeter-less case
+ **/
 template<typename TReturnValue>
 class JavaScriptCallback<void, TReturnValue>: public detail::JavaScriptCallbackBase
 {

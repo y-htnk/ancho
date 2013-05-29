@@ -142,26 +142,6 @@ private:
   { return reinterpret_cast<HWND>(aWinId); }
 
 public:
-  /*class ATabCreatedCallback: public ACommand
-  {
-  public:
-#if _HAS_CPP0X
-  typedef std::shared_ptr<ATabCreatedCallback> Ptr;
-#else
-  typedef std::tr1::shared_ptr<ATabCreatedCallback> Ptr;
-#endif
-
-    void operator()(INT aTabID)
-    { execute(aTabID); }
-    virtual void execute(INT aTabID) = 0;
-  };*/
-  //class TabCreatedCallback;
-  class WindowCreatedCallback;
-
-  //typedef std::map<int, ATabCreatedCallback::Ptr> CreateTabCallbackMap;
-
-  //HRESULT createTabImpl(CIDispatchHelper &aProperties, ATabCreatedCallback::Ptr aCallback, bool aInNewWindow);
-//  HRESULT createWindowImpl(CIDispatchHelper &aProperties, ATabCreatedCallback::Ptr aCallback);
 
   HRESULT FindActiveBrowser(IWebBrowser2** webBrowser);
 private:
@@ -200,74 +180,4 @@ OBJECT_ENTRY_AUTO(__uuidof(AnchoAddonService), CAnchoAddonService)
 
 //--------------------------------------------------------------------
 
-/*class CAnchoAddonService::TabCreatedCallback: public ATabCreatedCallback
-{
-public:
-  TabCreatedCallback(CAnchoAddonService &aService, LPDISPATCH aCreator, LPDISPATCH aCallback)
-    : mService(aService), mCreator(aCreator), mCallback(aCallback)
-  {}
-  void execute(INT aTabID)
-  {
-    CComVariant tabInfo;
-    if (FAILED(mService.getTabInfo(aTabID, mCreator, &tabInfo))) {
-      throw std::runtime_error("Failed to get tab info");
-    }
-    if (FAILED(mCallback.Invoke1((DISPID) 0, &tabInfo))) {
-      throw std::runtime_error("Failed to invoke callback for on tab create");
-    }
-  }
-protected:
-  CAnchoAddonService &mService;
-  CIDispatchHelper mCreator;
-  CIDispatchHelper mCallback;
-};
-
-class CAnchoAddonService::WindowCreatedCallback: public ATabCreatedCallback
-{
-public:
-  WindowCreatedCallback(CAnchoAddonService &aService, LPDISPATCH aCreator, LPDISPATCH aCallback)
-    : mService(aService), mCreator(aCreator), mCallback(aCallback)
-  {}
-  void execute(INT aTabID)
-  {
-    CComVariant tabInfo;
-    if (FAILED(mService.getTabInfo(aTabID, mCreator, &tabInfo)) || tabInfo.vt != VT_DISPATCH) {
-      throw std::runtime_error("Failed to get tab info");
-    }
-    CIDispatchHelper tabInfoHelper = tabInfo.pdispVal;
-    int winId;
-    if (FAILED((tabInfoHelper.Get<int, VT_I4>(L"windowId", winId)))) {
-      throw std::runtime_error("Failed to get windowID from tab info");
-    }
-    CComVariant windowInfo;
-    if (FAILED(mService.getWindow(winId, mCreator, FALSE, &windowInfo))) {
-      throw std::runtime_error("Failed to get window info");
-    }
-    if (FAILED(mCallback.Invoke1((DISPID) 0, &windowInfo))) {
-      throw std::runtime_error("Failed to invoke callback for on tab create");
-    }
-  }
-protected:
-  CAnchoAddonService &mService;
-  CIDispatchHelper mCreator;
-  CIDispatchHelper mCallback;
-};
-
-
-class CAnchoAddonService::CreateWindowCommand: public AQueuedCommand
-{
-public:
-  CreateWindowCommand(CAnchoAddonService &aService, LPDISPATCH aProperties, LPDISPATCH aCreator, LPDISPATCH aCallback)
-    : mService(aService), mProperties(aProperties), mCreator(aCreator), mCallback(aCallback)
-  {}
-  void execute()
-  {
-    mService.createWindowImpl(mProperties, ATabCreatedCallback::Ptr(new WindowCreatedCallback(mService, mCreator, mCallback)));
-  }
-protected:
-  CAnchoAddonService &mService;
-  CIDispatchHelper mProperties;
-  CIDispatchHelper mCreator;
-  CIDispatchHelper mCallback;
-};*/
 

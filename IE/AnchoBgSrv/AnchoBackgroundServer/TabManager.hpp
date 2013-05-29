@@ -7,11 +7,13 @@
 #include "AnchoBackgroundServer/PeriodicTimer.hpp"
 #include <IPCHeartbeat.h>
 #include <Exceptions.h>
+#include <SimpleWrappers.h>
 
 namespace Ancho {
 namespace Utils {
 
 /**
+ * Thread safe generator of unique sequential IDs.
  * \tparam TId must be integral type
  **/
 template<typename TId = int>
@@ -28,14 +30,15 @@ public:
 protected:
   boost::atomic<TId> mNextValue;
 };
-}
+} //namespace Utils
+
 namespace Service {
 
 struct ENotValidTabId : EAnchoException {};
 
 
 typedef CComPtr<ComSimpleJSObject> TabInfo;
-typedef CComPtr<ComSimpleJSArray> TabInfoList;
+typedef CComPtr<IDispatch/*ComSimpleJSArray*/> TabInfoList;
 typedef int TabId;
 
 typedef boost::function<void(TabInfo)> TabCallback;
@@ -43,12 +46,83 @@ typedef boost::function<void(TabInfoList)> TabListCallback;
 typedef boost::function<void(void)> SimpleCallback;
 
 class TabManager;
+//Pointer to tabmanger singleton instance
 extern CComObject<Ancho::Service::TabManager> *gTabManager;
 
+/**
+ * Stores basic JS entities (Object, Array) constructors for API instances.
+ * Useful for creation of return values, so JS engines can process objects from same context.
+ * NOTE: calling constructor from different thread doesn't work, so instead of storing
+ * constructors directly we store wrapper functions which return proper object instances.
+ **/
+class JSConstructorManager
+{
+public:
+  typedef boost::tuple<std::wstring, int> ApiInstanceId;
+  typedef boost::tuple<Ancho::Utils::ObjectMarshaller<IDispatchEx>::Ptr, Ancho::Utils::ObjectMarshaller<IDispatchEx>::Ptr> Constructors;
+
+  void registerConstructors(CComPtr<IDispatchEx> aObjectConstructor, CComPtr<IDispatchEx> aArrayConstructor, const std::wstring &aExtensionId, int aApiId)
+  {
+    boost::unique_lock<boost::mutex> lock(mConstructorMapMutex);
+
+    mConstructorInstances[ApiInstanceId(aExtensionId, aApiId)] = Constructors(boost::make_shared<Ancho::Utils::ObjectMarshaller<IDispatchEx> >(aObjectConstructor),
+                                                                              boost::make_shared<Ancho::Utils::ObjectMarshaller<IDispatchEx> >(aArrayConstructor));
+  }
+
+  void removeConstructors(const std::wstring &aExtensionId, int aApiId)
+  {
+    boost::unique_lock<boost::mutex> lock(mConstructorMapMutex);
+    mConstructorInstances.erase(ApiInstanceId(aExtensionId, aApiId));
+  }
+
+  CComPtr<IDispatch> createObject(const std::wstring &aExtensionId, int aApiId)
+  {
+    return createInstanceByConstructor<0>(aExtensionId, aApiId);
+  }
+
+  CComPtr<IDispatch> createArray(const std::wstring &aExtensionId, int aApiId)
+  {
+    return createInstanceByConstructor<1>(aExtensionId, aApiId);
+  }
+
+protected:
+  template<size_t tConstructorIdx>
+  CComPtr<IDispatch> createInstanceByConstructor(const std::wstring &aExtensionId, int aApiId)
+  {
+    boost::unique_lock<boost::mutex> lock(mConstructorMapMutex);
+    auto it = mConstructorInstances.find(ApiInstanceId(aExtensionId, aApiId));
+
+    if (it == mConstructorInstances.end()) {
+      ANCHO_THROW(EInvalidArgument());
+    }
+    CComPtr<IDispatchEx> creator = it->second.get<tConstructorIdx>()->get();
+    DISPPARAMS params = {0};
+    _variant_t result;
+    //Workaround - DISPATCH_CONSTRUCT doesn't work in worker thread -
+    //so we invoke wrapper function which calls constructors and returns newly created instance.
+    IF_FAILED_THROW(creator->InvokeEx(DISPID_VALUE, LOCALE_USER_DEFAULT, DISPATCH_METHOD, &params, result.GetAddress(), NULL, NULL));
+    try {
+      return CComPtr<IDispatch>(static_cast<IDispatch*>(result));
+    } catch (_com_error &e) {
+      ANCHO_THROW(EHResult(e.Error()));
+    }
+  }
+
+  std::map<ApiInstanceId, Constructors> mConstructorInstances;
+  boost::mutex mConstructorMapMutex;
+};
+
+
+/**
+ * Singleton class.
+ * This manager stores information and references to all tabs currently available in all IE windows.
+ * It provides dual interface - we can implement chrome.tabs API by calling methods of this class
+ **/
 class TabManager:
   public CComObjectRootEx<CComMultiThreadModel>,
   public IAnchoTabManagerInternal,
-  public IDispatchImpl<ITabManager, &IID_ITabManager, &LIBID_AnchoBgSrvLib, /*wMajor =*/ 0xffff, /*wMinor =*/ 0xffff>
+  public IDispatchImpl<ITabManager, &IID_ITabManager, &LIBID_AnchoBgSrvLib, /*wMajor =*/ 0xffff, /*wMinor =*/ 0xffff>,
+  public JSConstructorManager
 {
 public:
   friend struct CreateTabTask;
@@ -66,7 +140,7 @@ public:
 
 public:
   ///@{
-  /** Interface methods available to JS.**/
+  /** Asynchronous methods available to JS.**/
   STDMETHOD(createTab)(LPDISPATCH aProperties, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
   STDMETHOD(reloadTab)(INT aTabId, LPDISPATCH aReloadProperties, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
   STDMETHOD(queryTabs)(LPDISPATCH aProperties, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
@@ -74,12 +148,30 @@ public:
   STDMETHOD(removeTabs)(LPDISPATCH aTabs, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
   ///@}
 
+  //TODO - move to service
+  STDMETHOD(registerConstructors)(LPDISPATCH aObjectConstructor, LPDISPATCH aArrayConstructor, BSTR aExtensionId, INT aApiId)
+  {
+    BEGIN_TRY_BLOCK;
+    JSConstructorManager::registerConstructors(CComQIPtr<IDispatchEx>(aObjectConstructor), CComQIPtr<IDispatchEx>(aArrayConstructor), std::wstring(aExtensionId), aApiId);
+    CComPtr<IDispatch> tmp = JSConstructorManager::createArray(std::wstring(aExtensionId), aApiId);
+    return S_OK;
+    END_TRY_BLOCK_CATCH_TO_HRESULT;
+  }
+
+  STDMETHOD(getTabInfo)(INT aTabId, BSTR aExtensionId, INT aApiId, VARIANT* aRet);
+
   TabId getFrameTabId(HWND aFrameTab);
 
+  /**
+   * Apply callable object on each available tab.
+   * \tparam TCallable Type of callable object with signature TCallable::operator()(Ancho::Service::TabManager::TabRecord &).
+   * \param aCallable Callable object, which will be applied on each tab record instance obtained by ID from aTabIds list.
+   * \result Copy of provided callable object - can be used for returning accumulated values, etc.
+   **/
   template<typename TCallable>
   TCallable forEachTab(TCallable aCallable)
   {
-    boost::unique_lock<boost::mutex> lock(mMutex);
+    boost::unique_lock<boost::mutex> lock(mTabAccessMutex);
     TabMap::iterator it = mTabs.begin();
     while (it != mTabs.end()) {
       ATLASSERT(it->second);
@@ -89,12 +181,20 @@ public:
     return aCallable;
   }
 
+  /**
+   * Apply callable object on each tab from provided list.
+   * \tparam TContainer Iterable container (vector, list) of tab IDs
+   * \tparam TCallable Type of callable object with signature TCallable::operator()(Ancho::Service::TabManager::TabRecord &).
+   * \param aTabIds List of tab IDs which should be processed.
+   * \param aCallable Callable object, which will be applied on each tab record instance obtained by ID from aTabIds list.
+   * \result List of IDs for tabs which couldn't be found (wrong ID, tab already closed, etc.)
+   **/
   template<typename TContainer, typename TCallable>
   TContainer forTabsInList(const TContainer &aTabIds, TCallable aCallable)
   {
-    //Create list of tabs which don't exist
+    //Create list of tabs which do not exist
     TContainer missed;
-    boost::unique_lock<boost::mutex> lock(mMutex);
+    boost::unique_lock<boost::mutex> lock(mTabAccessMutex);
 
     BOOST_FOREACH(auto tabId, aTabIds) {
       TabMap::iterator it = mTabs.find(tabId);
@@ -189,13 +289,13 @@ protected:
 
   void addCreateTabCallbackInfo(ULONG aRequestId, CreateTabCallbackRequestInfo aInfo)
   {
-    boost::unique_lock<boost::mutex> lock(mMutex);
+    boost::unique_lock<boost::mutex> lock(mTabAccessMutex);
     mCreateTabCallbacks[aRequestId] = aInfo;
   }
 
   boost::shared_ptr<TabRecord> getTabRecord(TabId aTabId)
   {
-    boost::unique_lock<boost::mutex> lock(mMutex);
+    boost::unique_lock<boost::mutex> lock(mTabAccessMutex);
     TabMap::iterator it = mTabs.find(aTabId);
     if (it == mTabs.end()) {
       ANCHO_THROW(ENotValidTabId());
@@ -215,10 +315,13 @@ protected:
   typedef std::map<TabId, boost::shared_ptr<TabRecord> > TabMap;
   TabMap mTabs;
 
+  /// Tab record for newly created tab doesn't yet exist - store its callbeack in separate datastructure.
   CreateTabCallbackMap mCreateTabCallbacks;
   Ancho::Utils::PeriodicTimer mHeartbeatTimer;
   boost::atomic<bool> mHeartbeatActive;
-  boost::mutex mMutex;
+
+  /// Manipulations with tab record container is synchronized by this mutex
+  boost::mutex mTabAccessMutex;
 };
 
 //============================================================================================

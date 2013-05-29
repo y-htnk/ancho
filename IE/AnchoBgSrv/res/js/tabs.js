@@ -220,38 +220,6 @@ var Tabs = function(instanceID) {
     }
 
     serviceAPI.tabManager.queryTabs(args.queryInfo, args.callback, addonAPI.id, _instanceID);
-
-    /*function checkTabForQueryInfo(aTab, aQueryInfo) {
-      var retVal = true;
-      if (aQueryInfo.url) {
-        retVal = retVal && (aTab.url == aQueryInfo.url);
-      }
-      if (aQueryInfo.id) {
-        retVal = retVal && (aTab.id == aQueryInfo.id);
-      }
-      if (aQueryInfo.active) {
-        retVal = retVal && (aTab.active == aQueryInfo.active);
-      }
-      if (aQueryInfo.windowId) {
-        var winId = aQueryInfo.windowId;
-        if (windows.WINDOW_ID_CURRENT == winId) {
-          winId = _currentWindowID || serviceAPI.getCurrentWindowId();
-        }
-        retVal = retVal && (aTab.windowId == winId);
-      }
-      return retVal;
-    }
-
-    var ret = serviceAPI.queryTabs(args['queryInfo'], Object);
-    var tabs = new VBArray(ret).toArray();
-
-    var filteredTabs = [];
-    for (var i = 0; i < tabs.length; ++i) {
-      if (checkTabForQueryInfo(tabs[i], queryInfo)) {
-        filteredTabs.push(tabs[i]);
-      }
-    }
-    args['callback'](filteredTabs);*/
   };
 
   //----------------------------------------------------------------------------
@@ -272,13 +240,6 @@ var Tabs = function(instanceID) {
       tabs = args.tabIds;
     }
     serviceAPI.tabManager.removeTabs(tabs, args.callback, addonAPI.id, _instanceID);
-    /*var callbackWrapper = new removeCallbackWrapper(tabs, args.callback);
-    try {
-      serviceAPI.removeTabs(tabs, callbackWrapper.singleTabRemoveCallback);
-    } catch (e) {
-      console.error("Error while removing tabs [" + tabs + "] " + typeof (callbackWrapper.singleTabRemoveCallback) + " : " + e.message);
-      throw e;
-    }*/
   };
 
   //----------------------------------------------------------------------------

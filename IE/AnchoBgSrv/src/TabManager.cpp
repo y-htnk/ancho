@@ -105,6 +105,10 @@ CComPtr<IWebBrowser2> findActiveBrowser()
   return CComPtr<IWebBrowser2>();
 }
 
+/**
+ * Invokes single callback for set of operations specified by their IDs.
+ * Thread safe.
+ **/
 template<typename TId>
 class MultiOperationCallbackInvoker: public boost::noncopyable
 {
@@ -119,6 +123,11 @@ public:
     }
   }
 
+  /**
+   * This notifies the object that another operation finished.
+   * When all operations finished call the callback.
+   * \param aOperationId ID of finished operation.
+   **/
   void progress(TId aOperationId)
   {
     boost::unique_lock<boost::mutex> lock(mMutex);
@@ -139,6 +148,10 @@ public:
   boost::mutex mMutex;
 };
 
+/**
+ * Multi operation callback wrapper - each operation can call this as its callback
+ * - original multi operation callback will be invoked after all ops from the set finish.
+ **/
 template<typename TId>
 struct MultiOperationCallback
 {
@@ -164,7 +177,7 @@ namespace Service {
 
 CComObject<Ancho::Service::TabManager> *gTabManager = NULL;
 
-
+//==========================================================================================
 /**
  * Task which creates new tab
  **/
@@ -228,7 +241,7 @@ struct CreateTabTask
   std::wstring mExtensionId;
   int mApiId;
 };
-
+//==========================================================================================
 /**
  * Task which reloads tab
  **/
@@ -264,7 +277,7 @@ struct ReloadTabTask
   boost::function<void(void)> mCallback;
   int mApiId;
 };
-
+//==========================================================================================
 struct GetTabTask
 {
   GetTabTask(int aTabId,
@@ -293,7 +306,7 @@ struct GetTabTask
   TabCallback mCallback;
   int mApiId;
 };
-
+//==========================================================================================
 struct QueryTabsTask
 {
   QueryTabsTask(const Utils::JSObject &aProperties,
@@ -307,21 +320,25 @@ struct QueryTabsTask
 
   struct CheckTab
   {
-    VariantVector &mVector;
+    Utils::JSArrayWrapper &mArray;
     Utils::JSObject &mProperties;
+    std::wstring mExtensionId;
+    int mApiId;
 
-    CheckTab(VariantVector &aVector, Utils::JSObject &aProperties) : mVector(aVector), mProperties(aProperties)
+    CheckTab(Utils::JSArrayWrapper &aArray, Utils::JSObject &aProperties, const std::wstring &aExtensionId, int aApiId)
+      : mArray(aArray), mProperties(aProperties), mExtensionId(aExtensionId), mApiId(aApiId)
     { /*empty*/ }
 
     void operator()(Ancho::Service::TabManager::TabRecord &aRec)
     {
       CComPtr<IAnchoRuntime> runtime = aRec.runtime();
 
-      CComPtr<ComSimpleJSObject> info = SimpleJSObject::createInstance();
+      CComPtr<IDispatch> info = TabManager::instance().createObject(mExtensionId, mApiId);
+      //CComPtr<ComSimpleJSObject> info = SimpleJSObject::createInstance();
       _variant_t vtInfo(info);
       IF_FAILED_THROW(runtime->fillTabInfo(&vtInfo.GetVARIANT()));
 
-      JSValue infoWrapper(vtInfo.GetVARIANT());
+      Utils::JSObjectWrapperConst infoWrapper = Ancho::Utils::JSValueWrapperConst(vtInfo.GetVARIANT()).toObject();
 
       //TODO - more generic matching algorithm
       bool passed = true;
@@ -343,7 +360,7 @@ struct QueryTabsTask
         }
       }
       if (passed) {
-        mVector.push_back(CComVariant(vtInfo.GetVARIANT()));//TODO - change to _variant_t
+        mArray.push_back(infoWrapper);
       }
     }
   };
@@ -351,24 +368,32 @@ struct QueryTabsTask
   void operator()()
   {
     try {
-      TabInfoList tabs = ComSimpleJSArray::createInstance();
+      ATLTRACE(L"QUERY TABS TASK - Start\n");
+      CComPtr<IDispatch> tabsDisp = TabManager::instance().createArray(mExtensionId, mApiId);
+      Utils::JSArrayWrapper tabs = Utils::JSValueWrapper(tabsDisp).toArray();
+      //TabInfoList tabs = ComSimpleJSArray::createInstance();
 
       //We extended query parameters - we can get single tab specified by ID
       if (mProperties[L"tabId"].which() == Utils::jsInt) {
         TabManager::TabRecord::Ptr tabRecord = TabManager::instance().getTabRecord(boost::get<int>(mProperties[L"tabId"]));
         if (tabRecord) {
-          CComPtr<ComSimpleJSObject> info = SimpleJSObject::createInstance();
+          CComPtr<IDispatch> info = TabManager::instance().createObject(mExtensionId, mApiId);
           _variant_t vtInfo(info);
           IF_FAILED_THROW(tabRecord->runtime()->fillTabInfo(&vtInfo.GetVARIANT()));
-          tabs->push_back(CComVariant(vtInfo.GetVARIANT()));//TODO - change to _variant_t
+          tabs.push_back(Utils::JSValueWrapper(info));
         }
       } else {
-        TabManager::instance().forEachTab(CheckTab(*tabs, mProperties));
+        TabManager::instance().forEachTab(CheckTab(tabs, mProperties, mExtensionId, mApiId));
       }
 
-      mCallback(tabs);
+      ATLTRACE(L"QUERY TABS TASK - Before callback\n");
+      if (mCallback) {
+        mCallback(tabsDisp);
+        //mCallback();
+      }
+      ATLTRACE(L"QUERY TABS TASK - After callback\n");
     } catch (EHResult &e) {
-      ATLTRACE(L"HRESULT = %d\n", e.mHResult);
+      ATLTRACE(L"QUERY TABS TASK - caught exception: HRESULT = %d\n", e.mHResult);
     }
   }
 
@@ -377,7 +402,7 @@ struct QueryTabsTask
   std::wstring mExtensionId;
   int mApiId;
 };
-
+//==========================================================================================
 struct UpdateTabTask
 {
   UpdateTabTask(int aTabId,
@@ -405,7 +430,7 @@ struct UpdateTabTask
   std::wstring mExtensionId;
   int mApiId;
 };
-
+//==========================================================================================
 struct RemoveTabsTask
 {
   RemoveTabsTask(const std::vector<TabId> &aTabs,
@@ -414,14 +439,6 @@ struct RemoveTabsTask
              int aApiId)
               : mTabs(aTabs), mCallback(aCallback), mApiId(aApiId)
   { /*empty*/ }
-
-  struct CloseTab
-  {
-    void operator()(Ancho::Service::TabManager::TabRecord &aRec)const
-    {
-      aRec.runtime()->closeTab();
-    }
-  };
 
   void operator()()
   {
@@ -432,7 +449,7 @@ struct RemoveTabsTask
                               aRec.addOnCloseCallback(Ancho::Utils::MultiOperationCallback<TabId>(aRec.tabId(), invoker));
                               aRec.runtime()->closeTab();
                             });
-      //If some of the tabs were removed before our request we need to handle their ids.
+      //If some of the tabs were removed before our request, we need to handle their ids.
       if (!missedTabs.empty()) {
         std::for_each(missedTabs.begin(), missedTabs.end(), [&](TabId atabId){ invoker->progress(atabId); });
       }
@@ -588,7 +605,7 @@ void TabManager::getTab(TabId aTabId, const TabCallback& aCallback, const std::w
 
 TabId TabManager::getFrameTabId(HWND aFrameTab)
 {
-  boost::unique_lock<boost::mutex> lock(mMutex);
+  boost::unique_lock<boost::mutex> lock(mTabAccessMutex);
 
   FrameTabToTabIDMap::iterator it = mFrameTabIds.find(aFrameTab);
   if (it != mFrameTabIds.end()) {
@@ -597,6 +614,26 @@ TabId TabManager::getFrameTabId(HWND aFrameTab)
   mFrameTabIds[aFrameTab] = mTabIdGenerator.next();
   return mFrameTabIds[aFrameTab];
 }
+//==========================================================================================
+STDMETHODIMP TabManager::getTabInfo(INT aTabId, BSTR aExtensionId, INT aApiId, VARIANT* aRet)
+  {
+    ENSURE_RETVAL(aRet);
+
+    BEGIN_TRY_BLOCK;
+    _variant_t vtInfo;
+    vtInfo.Attach(*aRet);
+    TabManager::TabRecord::Ptr tabRecord = TabManager::instance().getTabRecord(aTabId);
+    if (tabRecord) {
+      CComPtr<IDispatch> info = TabManager::instance().createObject(std::wstring(aExtensionId), aApiId);
+      vtInfo = info;
+      IF_FAILED_THROW(tabRecord->runtime()->fillTabInfo(&vtInfo.GetVARIANT()));
+    } else {
+      vtInfo.Clear();
+    }
+    vtInfo.Detach();
+    return S_OK;
+    END_TRY_BLOCK_CATCH_TO_HRESULT;
+  }
 
 //==========================================================================================
 //              API methods - IAnchoTabManagerInternal
@@ -613,7 +650,7 @@ STDMETHODIMP TabManager::registerRuntime(OLE_HANDLE aFrameTab, IAnchoRuntime * a
   *aTabID = getFrameTabId((HWND)aFrameTab);
 
   {
-    boost::unique_lock<boost::mutex> lock(mMutex);
+    boost::unique_lock<boost::mutex> lock(mTabAccessMutex);
     mTabs[*aTabID] = boost::make_shared<TabRecord>(aRuntime, *aTabID, aHeartBeat);
   }
   ATLTRACE(L"ADDON SERVICE - registering tab: %d\n", *aTabID);
@@ -630,7 +667,7 @@ STDMETHODIMP TabManager::registerRuntime(OLE_HANDLE aFrameTab, IAnchoRuntime * a
 STDMETHODIMP TabManager::unregisterRuntime(INT aTabID)
 {
   BEGIN_TRY_BLOCK;
-  boost::unique_lock<boost::mutex> lock(mMutex);
+  boost::unique_lock<boost::mutex> lock(mTabAccessMutex);
   TabMap::iterator it = mTabs.find(aTabID);
   if (it != mTabs.end()) {
     it->second->tabClosed();
@@ -651,7 +688,7 @@ STDMETHODIMP TabManager::unregisterRuntime(INT aTabID)
 STDMETHODIMP TabManager::createTabNotification(INT aTabId, ULONG aRequestID)
 {
   BEGIN_TRY_BLOCK;
-  boost::unique_lock<boost::mutex> lock(mMutex);
+  boost::unique_lock<boost::mutex> lock(mTabAccessMutex);
 
   CreateTabCallbackMap::iterator it = mCreateTabCallbacks.find(aRequestID);
   if (it != mCreateTabCallbacks.end()) {
@@ -668,7 +705,7 @@ STDMETHODIMP TabManager::createTabNotification(INT aTabId, ULONG aRequestID)
 //
 void TabManager::checkBHOConnections()
 {
-  boost::unique_lock<boost::mutex> lock(mMutex);
+  boost::unique_lock<boost::mutex> lock(mTabAccessMutex);
 
   auto it = mTabs.begin();
   auto endIter =  mTabs.end();

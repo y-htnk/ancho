@@ -28,8 +28,6 @@ interface IAnchoAddonService : IUnknown
   HRESULT GetAddonBackground([in] BSTR bsID, [out, retval] IAnchoAddonBackground ** ppRet);
   HRESULT GetModulePath([out, retval] BSTR * pbsPath);
 
-
-  //HRESULT createTabNotification([in] INT aTabID, [in] INT aRequestID);
   HRESULT invokeEventObjectInAllExtensions([in] BSTR aEventName, [in] LPDISPATCH aArgs, [out] VARIANT* aRet);
 
   HRESULT webBrowserReady();
@@ -117,12 +115,6 @@ library AnchoBgSrvLib
     [propget, id(2)]
     HRESULT tabManager([out, retval] LPDISPATCH* ppRet);
 
-    //HRESULT createTab([in] LPDISPATCH aProperties, [in] LPDISPATCH aCreator, [in] LPDISPATCH aCallback);
-    //HRESULT updateTab([in] INT aTabId, [in] LPDISPATCH aProperties);
-    //HRESULT getTabInfo([in] INT aTabId, [in] LPDISPATCH aCreator, [out, retval] VARIANT* aRet);
-    //HRESULT removeTabs([in] LPDISPATCH aTabs, [in] LPDISPATCH aCallback);
-    //HRESULT queryTabs([in] LPDISPATCH aQueryInfo, [in] LPDISPATCH aCreator, [out, retval] VARIANT* aRet);
-
     HRESULT getWindow([in] INT aWindowId, [in] LPDISPATCH aCreator, [in] BOOL aPopulate, [out, retval] VARIANT* aRet);
     HRESULT getAllWindows([in] LPDISPATCH aCreator, [in] BOOL aPopulate, [out, retval] VARIANT* aRet);
     HRESULT updateWindow([in] INT aWindowId, [in] LPDISPATCH aProperties);
@@ -152,16 +144,19 @@ library AnchoBgSrvLib
   ]
   interface ITabManager : IDispatch
   {
-    [id(1), helpstring("createTab")]
+    [id(1), helpstring("createTab - asynchronous call")]
     HRESULT createTab([in] LPDISPATCH aProperties, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
-    [id(2), helpstring("reloadTab")]
+    [id(2), helpstring("reloadTab - asynchronous call")]
     HRESULT reloadTab([in] INT aTabId, [in] LPDISPATCH aReloadProperties, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
-    [id(3), helpstring("queryTabs")]
+    [id(3), helpstring("queryTabs - asynchronous call")]
     HRESULT queryTabs([in] LPDISPATCH aProperties, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
-    [id(4), helpstring("updateTab")]
+    [id(4), helpstring("updateTab - asynchronous call")]
     HRESULT updateTab([in] INT aTabId, [in] LPDISPATCH aUpdateProperties, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
-    [id(5), helpstring("removeTabs")]
+    [id(5), helpstring("removeTabs - asynchronous call")]
     HRESULT removeTabs([in] LPDISPATCH aTabs, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+
+    HRESULT registerConstructors([in] LPDISPATCH aObjectConstructor, [in] LPDISPATCH aArrayConstructor, [in] BSTR aExtensionId, [in] INT aApiId);
+    HRESULT getTabInfo([in] INT aTabId, [in] BSTR aExtensionId, [in] INT aApiId, [out, retval] VARIANT* aRet);
   };
 
   /*==========================================================================*/

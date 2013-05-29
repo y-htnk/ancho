@@ -288,13 +288,6 @@ STDMETHODIMP CAnchoAddonService::createWindow(LPDISPATCH aProperties, LPDISPATCH
 
 //----------------------------------------------------------------------------
 //
-/*HRESULT CAnchoAddonService::createWindowImpl(CIDispatchHelper &aProperties, ATabCreatedCallback::Ptr aCallback)
-{
-  //TODO - handle different types of windows
-  return createTabImpl(aProperties, aCallback, true);
-}*/
-//----------------------------------------------------------------------------
-//
 STDMETHODIMP CAnchoAddonService::closeWindow(INT aWindowId)
 {
   HWND win = winIdToHWND(aWindowId);
