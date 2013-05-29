@@ -621,16 +621,13 @@ STDMETHODIMP TabManager::getTabInfo(INT aTabId, BSTR aExtensionId, INT aApiId, V
 
     BEGIN_TRY_BLOCK;
     _variant_t vtInfo;
-    vtInfo.Attach(*aRet);
     TabManager::TabRecord::Ptr tabRecord = TabManager::instance().getTabRecord(aTabId);
     if (tabRecord) {
       CComPtr<IDispatch> info = TabManager::instance().createObject(std::wstring(aExtensionId), aApiId);
       vtInfo = info;
       IF_FAILED_THROW(tabRecord->runtime()->fillTabInfo(&vtInfo.GetVARIANT()));
-    } else {
-      vtInfo.Clear();
     }
-    vtInfo.Detach();
+    *aRet = vtInfo.Detach();
     return S_OK;
     END_TRY_BLOCK_CATCH_TO_HRESULT;
   }
