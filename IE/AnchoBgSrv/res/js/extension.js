@@ -118,7 +118,7 @@ var CallbackWrapper = function(responseCallback) {
 exports.CallbackWrapper = CallbackWrapper;
 
 var MessageSender = function(aInstanceId) {
-  this.id = addonAPI.id;
+  this.id = aInstanceId;
 
   if (aInstanceId > 0) { //we are in tab context
     try {
