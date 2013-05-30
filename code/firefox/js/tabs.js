@@ -100,7 +100,8 @@
         tabbrowser.selectedTab = tab;
       }
       if (callback) {
-        callback({ id: Utils.getWindowId(tab.contentWindow) });
+        var browser = tabbrowser.getBrowserForTab(tab);
+        callback({ id: Utils.getWindowId(browser.contentWindow) });
       }
     },
 

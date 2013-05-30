@@ -161,9 +161,9 @@ function registerComponents(addon) {
   require('./js/httpRequestObserver').register();
 }
 
-function unregisterComponents() {
+function unregisterComponents(callback) {
   require('./js/protocolHandler').unregister();
-  require('./js/contentPolicy').unregister();
+  require('./js/contentPolicy').unregister(callback);
   require('./js/httpRequestObserver').unregister();
 }
 
@@ -201,14 +201,13 @@ function startup(data, reason) {
 //
 function shutdown(data, reason) {
   closeStorageConnection();
-  unregisterComponents();
-  releaseBackground();
-  unloadBackgroundScripts();
-
-  // Unload the modules so that we will load new versions if the add-on is installed again.
-  Cu.unload('resource://ancho/modules/Require.jsm');
-  Cu.unload('resource://ancho/modules/External.jsm');
-
-  // Get rid of the resource package substitution.
-  resetResourceSubstitution();
+  unregisterComponents(function() {
+    releaseBackground();
+    unloadBackgroundScripts();
+    // Unload the modules so that we will load new versions if the add-on is installed again.
+    Cu.unload('resource://ancho/modules/Require.jsm');
+    Cu.unload('resource://ancho/modules/External.jsm');
+    // Get rid of the resource package substitution.
+    resetResourceSubstitution();
+  });
 }
