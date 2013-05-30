@@ -5,6 +5,7 @@ define(function() {
     });
 
     it('document.domain and document.location.href contain correct values', function(){
+      dump("*** " + document.location.href + "\n");
       var docDomain = document.domain,
         docUrl = document.location.href;
 
