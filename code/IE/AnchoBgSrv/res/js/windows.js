@@ -46,7 +46,7 @@ var Windows = function(instanceID) {
   // chrome.windows.create
   this.create = function(createData, callback) {
     var args = preprocessArguments('chrome.windows.create', arguments);
-    serviceAPI.createWindow(args['createData'], Object, args['callback']);
+    serviceAPI.windowManager.createWindow(args.createData, args.callback, addonAPI.id, _instanceID);
   };
 
   //----------------------------------------------------------------------------
@@ -87,10 +87,7 @@ var Windows = function(instanceID) {
   // chrome.windows.remove
   this.remove = function(windowId, callback) {
     var args = preprocessArguments('chrome.windows.remove', arguments);
-    serviceAPI.closeWindow(args['windowId']);
-    if (args['callback']) {
-      args['callback']();
-    }
+    serviceAPI.removeWindow(args.windowId, args.callback, addonAPI.id, _instanceID);
   };
 
   //----------------------------------------------------------------------------

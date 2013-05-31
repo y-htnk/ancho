@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "AnchoBackgroundServer/TabManager.hpp"
+#include "AnchoBackgroundServer/WindowManager.hpp"
 #include <Exceptions.h>
 #include <SimpleWrappers.h>
 #include "AnchoBackgroundServer/AsynchronousTaskManager.hpp"
@@ -8,29 +9,6 @@
 
 namespace Ancho {
 namespace Utils {
-std::wstring getLastError(HRESULT hr)
-{
-    LPWSTR lpMsgBuf;
-    DWORD ret;
-    std::wstring def(L"(UNNKOWN)");
-    ret = FormatMessage(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER |
-        FORMAT_MESSAGE_FROM_HMODULE,
-        GetModuleHandle(TEXT("imapi2.dll")),
-        hr,
-        0,
-        (LPWSTR) &lpMsgBuf,
-        0, NULL );
-
-    if(ret)
-    {
-        std::wstring last(lpMsgBuf);
-        LocalFree(lpMsgBuf);
-        return last;
-    }
-    return def;
-}
-
 
 BOOL CALLBACK enumBrowserWindows(HWND hwnd, LPARAM lParam)
 {
@@ -200,6 +178,10 @@ struct CreateTabTask
         return;
       }
 
+      Utils::JSVariant windowIdVt = mProperties[L"windowId"];
+      //TODO - handle windowId properly
+      int windowId = (windowIdVt.which() == Utils::jsInt) ? boost::get<int>(windowIdVt) : WINDOW_ID_CURRENT;
+
       Utils::JSVariant url = mProperties[L"url"];
       std::wstring tmpUrl = (url.which() == Utils::jsString) ? boost::get<std::wstring>(url) : L"about:blank";
 
@@ -214,11 +196,15 @@ struct CreateTabTask
           TabManager::instance().addCreateTabCallbackInfo(requestID, requestInfo);
         }
       }
-
       _variant_t vtUrl = tmpUrl.c_str();
-      _variant_t vtFlags((long)navOpenInNewTab, VT_I4);
+
+      long flags = windowId == WINDOW_ID_NON_EXISTENT ? navOpenInNewWindow : navOpenInNewTab;
+      _variant_t vtFlags(flags, VT_I4);
+
       _variant_t vtTargetFrameName;
+
       _variant_t vtPostData;
+
       _variant_t vtHeaders;
 
       IF_FAILED_THROW(browser->Navigate2(
@@ -284,7 +270,7 @@ struct GetTabTask
              const TabCallback& aCallback,
              const std::wstring &aExtensionId,
              int aApiId)
-              : mTabId(aTabId), mCallback(aCallback), mApiId(aApiId)
+              : mTabId(aTabId), mCallback(aCallback), mExtensionId(aExtensionId), mApiId(aApiId)
   {
     ATLASSERT(!aCallback.empty());
   }
@@ -296,7 +282,8 @@ struct GetTabTask
 
     CComPtr<IAnchoRuntime> runtime = tabRecord->runtime();
 
-    CComPtr<ComSimpleJSObject> info = SimpleJSObject::createInstance();
+    CComPtr<IDispatch> info = TabManager::instance().createObject(mExtensionId, mApiId);
+    //CComPtr<ComSimpleJSObject> info = SimpleJSObject::createInstance();
     IF_FAILED_THROW(runtime->fillTabInfo(&_variant_t(info).GetVARIANT()));
 
     mCallback(info);
@@ -304,6 +291,7 @@ struct GetTabTask
 
   int mTabId;
   TabCallback mCallback;
+  std::wstring mExtensionId;
   int mApiId;
 };
 //==========================================================================================

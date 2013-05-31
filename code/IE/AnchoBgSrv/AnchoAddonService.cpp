@@ -58,6 +58,13 @@ HRESULT CAnchoAddonService::get_tabManager(LPDISPATCH* ppRet)
 }
 //----------------------------------------------------------------------------
 //
+HRESULT CAnchoAddonService::get_windowManager(LPDISPATCH* ppRet)
+{
+  ENSURE_RETVAL(ppRet);
+  return mIWindowManager.QueryInterface(ppRet);
+}
+//----------------------------------------------------------------------------
+//
 HRESULT CAnchoAddonService::invokeExternalEventObject(BSTR aExtensionId, BSTR aEventName, LPDISPATCH aArgs, VARIANT* aRet)
 {
   ENSURE_RETVAL(aRet);
@@ -142,7 +149,7 @@ HRESULT CAnchoAddonService::addBrowserActionInfo(LPDISPATCH aBrowserActionInfo)
 
 //----------------------------------------------------------------------------
 //
-void CAnchoAddonService::fillWindowInfo(HWND aWndHandle, CIDispatchHelper &aInfo)
+/*void CAnchoAddonService::fillWindowInfo(HWND aWndHandle, CIDispatchHelper &aInfo)
 {
   //BOOL isVisible = IsWindowVisible(aWndHandle);
   WINDOWINFO winInfo;
@@ -162,10 +169,10 @@ void CAnchoAddonService::fillWindowInfo(HWND aWndHandle, CIDispatchHelper &aInfo
   } else {
     aInfo.SetProperty(L"state", CComVariant(L"normal"));
   }
-}
+}*/
 //----------------------------------------------------------------------------
 //
-STDMETHODIMP CAnchoAddonService::getWindow(INT aWindowId, LPDISPATCH aCreator, BOOL aPopulate, VARIANT* aRet)
+/*STDMETHODIMP CAnchoAddonService::getWindow(INT aWindowId, LPDISPATCH aCreator, BOOL aPopulate, VARIANT* aRet)
 {
   if (!aCreator) {
     return E_POINTER;
@@ -186,10 +193,10 @@ STDMETHODIMP CAnchoAddonService::getWindow(INT aWindowId, LPDISPATCH aCreator, B
   fillWindowInfo(hwnd, infoHelper);
   *aRet = info;
   return S_OK;
-}
+}*/
 //----------------------------------------------------------------------------
 //
-STDMETHODIMP CAnchoAddonService::getAllWindows(LPDISPATCH aCreator, BOOL aPopulate, VARIANT* aRet)
+/*STDMETHODIMP CAnchoAddonService::getAllWindows(LPDISPATCH aCreator, BOOL aPopulate, VARIANT* aRet)
 {
   if (!aCreator) {
     return E_POINTER;
@@ -212,7 +219,7 @@ STDMETHODIMP CAnchoAddonService::getAllWindows(LPDISPATCH aCreator, BOOL aPopula
     }
   }while(hIEFrame);
   return constructSafeArrayFromVector(windowInfos, *aRet);
-}
+}*/
 
 //----------------------------------------------------------------------------
 //
@@ -273,22 +280,22 @@ STDMETHODIMP CAnchoAddonService::updateWindow(INT aWindowId, LPDISPATCH aPropert
 }
 //----------------------------------------------------------------------------
 //
-STDMETHODIMP CAnchoAddonService::createWindow(LPDISPATCH aProperties, LPDISPATCH aCreator, LPDISPATCH aCallback)
+/*STDMETHODIMP CAnchoAddonService::createWindow(LPDISPATCH aProperties, LPDISPATCH aCreator, LPDISPATCH aCallback)
 {
- /* CIDispatchHelper properties(aProperties);
+  CIDispatchHelper properties(aProperties);
 
   try {
     m_WebBrowserPostInitTasks.addCommand(AQueuedCommand::Ptr(new CreateWindowCommand(*this, aProperties, aCreator, aCallback)));
   } catch (std::exception &e) {
     ATLTRACE("Error: %s\n", e.what());
     return E_FAIL;
-  }*/
+  }
   return S_OK;
-}
+}*/
 
 //----------------------------------------------------------------------------
 //
-STDMETHODIMP CAnchoAddonService::closeWindow(INT aWindowId)
+/*STDMETHODIMP CAnchoAddonService::closeWindow(INT aWindowId)
 {
   HWND win = winIdToHWND(aWindowId);
   if( ::DestroyWindow(win) ) {
@@ -296,7 +303,7 @@ STDMETHODIMP CAnchoAddonService::closeWindow(INT aWindowId)
   } else {
     return E_FAIL;
   }
-}
+}*/
 //----------------------------------------------------------------------------
 //
 STDMETHODIMP CAnchoAddonService::createPopupWindow(BSTR aUrl, INT aX, INT aY, LPDISPATCH aInjectedData, LPDISPATCH aCloseCallback)
@@ -374,6 +381,9 @@ HRESULT CAnchoAddonService::FinalConstruct()
 
     Ancho::Service::TabManager::initSingleton();
     mITabManager = &Ancho::Service::TabManager::instance();
+
+    Ancho::Service::WindowManager::initSingleton();
+    mIWindowManager = &Ancho::Service::WindowManager::instance();
   END_TRY_BLOCK_CATCH_TO_HRESULT;
   return S_OK;
 }

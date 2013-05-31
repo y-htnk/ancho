@@ -12,24 +12,8 @@
 namespace Ancho {
 namespace Utils {
 
-/**
- * Thread safe generator of unique sequential IDs.
- * \tparam TId must be integral type
- **/
-template<typename TId = int>
-class IdGenerator
-{
-public:
-  IdGenerator(TId aInitValue = 1): mNextValue(aInitValue)
-  { /*empty*/ }
 
-  TId next()
-  {
-    return mNextValue.fetch_add(1, boost::memory_order_relaxed);
-  }
-protected:
-  boost::atomic<TId> mNextValue;
-};
+
 } //namespace Utils
 
 namespace Service {
@@ -37,7 +21,7 @@ namespace Service {
 struct ENotValidTabId : EAnchoException {};
 
 
-typedef CComPtr<ComSimpleJSObject> TabInfo;
+typedef CComPtr<IDispatch> TabInfo;
 typedef CComPtr<IDispatch/*ComSimpleJSArray*/> TabInfoList;
 typedef int TabId;
 

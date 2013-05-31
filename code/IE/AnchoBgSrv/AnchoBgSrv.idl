@@ -115,13 +115,16 @@ library AnchoBgSrvLib
     [propget, id(2)]
     HRESULT tabManager([out, retval] LPDISPATCH* ppRet);
 
-    HRESULT getWindow([in] INT aWindowId, [in] LPDISPATCH aCreator, [in] BOOL aPopulate, [out, retval] VARIANT* aRet);
+    [propget, id(3)]
+    HRESULT windowManager([out, retval] LPDISPATCH* ppRet);
+
+    /*HRESULT getWindow([in] INT aWindowId, [in] LPDISPATCH aCreator, [in] BOOL aPopulate, [out, retval] VARIANT* aRet);
     HRESULT getAllWindows([in] LPDISPATCH aCreator, [in] BOOL aPopulate, [out, retval] VARIANT* aRet);
     HRESULT updateWindow([in] INT aWindowId, [in] LPDISPATCH aProperties);
     HRESULT createWindow([in] LPDISPATCH aProperties, [in] LPDISPATCH aCreator, [in] LPDISPATCH aCallback);
     HRESULT closeWindow([in] INT aWindowId);
     HRESULT createPopupWindow([in] BSTR aUrl, INT aX, INT aY, [in] LPDISPATCH aInjectedData, [in] LPDISPATCH aCloseCallback);
-    HRESULT getCurrentWindowId([out, retval] INT *aWinId);
+    HRESULT getCurrentWindowId([out, retval] INT *aWinId);*/
 
     //HRESULT executeScript([in] BSTR aExtensionId, [in] INT aTabID, [in] BSTR aCode, [in] BOOL aFileSpecified, [in] BOOL aInAllFrames);
     HRESULT invokeExternalEventObject([in] BSTR aExtensionId, [in] BSTR aEventName, [in] LPDISPATCH aArgs, [out, retval] VARIANT* aRet);
@@ -139,7 +142,7 @@ library AnchoBgSrvLib
 	  uuid(FE4E5D80-04A1-428C-8A0C-0E789E6D6B13),
 	  dual,
 	  nonextensible,
-	  helpstring("IAnchoBackgroundAPI Interface"),
+	  helpstring("ITabManager Interface"),
 	  pointer_default(unique)
   ]
   interface ITabManager : IDispatch
@@ -176,7 +179,29 @@ library AnchoBgSrvLib
     HRESULT createTabNotification([in] INT aTabId, [in] ULONG aRequestID);
   };
 
+  /*==========================================================================*/
+  [
+	  object,
+	  uuid(2B045C5D-EADB-4749-9A84-B75BC19E6BB7),
+	  dual,
+	  nonextensible,
+	  helpstring("IWindowManager Interface"),
+	  pointer_default(unique)
+  ]
+  interface IWindowManager : IDispatch
+  {
+    [id(1), helpstring("createWindow - asynchronous call")]
+    HRESULT createWindow([in] LPDISPATCH aCreateData, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+    [id(2), helpstring("getWindows - asynchronous call")]
+    HRESULT getWindows([in] LPDISPATCH aGetInfo, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+    [id(3), helpstring("updateWindow - asynchronous call")]
+    HRESULT updateWindow([in] LONG windowId, [in] LPDISPATCH aUpdateInfo, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+    [id(4), helpstring("removeWindow - asynchronous call")]
+    HRESULT removeWindow([in] LONG windowId, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+    /*[id(5), helpstring("captureVisibleTab - asynchronous call")]
+    HRESULT captureVisibleTab([in] LONG windowId, [in] LPDISPATCH aOptions, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);*/
 
+  };
   /*==========================================================================*/
   [
     object,
