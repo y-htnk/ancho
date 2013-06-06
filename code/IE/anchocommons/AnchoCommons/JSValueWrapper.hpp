@@ -98,30 +98,30 @@ public:
 
   JSValueWrapperConst() {}
 
-  JSValueWrapperConst(const CComVariant &aVariant)
+  explicit JSValueWrapperConst(const CComVariant &aVariant)
     : mCurrentValue(aVariant) {}
 
-  JSValueWrapperConst(const VARIANT &aVariant)
+  explicit JSValueWrapperConst(const VARIANT &aVariant)
     : mCurrentValue(aVariant) {}
 
   JSValueWrapperConst(const JSValueWrapperConst &aValue)
     : mCurrentValue(aValue.mCurrentValue) {}
 
-  JSValueWrapperConst(const JSValueWrapper &aValue);
+  explicit JSValueWrapperConst(const JSValueWrapper &aValue);
 
-  JSValueWrapperConst(int aValue)
+  explicit JSValueWrapperConst(int aValue)
     : mCurrentValue(aValue) {}
 
-  JSValueWrapperConst(double aValue)
+  explicit JSValueWrapperConst(double aValue)
     : mCurrentValue(aValue) {}
 
-  JSValueWrapperConst(const std::wstring &aValue)
+  explicit JSValueWrapperConst(const std::wstring &aValue)
     : mCurrentValue(aValue.c_str()) {}
 
-  JSValueWrapperConst(bool aValue)
+  explicit JSValueWrapperConst(bool aValue)
     : mCurrentValue(aValue) {}
 
-  JSValueWrapperConst(CComPtr<IDispatch> aValue)
+  explicit JSValueWrapperConst(CComPtr<IDispatch> aValue)
     : mCurrentValue(aValue) {}
 
   JS_VALUE_TYPE_METHODS(std::wstring, String, BSTR, VT_BSTR, ENotAString)
@@ -198,28 +198,28 @@ public:
 
   JSValueWrapper() {}
 
-  JSValueWrapper(const CComVariant &aVariant)
+  explicit JSValueWrapper(const CComVariant &aVariant)
     : JSValueWrapperConst(aVariant) {}
 
-  JSValueWrapper(const VARIANT &aVariant)
+  explicit JSValueWrapper(const VARIANT &aVariant)
     : JSValueWrapperConst(aVariant) {}
 
   JSValueWrapper(const JSValueWrapper &aVariant)
     : JSValueWrapperConst(aVariant.mCurrentValue) {}
 
-  JSValueWrapper(int aValue)
+  explicit JSValueWrapper(int aValue)
     : JSValueWrapperConst(aValue) {}
 
-  JSValueWrapper(double aValue)
+  explicit JSValueWrapper(double aValue)
     : JSValueWrapperConst(aValue) {}
 
-  JSValueWrapper(const std::wstring &aValue)
+  explicit JSValueWrapper(const std::wstring &aValue)
     : JSValueWrapperConst(aValue) {}
 
-  JSValueWrapper(bool aValue)
+  explicit JSValueWrapper(bool aValue)
     : JSValueWrapperConst(aValue) {}
 
-  JSValueWrapper(CComPtr<IDispatch> aValue)
+  explicit JSValueWrapper(CComPtr<IDispatch> aValue)
     : JSValueWrapperConst(aValue) {}
 
   void attach(VARIANT &aVariant)
@@ -238,6 +238,38 @@ public:
   }
 protected:
 
+};
+
+class JSValueAssigner: public JSValueWrapper
+{
+public:
+  JSValueAssigner(const CComVariant &aOwner, const std::wstring &aPropertyName, const CComVariant &aValue)
+    : JSValueWrapper(aValue), mOwner(aOwner), mPropertyName(aPropertyName)
+  { /*empty*/ }
+
+  JSValueAssigner & operator=(const std::wstring &aValue)
+  {
+    Utils::detail::setMember(mOwner, mPropertyName, CComVariant(aValue.c_str()));
+    return *this;
+  }
+  JSValueAssigner & operator=(int aValue)
+  {
+    Utils::detail::setMember(mOwner, mPropertyName, CComVariant(aValue));
+    return *this;
+  }
+  JSValueAssigner & operator=(double aValue)
+  {
+    Utils::detail::setMember(mOwner, mPropertyName, CComVariant(aValue));
+    return *this;
+  }
+  JSValueAssigner & operator=(bool aValue)
+  {
+    Utils::detail::setMember(mOwner, mPropertyName, CComVariant(aValue));
+    return *this;
+  }
+protected:
+  CComVariant mOwner;
+  std::wstring mPropertyName;
 };
 
 //Wrapper for JS objects
@@ -308,10 +340,10 @@ public:
     return *this;
   }*/
 
-  JSValueWrapper
+  JSValueAssigner
   operator[](const std::wstring &aProperty)
   {
-    return JSValueWrapper(getMember(aProperty));
+    return JSValueAssigner(mCurrentValue, aProperty, getMember(aProperty));
   }
 
   NameIterator memberNames()const
@@ -414,7 +446,7 @@ public:
   JSValueWrapper
   operator[](int aIdx)
   {
-    return operator[](boost::lexical_cast<std::wstring>(aIdx));
+    return JSValueAssigner(mCurrentValue, boost::lexical_cast<std::wstring>(aIdx), getMember(boost::lexical_cast<std::wstring>(aIdx)));
   }
 
   JSValueWrapper

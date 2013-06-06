@@ -165,8 +165,10 @@ private:
   CComQIPtr<IWebBrowser2>                 m_pWebBrowser;
   CComPtr<IAnchoAddonService>             m_pAnchoService;
   CComPtr<IAnchoTabManagerInternal>       mTabManager;
+  CComPtr<IAnchoWindowManagerInternal>    mWindowManager;
   AddonMap                                m_Addons;
   int                                     m_TabID;
+  LONG                                    mWindowID;
   CComPtr<DAnchoBrowserEvents>            m_pBrowserEventSource;
   DWORD                                   m_WebBrowserEventsCookie;
   DWORD                                   m_AnchoBrowserEventsCookie;
