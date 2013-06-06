@@ -31,7 +31,7 @@ var Windows = function(instanceID) {
   var _instanceID = instanceID;
   var _currentWindowID = 0;
   if (instanceID < 0) {
-    _currentWindowID = serviceAPI.getCurrentWindowId();
+    _currentWindowID = serviceAPI.windowManager.getCurrentWindowId();
   }
   //============================================================================
   // public properties
@@ -53,21 +53,18 @@ var Windows = function(instanceID) {
   // chrome.windows.get
   this.get = function(windowId, getInfo, callback) {
     var args = preprocessArguments('chrome.windows.get', arguments);
-    var winId = args['windowId'];
+    var winId = args.windowId;
     if (winId === this.WINDOW_ID_CURRENT) {
-      winId = _currentWindowID || serviceAPI.getCurrentWindowId();
+      winId = _currentWindowID || serviceAPI.windowManager.getCurrentWindowId();
     }
-    var win = serviceAPI.getWindow(winId, Object, (args['getInfo'] && args['getInfo'].populate));
-    args['callback'](win);
+    serviceAPI.windowManager.getWindow(winId, (args.getInfo && args.getInfo.populate), args.callback, addonAPI.id, _instanceID);
   };
 
   //----------------------------------------------------------------------------
   // chrome.windows.getAll
   this.getAll = function(getInfo, callback) {
     var args = preprocessArguments('chrome.windows.getAll', arguments);
-    var windowsSafeArray = serviceAPI.getAllWindows(Object, (args['getInfo'] && args['getInfo'].populate));
-    var windows = new VBArray(windowsSafeArray).toArray();
-    args['callback'](windows);
+    serviceAPI.windowManager.getAllWindows(args.getInfo, args.callback, addonAPI.id, _instanceID);
   };
 
   //----------------------------------------------------------------------------
@@ -94,14 +91,11 @@ var Windows = function(instanceID) {
   // chrome.windows.update
   this.update = function(windowId, updateInfo, callback) {
     var args = preprocessArguments('chrome.windows.update', arguments);
-    serviceAPI.updateWindow(args.windowId, args.updateInfo);
-    if (args.callback) {
-      this.get(args.windowId, { populate: false }, args.callback);
-    }
+    serviceAPI.windowManager.updateWindow(args.windowId, args.updateInfo, args.callback, addonAPI.id, _instanceID);
   };
 
   this.test = function() {
-    serviceAPI.createPopupWindow(addonRootURL + "popup.html");
+    serviceAPI.windowManager.createPopupWindow(addonRootURL + "popup.html");
   }
   //============================================================================
   // events

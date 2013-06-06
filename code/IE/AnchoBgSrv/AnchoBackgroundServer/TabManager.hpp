@@ -117,6 +117,7 @@ public:
   friend struct RemoveTabsTask;
 
   class TabRecord;
+  typedef boost::recursive_mutex Mutex;
 
   TabManager()
   {
@@ -155,7 +156,7 @@ public:
   template<typename TCallable>
   TCallable forEachTab(TCallable aCallable)
   {
-    boost::unique_lock<boost::mutex> lock(mTabAccessMutex);
+    boost::unique_lock<Mutex> lock(mTabAccessMutex);
     TabMap::iterator it = mTabs.begin();
     while (it != mTabs.end()) {
       ATLASSERT(it->second);
@@ -178,7 +179,7 @@ public:
   {
     //Create list of tabs which do not exist
     TContainer missed;
-    boost::unique_lock<boost::mutex> lock(mTabAccessMutex);
+    boost::unique_lock<Mutex> lock(mTabAccessMutex);
 
     BOOST_FOREACH(auto tabId, aTabIds) {
       TabMap::iterator it = mTabs.find(tabId);
@@ -190,7 +191,7 @@ public:
         missed.insert(missed.end(), tabId);
       }
     }
-    return missed;
+    return std::move(missed);
   }
 
   static void initSingleton()
@@ -273,13 +274,13 @@ protected:
 
   void addCreateTabCallbackInfo(ULONG aRequestId, CreateTabCallbackRequestInfo aInfo)
   {
-    boost::unique_lock<boost::mutex> lock(mTabAccessMutex);
+    boost::unique_lock<Mutex> lock(mTabAccessMutex);
     mCreateTabCallbacks[aRequestId] = aInfo;
   }
 
   boost::shared_ptr<TabRecord> getTabRecord(TabId aTabId)
   {
-    boost::unique_lock<boost::mutex> lock(mTabAccessMutex);
+    boost::unique_lock<Mutex> lock(mTabAccessMutex);
     TabMap::iterator it = mTabs.find(aTabId);
     if (it == mTabs.end()) {
       ANCHO_THROW(ENotValidTabId());
@@ -305,7 +306,7 @@ protected:
   boost::atomic<bool> mHeartbeatActive;
 
   /// Manipulations with tab record container is synchronized by this mutex
-  boost::mutex mTabAccessMutex;
+  Mutex mTabAccessMutex;
 };
 
 //============================================================================================

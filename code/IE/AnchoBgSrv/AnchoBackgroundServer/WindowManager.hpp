@@ -22,9 +22,10 @@ enum SpecialWindowId {
 
 typedef int WindowId;
 typedef CComPtr<IDispatch> WindowInfo;
+typedef CComPtr<IDispatch> WindowInfoList;
 
 typedef boost::function<void(WindowInfo)> WindowCallback;
-/*typedef boost::function<void(TabInfoList)> TabListCallback;*/
+typedef boost::function<void(WindowInfoList)> WindowListCallback;
 typedef boost::function<void(void)> SimpleCallback;
 
 class WindowManager;
@@ -41,6 +42,7 @@ class WindowManager:
   public CComObjectRootEx<CComMultiThreadModel>,
   //public IAnchoTabManagerInternal,
   public IDispatchImpl<IWindowManager, &IID_IWindowManager, &LIBID_AnchoBgSrvLib, /*wMajor =*/ 0xffff, /*wMinor =*/ 0xffff>,
+  public IAnchoWindowManagerInternal,
   public boost::noncopyable
 
 {
@@ -49,6 +51,7 @@ public:
 
 
   class WindowRecord;
+  typedef boost::recursive_mutex Mutex;
 
   WindowManager()
   {
@@ -58,9 +61,12 @@ public:
   ///@{
   /** Asynchronous methods available to JS.**/
   STDMETHOD(createWindow)(LPDISPATCH aCreateData, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
-  STDMETHOD(getWindows)(LPDISPATCH aGetInfo, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
+  STDMETHOD(getAllWindows)(LPDISPATCH aGetInfo, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
+  STDMETHOD(getWindow)(LONG windowId, LPDISPATCH aGetInfo, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
   STDMETHOD(updateWindow)(LONG windowId, LPDISPATCH aUpdateInfo, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
   STDMETHOD(removeWindow)(LONG windowId, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
+
+  STDMETHOD(getCurrentWindowId)(LONG *aWindowId);
   ///@}
 
   /**
@@ -72,13 +78,13 @@ public:
   template<typename TCallable>
   TCallable forEachWindow(TCallable aCallable)
   {
-    boost::unique_lock<boost::mutex> lock(mWindowAccessMutex);
-    /*TabMap::iterator it = mTabs.begin();
-    while (it != mTabs.end()) {
+    boost::unique_lock<Mutex> lock(mWindowAccessMutex);
+    auto it = mWindows.begin();
+    while (it != mWindows.end()) {
       ATLASSERT(it->second);
       aCallable(*it->second);
       ++it;
-    }*/
+    }
     return aCallable;
   }
 
@@ -95,19 +101,19 @@ public:
   {
     //Create list of tabs which do not exist
     TContainer missed;
-    boost::unique_lock<boost::mutex> lock(mWindowAccessMutex);
+    boost::unique_lock<Mutex> lock(mWindowAccessMutex);
 
     BOOST_FOREACH(auto windowId, aWindowIds) {
-      /*TabMap::iterator it = mTabs.find(tabId);
+      auto it = mWindows.find(windowId);
       if (it != mTabs.end()) {
         ATLASSERT(it->second);
         aCallable(*it->second);
         ++it;
       } else {
-        missed.insert(missed.end(), tabId);
-      }*/
+        missed.insert(missed.end(), windowId);
+      }
     }
-    return missed;
+    return std::move(missed);
   }
 
   static void initSingleton()
@@ -123,14 +129,25 @@ public:
     ATLASSERT(gWindowManager != NULL);
     return *gWindowManager;
   }
+
+  STDMETHOD(getWindowIdFromHWND)(OLE_HANDLE aHWND, LONG *aWindowId);
+  STDMETHOD(createPopupWindow)(BSTR aUrl, INT aX, INT aY, LPDISPATCH aInjectedData, LPDISPATCH aCloseCallback);
 public:
-  void createWindow(const Utils::JSObject &aCreateData,
+  void createWindow(
+                  const Utils::JSObject &aCreateData,
                   const WindowCallback& aCallback,
                   const std::wstring &aExtensionId,
                   int aApiId);
 
-  void getWindow(WindowId aWindowId,
-                bool aPopulate,
+  void getAllWindows(
+                const Utils::JSObject &aGetInfo,
+                const WindowListCallback& aCallback,
+                const std::wstring &aExtensionId,
+                int aApiId);
+
+  void getWindow(
+                WindowId aWindowId,
+                const Utils::JSObject &aGetInfo,
                 const WindowCallback& aCallback,
                 const std::wstring &aExtensionId,
                 int aApiId);
@@ -142,10 +159,13 @@ public:
                  const std::wstring &aExtensionId,
                  int aApiId);
 
-  void removeWindow(WindowId aWindowId,
+  void removeWindow(
+                 WindowId aWindowId,
                  const SimpleCallback& aCallback,
                  const std::wstring &aExtensionId,
                  int aApiId);
+
+  WindowId getCurrentWindowId();
 public:
   // -------------------------------------------------------------------------
   // COM standard stuff
@@ -168,7 +188,7 @@ public:
   BEGIN_COM_MAP(Ancho::Service::WindowManager)
     COM_INTERFACE_ENTRY(IDispatch)
     COM_INTERFACE_ENTRY(IWindowManager)
-    //COM_INTERFACE_ENTRY(IAnchoWindowManagerInternal)
+    COM_INTERFACE_ENTRY(IAnchoWindowManagerInternal)
   END_COM_MAP()
 
 
@@ -192,7 +212,7 @@ protected:
   WindowMap mWindows;
 
   /// Manipulations with tab record container is synchronized by this mutex
-  boost::mutex mWindowAccessMutex;
+  Mutex mWindowAccessMutex;
 };
 
 //============================================================================================

@@ -593,7 +593,7 @@ void TabManager::getTab(TabId aTabId, const TabCallback& aCallback, const std::w
 
 TabId TabManager::getFrameTabId(HWND aFrameTab)
 {
-  boost::unique_lock<boost::mutex> lock(mTabAccessMutex);
+  boost::unique_lock<Mutex> lock(mTabAccessMutex);
 
   FrameTabToTabIDMap::iterator it = mFrameTabIds.find(aFrameTab);
   if (it != mFrameTabIds.end()) {
@@ -635,7 +635,7 @@ STDMETHODIMP TabManager::registerRuntime(OLE_HANDLE aFrameTab, IAnchoRuntime * a
   *aTabID = getFrameTabId((HWND)aFrameTab);
 
   {
-    boost::unique_lock<boost::mutex> lock(mTabAccessMutex);
+    boost::unique_lock<Mutex> lock(mTabAccessMutex);
     mTabs[*aTabID] = boost::make_shared<TabRecord>(aRuntime, *aTabID, aHeartBeat);
   }
   ATLTRACE(L"ADDON SERVICE - registering tab: %d\n", *aTabID);
@@ -652,7 +652,7 @@ STDMETHODIMP TabManager::registerRuntime(OLE_HANDLE aFrameTab, IAnchoRuntime * a
 STDMETHODIMP TabManager::unregisterRuntime(INT aTabID)
 {
   BEGIN_TRY_BLOCK;
-  boost::unique_lock<boost::mutex> lock(mTabAccessMutex);
+  boost::unique_lock<Mutex> lock(mTabAccessMutex);
   TabMap::iterator it = mTabs.find(aTabID);
   if (it != mTabs.end()) {
     it->second->tabClosed();
@@ -673,7 +673,7 @@ STDMETHODIMP TabManager::unregisterRuntime(INT aTabID)
 STDMETHODIMP TabManager::createTabNotification(INT aTabId, ULONG aRequestID)
 {
   BEGIN_TRY_BLOCK;
-  boost::unique_lock<boost::mutex> lock(mTabAccessMutex);
+  boost::unique_lock<Mutex> lock(mTabAccessMutex);
 
   CreateTabCallbackMap::iterator it = mCreateTabCallbacks.find(aRequestID);
   if (it != mCreateTabCallbacks.end()) {
@@ -690,7 +690,7 @@ STDMETHODIMP TabManager::createTabNotification(INT aTabId, ULONG aRequestID)
 //
 void TabManager::checkBHOConnections()
 {
-  boost::unique_lock<boost::mutex> lock(mTabAccessMutex);
+  boost::unique_lock<Mutex> lock(mTabAccessMutex);
 
   auto it = mTabs.begin();
   auto endIter =  mTabs.end();

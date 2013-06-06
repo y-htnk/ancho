@@ -122,26 +122,38 @@ HRESULT CAnchoRuntime::Init()
   // create addon service object
   IF_FAILED_RET(m_pAnchoService.CoCreateInstance(CLSID_AnchoAddonService));
 
-  //get access to the tabmanager
-  CComQIPtr<IAnchoTabManagerInternal> tabManager;
   CComQIPtr<IAnchoServiceApi> serviceApi = m_pAnchoService;
   if (!serviceApi) {
     return E_NOINTERFACE;
   }
-  CComQIPtr<IDispatch> dispatch;
-  IF_FAILED_RET(serviceApi->get_tabManager(&dispatch));
-  tabManager = dispatch;
-  if (!tabManager) {
-    return E_NOINTERFACE;
-  }
-  mTabManager = tabManager;
 
+  {//Get TabManager
+    CComQIPtr<IDispatch> dispatch;
+    IF_FAILED_RET(serviceApi->get_tabManager(&dispatch));
+    CComQIPtr<IAnchoTabManagerInternal> tabManager = dispatch;
+    if (!tabManager) {
+      return E_NOINTERFACE;
+    }
+    mTabManager = tabManager;
+  }
+  {//Get WindowManager
+    CComQIPtr<IDispatch> dispatch;
+    IF_FAILED_RET(serviceApi->get_windowManager(&dispatch));
+    CComQIPtr<IAnchoWindowManagerInternal> windowManager = dispatch;
+    if (!windowManager) {
+      return E_NOINTERFACE;
+    }
+    mWindowManager = windowManager;
+  }
 
   // Registering tab in service - obtains tab id and assigns it to the tab as property
   IF_FAILED_RET(mTabManager->registerRuntime((OLE_HANDLE)getFrameTabWindow(), this, m_HeartbeatSlave.id(), &m_TabID));
   HWND hwnd;
   m_pWebBrowser->get_HWND((SHANDLE_PTR*)&hwnd);
   ::SetProp(hwnd, s_AnchoTabIDPropertyName, (HANDLE)m_TabID);
+
+  //Get WindowId
+  IF_FAILED_RET(mWindowManager->getWindowIdFromHWND(reinterpret_cast<OLE_HANDLE>(getMainWindow()), &mWindowID));
 
   CComObject<CAnchoBrowserEvents>* pBrowserEventSource;
   IF_FAILED_RET(CComObject<CAnchoBrowserEvents>::CreateInstance(&pBrowserEventSource));
@@ -635,7 +647,7 @@ STDMETHODIMP CAnchoRuntime::fillTabInfo(VARIANT* aInfo)
 
   IF_FAILED_RET(obj.SetProperty(L"active", CComVariant(isTabActive())));
 
-  IF_FAILED_RET(obj.SetProperty(L"windowId", reinterpret_cast<INT>(getMainWindow())));
+  IF_FAILED_RET(obj.SetProperty(L"windowId", mWindowID));
   return S_OK;
 }
 

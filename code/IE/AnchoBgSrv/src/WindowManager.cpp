@@ -6,6 +6,8 @@
 #include "AnchoBackgroundServer/AsynchronousTaskManager.hpp"
 #include "AnchoBackgroundServer/COMConversions.hpp"
 #include "AnchoBackgroundServer/JavaScriptCallback.hpp"
+#include "PopupWindow.h"
+#include "AnchoAddonService.h"
 
 namespace Ancho {
 namespace Utils {
@@ -14,6 +16,12 @@ bool isIEWindow(HWND aHwnd)
 {
   wchar_t className[256];
   return GetClassName(aHwnd, className, 256) && (std::wstring(L"IEFrame") == className);
+}
+
+HWND getCurrentWindowHWND()
+{
+  //FindWindowEx returns windows in z-order - the first one is also the top one
+  return ::FindWindowEx(NULL, NULL, L"IEFrame", NULL);
 }
 
 } //namespace Utils
@@ -60,7 +68,7 @@ struct CreateWindowTask
 
       WindowId windowId = info[L"windowId"].toInt();
 
-      WindowManager::instance().getWindow(windowId, false, mCallback, mExtensionId, mApiId);
+      WindowManager::instance().getWindow(windowId, Ancho::Utils::JSObject(), mCallback, mExtensionId, mApiId);
     };
 
     TabManager::instance().createTab(properties, helperCallback, mExtensionId, mApiId);
@@ -102,9 +110,48 @@ void WindowManager::createWindow(const Utils::JSObject &aCreateData,
   mAsyncTaskManager.addTask(CreateWindowTask(aCreateData, aCallback, aExtensionId, aApiId));
 }
 //==========================================================================================
-STDMETHODIMP WindowManager::getWindows(LPDISPATCH aGetInfo, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId)
+STDMETHODIMP WindowManager::getAllWindows(LPDISPATCH aGetInfo, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId)
 {
+  BEGIN_TRY_BLOCK;
+  if (aExtensionId == NULL) {
+    return E_INVALIDARG;
+  }
+  CComQIPtr<IDispatchEx> tmp(aGetInfo);
+  if (!tmp) {
+    return E_FAIL;
+  }
+
+  Utils::JSVariant getInfo = Utils::convertToJSVariant(*tmp);
+  Utils::JavaScriptCallback<WindowInfoList, void> callback(aCallback);
+
+  getAllWindows(boost::get<Utils::JSObject>(getInfo), callback, std::wstring(aExtensionId), aApiId);
+  END_TRY_BLOCK_CATCH_TO_HRESULT;
   return S_OK;
+}
+
+void WindowManager::getAllWindows(
+                 const Utils::JSObject &aGetInfo,
+                 const WindowListCallback& aCallback,
+                 const std::wstring &aExtensionId,
+                 int aApiId)
+{
+  mAsyncTaskManager.addTask([=,this]{
+    //inner lambda had problems with capturing of these variables
+    std::wstring extensionId = aExtensionId;
+    int apiId = aApiId;
+
+    CComPtr<IDispatch> windowList = TabManager::instance().createArray(aExtensionId, aApiId);
+    Utils::JSArrayWrapper windowListWrapper = Ancho::Utils::JSValueWrapper(windowList).toArray();
+
+    WindowManager::instance().forEachWindow([&, extensionId, apiId](const WindowRecord &rec) {
+      CComPtr<IDispatch> info = TabManager::instance().createObject(extensionId, apiId);
+      Utils::JSObjectWrapper infoWrapper = Ancho::Utils::JSValueWrapper(info).toObject();
+      WindowManager::instance().fillWindowInfo(rec.getHWND(), infoWrapper);
+      windowListWrapper.push_back(infoWrapper);
+    });
+
+    aCallback(windowList);
+  });
 }
 //==========================================================================================
 STDMETHODIMP WindowManager::updateWindow(LONG windowId, LPDISPATCH aUpdateInfo, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId)
@@ -138,7 +185,7 @@ void WindowManager::updateWindow(
     updateWindowImpl(win, aUpdateInfo);
 
     getWindow(aWindowId,
-              false,
+              Ancho::Utils::JSObject(),
               aCallback,
               aExtensionId,
               aApiId);
@@ -175,9 +222,28 @@ void WindowManager::removeWindow(
   });
 }
 //==========================================================================================
+STDMETHODIMP WindowManager::getWindow(LONG aWindowId, LPDISPATCH aGetInfo, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId)
+{
+  BEGIN_TRY_BLOCK;
+  if (aExtensionId == NULL) {
+    return E_INVALIDARG;
+  }
+  CComQIPtr<IDispatchEx> tmp(aGetInfo);
+  if (!tmp) {
+    return E_FAIL;
+  }
+
+  Utils::JSVariant getInfo = Utils::convertToJSVariant(*tmp);
+  Utils::JavaScriptCallback<WindowInfo, void> callback(aCallback);
+
+  getWindow(aWindowId, boost::get<Utils::JSObject>(getInfo), callback, std::wstring(aExtensionId), aApiId);
+  END_TRY_BLOCK_CATCH_TO_HRESULT;
+  return S_OK;
+}
+
 void WindowManager::getWindow(
                 WindowId aWindowId,
-                bool aPopulate,
+                const Utils::JSObject &aGetInfo,
                 const WindowCallback& aCallback,
                 const std::wstring &aExtensionId,
                 int aApiId)
@@ -185,15 +251,66 @@ void WindowManager::getWindow(
   mAsyncTaskManager.addTask([=, this](){
     HWND win = getHandleFromWindowId(aWindowId);
     CComPtr<IDispatch> info = TabManager::instance().createObject(aExtensionId, aApiId);
-    //TODO - populate
+    //TODO - populate: aGetInfo[L"populate"];
     WindowManager::instance().fillWindowInfo(win, Utils::JSValueWrapper(info).toObject());
     aCallback(info);
   });
 }
+
+//==========================================================================================
+STDMETHODIMP WindowManager::createPopupWindow(BSTR aUrl, INT aX, INT aY, LPDISPATCH aInjectedData, LPDISPATCH aCloseCallback)
+{
+  if (!aInjectedData || !aCloseCallback) {
+    return E_INVALIDARG;
+  }
+
+  CIDispatchHelper injectedData(aInjectedData);
+  CIDispatchHelper closeCallback(aCloseCallback);
+  DispatchMap injectedDataMap;
+
+  IDispatch* api;
+  IF_FAILED_RET((injectedData.Get<IDispatch*, VT_DISPATCH>((LPOLESTR)s_AnchoBackgroundPageAPIName, api)));
+  injectedDataMap[s_AnchoBackgroundPageAPIName] = api;
+
+  IDispatch* console;
+  IF_FAILED_RET((injectedData.Get<IDispatch*, VT_DISPATCH>((LPOLESTR)s_AnchoBackgroundConsoleObjectName, console)));
+  injectedDataMap[s_AnchoBackgroundConsoleObjectName] = console;
+
+  HWND hwnd = Utils::getCurrentWindowHWND();
+  IF_FAILED_RET(CPopupWindow::CreatePopupWindow(hwnd, &CAnchoAddonService::instance(), injectedDataMap, aUrl, aX, aY, closeCallback));
+  return S_OK;
+}
+//==========================================================================================
+STDMETHODIMP WindowManager::getCurrentWindowId(LONG *aWindowId)
+{
+  BEGIN_TRY_BLOCK;
+  ENSURE_RETVAL(aWindowId);
+  *aWindowId = getCurrentWindowId();
+  END_TRY_BLOCK_CATCH_TO_HRESULT;
+  return S_OK;
+}
+
+WindowId WindowManager::getCurrentWindowId()
+{
+  HWND hwnd = Utils::getCurrentWindowHWND();
+  if (hwnd) {
+    return getWindowIdFromHWND(hwnd);
+  }
+  ANCHO_THROW(EFail());
+}
+//==========================================================================================
+STDMETHODIMP WindowManager::getWindowIdFromHWND(OLE_HANDLE aHWND, LONG *aWindowId)
+{
+  BEGIN_TRY_BLOCK;
+  ENSURE_RETVAL(aWindowId);
+  *aWindowId = getWindowIdFromHWND(reinterpret_cast<HWND>(aHWND));
+  END_TRY_BLOCK_CATCH_TO_HRESULT;
+  return S_OK;
+}
 //==========================================================================================
 HWND WindowManager::getHandleFromWindowId(WindowId aWindowId)
 {
-  boost::unique_lock<boost::mutex> lock(mWindowAccessMutex);
+  boost::unique_lock<Mutex> lock(mWindowAccessMutex);
   auto it = mWindows.find(aWindowId);
   if (it == mWindows.end()) {
     ANCHO_THROW(EFail());
@@ -204,7 +321,7 @@ HWND WindowManager::getHandleFromWindowId(WindowId aWindowId)
 //==========================================================================================
 WindowId WindowManager::getWindowIdFromHWND(HWND aHWND)
 {
-  boost::unique_lock<boost::mutex> lock(mWindowAccessMutex);
+  boost::unique_lock<Mutex> lock(mWindowAccessMutex);
   auto it = mWindowIds.find(aHWND);
   if (it == mWindowIds.end()) {
     return createNewWindowRecord(aHWND);
@@ -216,7 +333,7 @@ WindowId WindowManager::getWindowIdFromHWND(HWND aHWND)
 //==========================================================================================
 WindowId WindowManager::createNewWindowRecord(HWND aHWND)
 {
-  boost::unique_lock<boost::mutex> lock(mWindowAccessMutex);
+  boost::unique_lock<Mutex> lock(mWindowAccessMutex);
   WindowId id = mWindowIdGenerator.next();
 
   mWindowIds[aHWND] = id;

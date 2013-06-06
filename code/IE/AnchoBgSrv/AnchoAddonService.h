@@ -29,6 +29,7 @@
 #endif
 
 class CAnchoAddonService;
+extern CComObject<CAnchoAddonService> *gAnchoAddonService;
 /*============================================================================
  * class CAnchoAddonServiceCallback
  */
@@ -96,15 +97,6 @@ public:
 
   STDMETHOD(invokeExternalEventObject)(BSTR aExtensionId, BSTR aEventName, LPDISPATCH aArgs, VARIANT* aRet);
 
-  //STDMETHOD(getWindow)(INT aWindowId, LPDISPATCH aCreator, BOOL aPopulate, VARIANT* aRet);
-  //STDMETHOD(getAllWindows)(LPDISPATCH aCreator, BOOL aPopulate, VARIANT* aRet);
-  STDMETHOD(updateWindow)(INT aWindowId, LPDISPATCH aProperties);
-  //STDMETHOD(createWindow)(LPDISPATCH aProperties, LPDISPATCH aCreator, LPDISPATCH aCallback);
-  //STDMETHOD(closeWindow)(INT aWindowId);
-  STDMETHOD(createPopupWindow)(BSTR aUrl, INT aX, INT aY, LPDISPATCH aInjectedData, LPDISPATCH aCloseCallback);
-  STDMETHOD(getCurrentWindowId)(INT *aWinId);
-
-
   //STDMETHOD(get_browserActionInfos)(VARIANT* aBrowserActionInfos);
   STDMETHOD(getBrowserActions)(VARIANT* aBrowserActionsArray);
   STDMETHOD(addBrowserActionInfo)(LPDISPATCH aBrowserActionInfo);
@@ -131,17 +123,12 @@ public:
   STDMETHOD(registerBrowserActionToolbar)(OLE_HANDLE aFrameTab, BSTR * aUrl, INT*aTabId);
   STDMETHOD(unregisterBrowserActionToolbar)(INT aTabId);
   STDMETHOD(getDispatchObject)(IDispatch **aRet);
-private:
 
-  //void fillWindowInfo(HWND aWndHandle, CIDispatchHelper &aInfo);
-  HWND getCurrentWindowHWND();
-  bool isIEWindow(HWND);
-
-  INT winHWNDToId(HWND aHwnd)
-  { return reinterpret_cast<INT>(aHwnd); }
-
-  HWND winIdToHWND(INT aWinId)
-  { return reinterpret_cast<HWND>(aWinId); }
+  static CComObject<CAnchoAddonService> & instance()
+  {
+    ATLASSERT(gAnchoAddonService != NULL);
+    return *gAnchoAddonService;
+  }
 
 public:
 

@@ -118,14 +118,6 @@ library AnchoBgSrvLib
     [propget, id(3)]
     HRESULT windowManager([out, retval] LPDISPATCH* ppRet);
 
-    /*HRESULT getWindow([in] INT aWindowId, [in] LPDISPATCH aCreator, [in] BOOL aPopulate, [out, retval] VARIANT* aRet);
-    HRESULT getAllWindows([in] LPDISPATCH aCreator, [in] BOOL aPopulate, [out, retval] VARIANT* aRet);
-    HRESULT updateWindow([in] INT aWindowId, [in] LPDISPATCH aProperties);
-    HRESULT createWindow([in] LPDISPATCH aProperties, [in] LPDISPATCH aCreator, [in] LPDISPATCH aCallback);
-    HRESULT closeWindow([in] INT aWindowId);
-    HRESULT createPopupWindow([in] BSTR aUrl, INT aX, INT aY, [in] LPDISPATCH aInjectedData, [in] LPDISPATCH aCloseCallback);
-    HRESULT getCurrentWindowId([out, retval] INT *aWinId);*/
-
     //HRESULT executeScript([in] BSTR aExtensionId, [in] INT aTabID, [in] BSTR aCode, [in] BOOL aFileSpecified, [in] BOOL aInAllFrames);
     HRESULT invokeExternalEventObject([in] BSTR aExtensionId, [in] BSTR aEventName, [in] LPDISPATCH aArgs, [out, retval] VARIANT* aRet);
 
@@ -192,15 +184,36 @@ library AnchoBgSrvLib
   {
     [id(1), helpstring("createWindow - asynchronous call")]
     HRESULT createWindow([in] LPDISPATCH aCreateData, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
-    [id(2), helpstring("getWindows - asynchronous call")]
-    HRESULT getWindows([in] LPDISPATCH aGetInfo, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
-    [id(3), helpstring("updateWindow - asynchronous call")]
+    [id(2), helpstring("getAllWindows - asynchronous call")]
+    HRESULT getAllWindows([in] LPDISPATCH aGetInfo, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+    [id(3), helpstring("getWindow - asynchronous call")]
+    HRESULT getWindow([in] LONG windowId, [in] LPDISPATCH aGetInfo, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+    [id(4), helpstring("updateWindow - asynchronous call")]
     HRESULT updateWindow([in] LONG windowId, [in] LPDISPATCH aUpdateInfo, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
-    [id(4), helpstring("removeWindow - asynchronous call")]
+    [id(5), helpstring("removeWindow - asynchronous call")]
     HRESULT removeWindow([in] LONG windowId, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+    [id(6), helpstring("getCurrentWindowId - synchronous call")]
+    HRESULT getCurrentWindowId([out, retval] LONG *aWindowId);
+
+    HRESULT createPopupWindow([in] BSTR aUrl, INT aX, INT aY, [in] LPDISPATCH aInjectedData, [in] LPDISPATCH aCloseCallback);
+
     /*[id(5), helpstring("captureVisibleTab - asynchronous call")]
     HRESULT captureVisibleTab([in] LONG windowId, [in] LPDISPATCH aOptions, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);*/
 
+  };
+  /*==========================================================================*/
+  [
+	  object,
+	  uuid(B59F412A-A1E9-4DED-91BE-D69C3A114235),
+	  dual,
+	  nonextensible,
+	  helpstring("IWindowManager Interface"),
+	  pointer_default(unique)
+  ]
+  interface IAnchoWindowManagerInternal : IUnknown
+  {
+    [id(1), helpstring("getWindowIdFromHWND - synchronous call")]
+    HRESULT getWindowIdFromHWND([in] OLE_HANDLE aHWND, [out, retval] LONG *aWindowId);
   };
   /*==========================================================================*/
   [
