@@ -14,23 +14,20 @@ HKLM
 {
   NoRemove Software
   {
-    NoRemove Policies
+    NoRemove Microsoft
     {
-      NoRemove Microsoft
+      NoRemove 'Internet Explorer'
       {
-        NoRemove 'Internet Explorer'
+        NoRemove 'Low Rights'
         {
-          NoRemove 'Low Rights'
+          NoRemove ElevationPolicy
           {
-            NoRemove ElevationPolicy
+            ForceRemove '{F296CB18-1DBD-4B3B-B4B2-0C5318818D8D}' = s 'Ancho Background Server'
             {
-              ForceRemove '{F296CB18-1DBD-4B3B-B4B2-0C5318818D8D}' = s 'Ancho Background Server'
-              {
-                val AppName = s '%OBJECTFILENAME%'
-                val AppPath = s '%MODULEPATH%'
-                val CLSID = s '%APPID%'
-                val Policy = d '3'
-              }
+              val AppName = s '%OBJECTFILENAME%'
+              val AppPath = s '%MODULEPATH%'
+              val CLSID = s '%APPID%'
+              val Policy = d '3'
             }
           }
         }
