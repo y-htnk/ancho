@@ -196,12 +196,11 @@ add_custom_command(TARGET ${PROJECT_NAME}
                    WORKING_DIRECTORY "${${PROJECT_NAME}_GENERATED_FILES_DIR}"
                    )
 
-
-# Register service
+# Register service - using start to handle bug in cmake (wrong quote escaping in COMMAND section
 if (NOT ${DISABLE_REGISTRATION})
   add_custom_command(TARGET ${PROJECT_NAME}
                      POST_BUILD
-                     COMMAND "\$(TargetPath)" ARGS "/RegServer" "/s"
+                     COMMAND "start" ARGS "\"DUMMY\"" "/B" "/WAIT" "\"\$(TargetPath)\"" "/RegServer" "/s"
                      )
 endif (NOT ${DISABLE_REGISTRATION})
 

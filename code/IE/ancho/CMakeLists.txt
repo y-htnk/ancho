@@ -168,7 +168,7 @@ add_custom_command(TARGET ${PROJECT_NAME}
 if (NOT ${DISABLE_REGISTRATION})
   add_custom_command(TARGET ${PROJECT_NAME}
                        POST_BUILD
-                       COMMAND "regsvr32" ARGS "/s" "\$(TargetPath)"
+                       COMMAND "regsvr32" ARGS "/s" "\"\$(TargetPath)\""
                        )
 endif (NOT ${DISABLE_REGISTRATION})
 
