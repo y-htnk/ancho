@@ -24,6 +24,9 @@ if(${ANCHO_WTL_SEARCH})
   find_path(WTL_INCLUDE_DIR "atlapp.h")
   include_directories(${WTL_INCLUDE_DIR})
 endif(${ANCHO_WTL_SEARCH})
+
+#This sets size of the heap used for generating precompiled headers
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zm1000")
 #-----------------------------------------
 
 
