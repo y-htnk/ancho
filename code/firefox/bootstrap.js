@@ -158,7 +158,8 @@ function registerComponents(addon) {
   protocolHandler.registerExtensionURI('ancho', addon.getResourceURI('chrome-ext'));
 
   require('./js/contentPolicy').register();
-  require('./js/httpRequestObserver').register();
+  var extensionState = require('./js/state');
+  require('./js/httpRequestObserver').register(extensionState, backgroundWindow);
 }
 
 function unregisterComponents(callback) {
@@ -192,8 +193,8 @@ function startup(data, reason) {
   AddonManager.getAddonByID(EXTENSION_ID, function(addon) {
     setResourceSubstitution(addon);
     loadConfig(addon, (reason === ADDON_INSTALL || reason === ADDON_ENABLE));
-    registerComponents(addon);
     createBackground();
+    registerComponents(addon);
   });
 }
 
