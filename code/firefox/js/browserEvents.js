@@ -25,58 +25,27 @@
     return true;
   }
 
-  var progressListener = {
-    callback: null,
-
-    // nsIWebProgressListener
-    onLocationChange: function(aProgress, aRequest, aURI) {
-      var document = aProgress.DOMWindow.document;
-      var self = this;
-      // The callback may be expecting DOMContentLoaded to be called, so we want to
-      // trigger it before that event. We do this by hooking into invoking the callback
-      // when the readystate changes to 'interactive'. This occurs just before the
-      // DOMContentLoaded event.
-      if ('loading' === document.readyState) {
-        document.addEventListener('readystatechange', function(event) {
-          if ('interactive' === document.readyState) {
-            document.removeEventListener('readystatechange', arguments.callee, false);
-            if (self.callback) {
-              self.callback(document);
-            }
-          }
-        }, false);
-      }
-    },
-
-    onStateChange: function() {},
-    onProgressChange: function() {},
-    onStatusChange: function() {},
-    onSecurityChange: function() {}
-  };
-
   function BrowserEvents(tabbrowser, extensionState) {
     this.init = function(contentLoadedCallback) {
-      function onContentLoaded(document) {
+      function onContentLoaded(document, isFrame) {
         var win = document.defaultView;
         var browser = tabbrowser.mCurrentBrowser;
-        // TODO: Implement for subframes
-        var isFrame = ((document instanceof Ci.nsIDOMHTMLDocument) && win.frameElement);
+
         // We don't want to trigger the content scripts for about:blank.
-        if (isContentBrowser(document) && !isFrame) {
-          if (browser._anchoCurrentLocation != document.location.href) {
-            browser._anchoCurrentLocation = document.location.href;
-            var tabId = Utils.getWindowId(browser.contentWindow);
-            extensionState.eventDispatcher.notifyListeners('tab.updated', null,
-              [ tabId, { url: document.location.href }, { id: tabId } ]);
+        if (isContentBrowser(document)) {
+          if (!isFrame) {
+            if (browser._anchoCurrentLocation != document.location.href) {
+              browser._anchoCurrentLocation = document.location.href;
+              var tabId = Utils.getWindowId(browser.contentWindow);
+              extensionState.eventDispatcher.notifyListeners('tab.updated', null,
+                [ tabId, { url: document.location.href }, { id: tabId } ]);
+            }
           }
           if (contentLoadedCallback) {
-            contentLoadedCallback(document.defaultView, document.location.href);
+            contentLoadedCallback(document.defaultView, document.location.href, isFrame);
           }
         }
       }
-
-      progressListener.callback = onContentLoaded;
-      tabbrowser.addProgressListener(progressListener);
 
       function unload() {
         tabbrowser.removeProgressListener(progressListener);
@@ -105,8 +74,26 @@
       }
 
       function onWindowCreated(event) {
-        if ('chrome-extension:' === event.target.location.protocol) {
-          prepareWindow(event.target.defaultView.wrappedJSObject);
+        var document = event.target;
+        var win = document.defaultView;
+        var isFrame = !!((document instanceof Ci.nsIDOMHTMLDocument) && win.frameElement);
+        if (isFrame) {
+          win.frameElement.addEventListener('load', function(event) {
+            win.frameElement.removeEventListener('load', arguments.callee, false);
+            onContentLoaded(win.frameElement.contentDocument, true);
+          }, false);
+        }
+        else {
+          document.addEventListener('readystatechange', function(event) {
+            if ('interactive' === document.readyState) {
+              document.removeEventListener('readystatechange', arguments.callee, false);
+              onContentLoaded(document, false);
+            }
+          }, false);
+        }
+
+        if ('chrome-extension:' === document.location.protocol) {
+          prepareWindow(win.wrappedJSObject);
         }
       }
 
@@ -132,7 +119,7 @@
       }
 
       return unload;
-    }
+    };
   }
 
   module.exports = BrowserEvents;

@@ -116,7 +116,8 @@ function loadConfig(addon, firstRun) {
         }
         Config.contentScripts.push({
           matches: matches,
-          js: js
+          js: js,
+          all_frames: scriptInfo.all_frames || false
         });
       }
     }
