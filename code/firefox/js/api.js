@@ -1,5 +1,4 @@
 (function() {
-
   // Google Chrome APIs
   var ExtensionAPI = require('./extension');
   var TabsAPI = require('./tabs');
