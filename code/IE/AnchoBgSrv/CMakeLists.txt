@@ -29,6 +29,7 @@ set(${PROJECT_NAME}_HEADERS
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/JavaScriptCallback.hpp"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/PeriodicTimer.hpp"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/TabManager.hpp"
+  "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/WindowManager.hpp"
   "${${PROJECT_NAME}_INC_DIR}/AnchoAddonService.h"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackgroundAPI.h"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackground.h"
@@ -51,6 +52,7 @@ set(${PROJECT_NAME}_HEADERS
 set(${PROJECT_NAME}_SOURCES
   "${${PROJECT_NAME}_SRC_DIR}/src/AsynchronousTaskManager.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/src/TabManager.cpp"
+  "${${PROJECT_NAME}_SRC_DIR}/src/WindowManager.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoAddonService.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoBackgroundAPI.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoBackground.cpp"
@@ -194,12 +196,11 @@ add_custom_command(TARGET ${PROJECT_NAME}
                    WORKING_DIRECTORY "${${PROJECT_NAME}_GENERATED_FILES_DIR}"
                    )
 
-
-# Register service
+# Register service - using start to handle bug in cmake (wrong quote escaping in COMMAND section
 if (NOT ${DISABLE_REGISTRATION})
   add_custom_command(TARGET ${PROJECT_NAME}
                      POST_BUILD
-                     COMMAND "\$(TargetPath)" ARGS "/RegServer" "/s"
+                     COMMAND "start" ARGS "\"DUMMY\"" "/B" "/WAIT" "\"\$(TargetPath)\"" "/RegServer" "/s"
                      )
 endif (NOT ${DISABLE_REGISTRATION})
 

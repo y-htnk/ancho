@@ -8,15 +8,13 @@
   Cu.import('resource://gre/modules/Services.jsm');
   var Event = require('./event');
   var Utils = require('./utils');
+  var DebugData = require('./debuggerData');
 
   var HTTP_ON_MODIFY_REQUEST = 'http-on-modify-request';
   var HTTP_ON_EXAMINE_RESPONSE = 'http-on-examine-response';
   var HTTP_ON_EXAMINE_CACHED_RESPONSE = 'http-on-examine-cached-response';
 
   var HTTP_STATUS_NOT_MODIFIED = 304;
-
-  var DEBUGGER_SEND_ALL = -1;  // tab id in case we want to send notifications
-                               // regardless of tab id
 
   var BinaryInputStream = Components.Constructor('@mozilla.org/binaryinputstream;1', 'nsIBinaryInputStream');
   var StorageStream = Components.Constructor('@mozilla.org/storagestream;1', 'nsIStorageStream');
@@ -27,42 +25,35 @@
 
   function HttpRequestObserver() {
     this._state = null;
-    this._tab = null;
 
     // request map
     // tabId --> URI --> { request info }
     this._requests = {};
-
-    // debugger API support
-    // tab id --> debugger data
-    this._debuggerData = require('./debuggerData').data;
 
     this._httpActivityDistributor =
         Cc['@mozilla.org/network/http-activity-distributor;1']
         .getService(Ci.nsIHttpActivityDistributor);
   }
 
-  HttpRequestObserver.prototype.init = function(state, window) {
+  HttpRequestObserver.prototype.register = function(state, bgWindow) {
     this._state = state;
-    this._tab = Utils.getWindowId(window);
 
     // webRequest API
-    this.onCompleted = new Event(window, this._tab, this._state, 'webRequest.completed');
-    this.onHeadersReceived = new Event(window, this._tab, this._state, 'webRequest.headersReceived');
-    this.onBeforeRedirect = new Event(window, this._tab, this._state, 'webRequest.beforeRedirect');
-    this.onAuthRequired = new Event(window, this._tab, this._state, 'webRequest.authRequired');
-    this.onBeforeSendHeaders = new Event(window, this._tab, this._state, 'webRequest.beforeSendHeaders');
-    this.onErrorOccurred = new Event(window, this._tab, this._state, 'webRequest.errorOccurred');
-    this.onResponseStarted = new Event(window, this._tab, this._state, 'webRequest.responseStarted');
-    this.onSendHeaders = new Event(window, this._tab, this._state, 'webRequest.sendHeaders');
-    this.onBeforeRequest = new Event(window, this._tab, this._state, 'webRequest.beforeRequest');
+    this.onCompleted = new Event(bgWindow, null, this._state, 'webRequest.completed');
+    this.onHeadersReceived = new Event(bgWindow, null, this._state, 'webRequest.headersReceived');
+    this.onBeforeRedirect = new Event(bgWindow, null, this._state, 'webRequest.beforeRedirect');
+    this.onAuthRequired = new Event(bgWindow, null, this._state, 'webRequest.authRequired');
+    this.onBeforeSendHeaders = new Event(bgWindow, null, this._state, 'webRequest.beforeSendHeaders');
+    this.onErrorOccurred = new Event(bgWindow, null, this._state, 'webRequest.errorOccurred');
+    this.onResponseStarted = new Event(bgWindow, null, this._state, 'webRequest.responseStarted');
+    this.onSendHeaders = new Event(bgWindow, null, this._state, 'webRequest.sendHeaders');
+    this.onBeforeRequest = new Event(bgWindow, null, this._state, 'webRequest.beforeRequest');
 
     // debugger API
-    this.onEvent  = new Event(window, this._tab, this._state, 'debugger.event');
-    this.onDetach = new Event(window, this._tab, this._state, 'debugger.detach');
-  };
+    this.onEvent  = new Event(bgWindow, null, this._state, 'debugger.event');
+    this.onDetach = new Event(bgWindow, null, this._state, 'debugger.detach');
 
-  HttpRequestObserver.prototype.register = function() {
+    // observer (i.e. instance of this class) registration
     Services.obs.addObserver(this, HTTP_ON_MODIFY_REQUEST, false);
     Services.obs.addObserver(this, HTTP_ON_EXAMINE_RESPONSE, false);
     Services.obs.addObserver(this, HTTP_ON_EXAMINE_CACHED_RESPONSE, false);
@@ -246,7 +237,7 @@
     var type = 'other';
 
     // set extra headers (debugger API)
-    if (_ref = this._debuggerGetProperty(tabId, 'Network.setExtraHTTPHeaders')) {
+    if (_ref = DebugData.getProperty(tabId, 'extraHttpHeaders')) {
       for (var key in _ref) {
         httpChannel.setRequestHeader(key, _ref[key], false);
       }
@@ -315,7 +306,7 @@
           context._setRequest(tabId, Utils.removeFragment(url), null);
           params.error = 'REQUEST_CANCELLED_BY_EXTENSION';
           context.onErrorOccurred.fire([ params ]);
-          if (context._debuggerIsMonitored(tabId, url)) {
+          if (DebugData.getProperty(tabId, 'networkMonitor')) {
             var data = {
               timestamp: params.timeStamp / 1000,
               requestId: params.requestId
@@ -329,7 +320,7 @@
     }
 
     // fire 'Network.requestWillBeSent'
-    if (this._debuggerIsMonitored(tabId, url)) {
+    if (DebugData.getProperty(tabId, 'networkMonitor')) {
       var data = {
         timestamp: params.timeStamp / 1000,
         requestId: params.requestId,
@@ -385,8 +376,11 @@
       });
     }
 
-    // dispatching dedicated listening thread for onStopRequest
-    // and onDataAvailable events
+    // dispatching dedicated listening thread for onStopRequest and onDataAvailable events
+    //
+    // the new thread is needed (i.e. we cannot simply set new stream listener
+    // on the HTTP channel directly) because of this Firefox bug:
+    // https://bugzilla.mozilla.org/show_bug.cgi?id=646370
     var mainThread = Cc['@mozilla.org/thread-manager;1'].getService().mainThread;
     mainThread.dispatch(new ListenerThread({
         id: tabId,
@@ -445,7 +439,7 @@
     params.statusCode = statusCode;
     params.fromCache = (HTTP_ON_EXAMINE_CACHED_RESPONSE === topic);
 
-    if (this._debuggerIsMonitored(tabId, url)) {
+    if (DebugData.getProperty(tabId, 'networkMonitor')) {
       var data = {
         timestamp: params.timeStamp / 1000,
         requestId: params.requestId
@@ -602,27 +596,6 @@
     return tab.flag;
   };
 
-  // two functions supporting debugger API
-  HttpRequestObserver.prototype._debuggerGetProperty = function(tabId, propertyName) {
-    var debuggerTabId = DEBUGGER_SEND_ALL in this._debuggerData ?  DEBUGGER_SEND_ALL : tabId;
-    return (this._debuggerData[debuggerTabId] && this._debuggerData[debuggerTabId][propertyName]);
-  }
-
-  HttpRequestObserver.prototype._debuggerIsMonitored = function(tabId, url) {
-    var debuggerTabId = DEBUGGER_SEND_ALL in this._debuggerData ?  DEBUGGER_SEND_ALL : tabId;
-    var _ref = this._debuggerData[debuggerTabId];
-    if (!_ref || !_ref.networkMonitor) {
-      return false;
-    }
-    if (_ref.exclude) {
-      for (var i = 0; i < _ref.exclude.length; i++) {
-        if (0 === url.indexOf(_ref.exclude[i])) {
-          return false;
-        }
-      }
-    }
-    return true;
-  }
 
   // --------------
   // Helper classes
@@ -710,7 +683,7 @@
         case Cr.NS_OK:
           // fire onCompleted
           this.requestData.monitor.onCompleted.fire([ data ]);
-          if (this.requestData.monitor._debuggerIsMonitored(data.tabId, data.url)) {
+          if (DebugData.getProperty(data.tabId, 'networkMonitor')) {
             var debuggerData = {
               timestamp: data.timeStamp / 1000,
               requestId: data.requestId
@@ -735,7 +708,7 @@
           // (b) how to cover the remaining ones we need.
           data.error = Utils.mapHttpError(statusCode);
           this.requestData.monitor.onErrorOccurred.fire([ data ]);
-          if (this.requestData.monitor._debuggerIsMonitored(data.tabId, data.url)) {
+          if (DebugData.getProperty(data.tabId, 'networkMonitor')) {
             var debuggerData = {
               timestamp: data.timeStamp / 1000,
               requestId: data.requestId
@@ -777,7 +750,7 @@
       );
     if (data) {
       data.timeStamp = (new Date()).getTime();
-      if (this.requestData.monitor._debuggerIsMonitored(data.tabId, data.url)) {
+      if (DebugData.getProperty(data.tabId, 'networkMonitor')) {
         var debuggerData = {
           timestamp: data.timeStamp / 1000,
           requestId: data.requestId,

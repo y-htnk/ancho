@@ -51,7 +51,7 @@ var Tabs = function(instanceID) {
   var _instanceID = instanceID;
   var _currentWindowID = 0;
   if (instanceID < 0) {
-    _currentWindowID = serviceAPI.getCurrentWindowId();
+    _currentWindowID = serviceAPI.windowManager.getCurrentWindowId();
   }
   //============================================================================
   // public properties

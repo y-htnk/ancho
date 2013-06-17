@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <boost/atomic.hpp>
 
 extern const wchar_t * s_AnchoMainAPIModuleID;
 extern const wchar_t * s_AnchoExtensionsRegistryKey;
@@ -72,3 +73,50 @@ inline HWND findParentWindowByClass(HWND aWindow, std::wstring aClassName)
   return NULL;
 }
 
+namespace Ancho {
+namespace Utils {
+
+inline std::wstring getLastError(HRESULT hr)
+{
+    LPWSTR lpMsgBuf;
+    DWORD ret;
+    std::wstring def(L"(UNNKOWN)");
+    ret = FormatMessage(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER |
+        FORMAT_MESSAGE_FROM_HMODULE,
+        GetModuleHandle(TEXT("imapi2.dll")),
+        hr,
+        0,
+        (LPWSTR) &lpMsgBuf,
+        0, NULL );
+
+    if(ret)
+    {
+        std::wstring last(lpMsgBuf);
+        LocalFree(lpMsgBuf);
+        return last;
+    }
+    return def;
+}
+
+/**
+ * Thread safe generator of unique sequential IDs.
+ * \tparam TId must be integral type
+ **/
+template<typename TId = int>
+class IdGenerator
+{
+public:
+  IdGenerator(TId aInitValue = 1): mNextValue(aInitValue)
+  { /*empty*/ }
+
+  TId next()
+  {
+    return mNextValue.fetch_add(1, boost::memory_order_relaxed);
+  }
+protected:
+  boost::atomic<TId> mNextValue;
+};
+
+} //namespace Utils
+} //namespace Ancho

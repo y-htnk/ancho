@@ -15,7 +15,7 @@
 
   var Event = require('./event');
   var Utils = require('./utils');
-  var debugData = require('./debuggerData');
+  var DebugData = require('./debuggerData');
 
   // register debugger protocol handlers (one for each domain):
   require('./debuggerNetwork').register();
@@ -25,8 +25,6 @@
   var DebuggerAPI = function(state, window) {
     this._state = state;
     this._tab = Utils.getWindowId(window);
-    this._data = debugData.data;
-    this._handlers = debugData.handlers;
 
     this.onEvent  = new Event(window, this._tab, this._state, 'debugger.event');
     this.onDetach = new Event(window, this._tab, this._state, 'debugger.detach');
@@ -35,20 +33,17 @@
   DebuggerAPI.prototype = {
 
     attach: function(target, requiredVersion, callback) {
-      this._data[target.tabId] = {
-        protocol: requiredVersion
-      };
-      if (callback) {
+      DebugData.setProperty(target.tabId, 'protocol', requiredVersion);
+      if ('function' === typeof(callback)) {
         callback();
       }
     },
 
     detach: function(target, callback) {
-      if (target.tabId in this._data) {
-        delete this._data[target.tabId];
+      if (DebugData.reset(target.tabId)) {
         this.onDetach.fire([ { tabId: target.tabId }, 'canceled_by_user' ]);
       }
-      if (callback) {
+      if ('function' === typeof(callback)) {
         callback();
       }
     },
@@ -66,8 +61,9 @@
         return;
       }
 
-      if (parsed[0] in this._handlers) {
-        this._handlers[parsed[0]](target, parsed[1], commandParams, callback);
+      var _ref;
+      if (_ref = DebugData.getHandler(parsed[0])) {
+        _ref(target, parsed[1], commandParams, callback);
       } else {
         dump('ERROR: unsupported debugger domain "' + parsed[0] +'"\n');
       }

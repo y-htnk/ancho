@@ -210,7 +210,7 @@ function createPopup(aX, aY, aPopup) {
     api.releaseFullAPI(apiId);
   }
   console.debug("Creating popup window");
-  serviceAPI.createPopupWindow(aPopup, aX, aY, data, cleanUpProcedure);
+  serviceAPI.windowManager.createPopupWindow(aPopup, aX, aY, data, cleanUpProcedure);
 }
 
 

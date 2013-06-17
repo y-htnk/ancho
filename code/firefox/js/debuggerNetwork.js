@@ -4,27 +4,25 @@
       Handler for Network domain of debugger protocol.
   */
 
-  var debuggerData = require('./debuggerData');
+  var DebugData = require('./debuggerData');
 
   function processNetworkCommand(target, method, commandParams, callback) {
-    var obj = debuggerData.data[target.tabId];
-    if (!obj) {
+    if (!DebugData.getProperty(target.tabId, 'protocol')) {
       return;  // not attached
     }
     switch (method) {
       case 'enable':
-        obj.networkMonitor = true;
-        if (commandParams && commandParams.exclude) {
-          obj.exclude = commandParams.exclude;
-        }
+        DebugData.setProperty(target.tabId, 'networkMonitor', true);
         break;
+
       case 'disable':
-        obj.networkMonitor = false;
-        delete obj.exclude;
+        DebugData.setProperty(target.tabId, 'networkMonitor', false);
         break;
+
       case 'setExtraHTTPHeaders':
-        obj.httpHeaders = commandParams;
+        DebugData.setProperty(target.tabId, 'extraHttpHeaders', commandParams);
         break;
+
       default:
         dump('ERROR: unsupported debugger method "Network.' + method + '".\n');
         break;
@@ -36,11 +34,11 @@
 
   module.exports = {
     register: function() {
-      debuggerData.handlers['Network'] = processNetworkCommand;
+      DebugData.setHandler('Network', processNetworkCommand);
     },
 
     unregister: function() {
-      delete debuggerData.handlers['Network'];
+      DebugData.setHandler('Network');
     }
   };
 
