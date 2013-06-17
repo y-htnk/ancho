@@ -57,26 +57,13 @@
   };
 
   exports.unregister = function(callback) {
+    XPCOMUtils.categoryManager.deleteCategoryEntry('content-policy', className, false);
     // We can't just unregister the component since deleteCategoryEntry occurs asynchronously.
     // If the component is unregistered by the time it runs, it leaves a dangling reference to it.
     // So we have to wait until the category is really removed.
-    var observer = {
-      observe: function(aSubject, aTopic, aData) {
-        var entryName = aSubject.QueryInterface(Ci.nsISupportsCString).data;
-        if (entryName === className) {
-          // Since the category deletion also responds to xpcom-category-entry-removed, we can't
-          // be sure this code will run afterward. So run it asynchronously as well using a timer.
-          var timer = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
-          timer.initWithCallback(function() {
-            Services.obs.removeObserver(observer, "xpcom-category-entry-removed", false);
-            Cm.QueryInterface(Ci.nsIComponentRegistrar).unregisterFactory(classID, factory);
-            callback();
-          }, 0, Ci.nsITimer.TYPE_ONE_SHOT);
-        }
-      }
-    }
-
-    Services.obs.addObserver(observer, "xpcom-category-entry-removed", false);
-    XPCOMUtils.categoryManager.deleteCategoryEntry('content-policy', className, false);
+    Services.tm.mainThread.dispatch(function() {
+      Cm.QueryInterface(Ci.nsIComponentRegistrar).unregisterFactory(classID, factory);
+      callback();
+    }, Ci.nsIThread.DISPATCH_NORMAL);
   };
 }).call(this);

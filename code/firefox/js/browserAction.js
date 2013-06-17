@@ -6,7 +6,7 @@
 
   //var Event = require('./event');
   var Utils = require('./utils');
-  var WindowWatcher = require('./windowWatcher');
+  var WindowWatcher = require('./windowWatcher').WindowWatcher;
   var Config = require('./config');
 
   const BUTTON_ID = '__ANCHO_BROWSER_ACTION_BUTTON__';
@@ -33,7 +33,6 @@
 
       this.buttonId = BUTTON_ID;
       var self = this;
-
       WindowWatcher.register(function(win, context) {
         self.startup(win);
         var tabbrowser = win.document.getElementById('content');

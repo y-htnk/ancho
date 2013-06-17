@@ -100,7 +100,7 @@
       if (window !== targetWindow && window.wrappedJSObject !== targetWindow) {
         return;
       }
-      document.removeEventListener('DOMWindowCreated', arguments.callee, false);
+      iframe.removeEventListener('DOMWindowCreated', arguments.callee, false);
       exports.prepareWindow(targetWindow.wrappedJSObject);
     }, false);
 
