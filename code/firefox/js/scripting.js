@@ -27,9 +27,9 @@
         delete window.console;
       });
     }
-  }
+  };
 
-  exports.applyContentScripts = function(win, spec) {
+  exports.applyContentScripts = function(win, spec, isFrame) {
     var baseUrl = Services.io.newURI(spec, '', null);
     var principal;
     // Preserving backwards compatibility with FF18 and older.
@@ -58,6 +58,9 @@
     var events = [];
     for (var i=0; i<contentScripts.length; i++) {
       var scriptInfo = contentScripts[i];
+      if (isFrame && !scriptInfo.all_frames) {
+        continue;
+      }
       var matches = scriptInfo.matches;
       for (var j=0; j<matches.length; j++) {
         if (spec.match(matches[j])) {

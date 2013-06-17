@@ -21,7 +21,7 @@ var WindowWatcher = require('./windowWatcher').WindowWatcher;
 window.addEventListener('load', function(event) {
   window.removeEventListener('load', arguments.callee, false);
   ExtensionState.backgroundWindow = window;
-  httpObserver.init(ExtensionState, window);
+  httpObserver.register(ExtensionState, window);
 
   WindowWatcher.register(function(win) {
     var browser = win.document.getElementById('content');
