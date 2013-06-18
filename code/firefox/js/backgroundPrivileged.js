@@ -15,13 +15,11 @@ var loadHtml = require('./scripting').loadHtml;
 var BrowserEvents = require('./browserEvents');
 var Toolbar = require('./toolbarSingleton');
 var Config = require('./config');
-var httpObserver = require('./httpRequestObserver');
 var WindowWatcher = require('./windowWatcher').WindowWatcher;
 
 window.addEventListener('load', function(event) {
   window.removeEventListener('load', arguments.callee, false);
   ExtensionState.backgroundWindow = window;
-  httpObserver.register(ExtensionState, window);
 
   WindowWatcher.register(function(win) {
     var browser = win.document.getElementById('content');
