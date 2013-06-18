@@ -237,9 +237,10 @@
     var type = 'other';
 
     // set extra headers (debugger API)
-    if (_ref = DebugData.getProperty(tabId, 'extraHttpHeaders')) {
-      for (var key in _ref) {
-        httpChannel.setRequestHeader(key, _ref[key], false);
+    var extraHeaders = DebugData.getProperty(tabId, 'extraHttpHeaders');
+    if (extraHeaders) {
+      for (var key in extraHeaders) {
+        httpChannel.setRequestHeader(key, extraHeaders[key], false);
       }
     }
 
