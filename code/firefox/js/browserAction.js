@@ -14,15 +14,14 @@
   const CANVAS_ID = '__ANCHO_BROWSER_ACTION_CANVAS__';
   const HBOX_ID = '__ANCHO_BROWSER_ACTION_HBOX__';
   const IMAGE_ID = '__ANCHO_BROWSER_ACTION_IMAGE__';
+  const PANEL_ID = '__ANCHO_BROWSER_ACTION_PANEL__';
   const NAVIGATOR_TOOLBOX = 'navigator-toolbox';
   const TOOLBAR_ID = 'nav-bar';
-
   const BROWSER_ACTION_ICON_WIDTH = 19;
   const BROWSER_ACTION_ICON_HEIGHT = 19;
 
   var BrowserActionService = {
-    iconEnabled: false,
-    buttonId: null,
+    iconType: null,
     badgeText: null,
     badgeBackgroundColor: '#f00',
     tabBadgeText: {},
@@ -30,28 +29,60 @@
 
     init: function() {
       // TODO: this.onClicked = new Event();
-      this.iconEnabled = Manifest.browser_action && Manifest.browser_action.default_icon;
+      if (Manifest.browser_action && Manifest.browser_action.default_icon) {
+        this.iconType = 'browser_action';
+      }
+      else if (Manifest.page_action && Manifest.page_action.default_icon) {
+        this.iconType = 'page_action';
+      }
 
-      this.buttonId = BUTTON_ID;
-      var self = this;
-      WindowWatcher.register(function(win, context) {
-        self.startup(win);
-        var tabbrowser = win.document.getElementById('content');
-        var container = tabbrowser.tabContainer;
-        context.listener = function() {
-          self.setIcon(win, {});
-        };
-        container.addEventListener('TabSelect', context.listener, false);
-      }, function(win, context) {
-        var tabbrowser = win.document.getElementById('content');
-        var container = tabbrowser.tabContainer;
-        container.removeEventListener('TabSelect', context.listener, false);
-        self.shutdown(win);
-      });
+      if (this.iconType) {
+        WindowWatcher.register(function(win, context) {
+          this.startup(win);
+          var tabbrowser = win.document.getElementById('content');
+          var container = tabbrowser.tabContainer;
+          context.listener = function() {
+            this.setIcon(win, {});
+          };
+          container.addEventListener('TabSelect', context.listener, false);
+        }.bind(this), function(win, context) {
+          var tabbrowser = win.document.getElementById('content');
+          var container = tabbrowser.tabContainer;
+          container.removeEventListener('TabSelect', context.listener, false);
+          this.shutdown(win);
+        }.bind(this));
+      }
     },
 
-    installIcon: function(window) {
-      var id = this.buttonId;
+    _installAction: function(window, button, iconPath) {
+      var document = window.document;
+      var panel = document.createElement('panel');
+      panel.id = PANEL_ID;
+      var iframe = document.createElement('iframe');
+      iframe.setAttribute('type', 'chrome');
+
+      document.getElementById('mainPopupSet').appendChild(panel);
+      panel.appendChild(iframe);
+
+      var hbox = document.createElement('hbox');
+      hbox.id = HBOX_ID;
+      hbox.setAttribute('hidden', 'true');
+      panel.appendChild(hbox);
+
+      // Catch keypresses that propagate up to the panel so that they don't get processed
+      // by the toolbar button.
+      panel.addEventListener('keypress', function(event) {
+        event.stopPropagation();
+      }, false);
+
+      button.addEventListener('click', function(event) {
+        this.clickHandler(event);
+      }.bind(this), false);
+      this.setIcon(window, { path: iconPath });
+    },
+
+    installBrowserAction: function(window) {
+      var id = BUTTON_ID;
       var document = window.document;
       if (document.getElementById(id)) {
         // We already have the toolbar button.
@@ -69,7 +100,7 @@
       toolbarButton.setAttribute('class', 'toolbarbutton-1 chromeclass-toolbar-additional');
       toolbarButton.setAttribute('label', Manifest.name);
 
-      var iconPath = this.iconEnabled ? Config.hostExtensionRoot + Manifest.browser_action.default_icon : '';
+      var iconPath = Config.hostExtensionRoot + Manifest.browser_action.default_icon;
       toolbarButton.style.listStyleImage = 'url(' + iconPath + ')';
 
       var palette = document.getElementById(NAVIGATOR_TOOLBOX).palette;
@@ -99,27 +130,27 @@
         }
       }
 
-      var panel = document.createElement('panel');
-      var iframe = document.createElement('iframe');
-      iframe.setAttribute('type', 'chrome');
+      this._installAction(window, toolbarButton, iconPath);
+    },
 
-      toolbarButton.appendChild(panel);
-      panel.appendChild(iframe);
+    installPageAction: function(window) {
+      var id = BUTTON_ID;
+      var document = window.document;
+      if (document.getElementById(id)) {
+        // We already have the toolbar button.
+        return;
+      }
+      var image = document.createElement('image');
+      image.setAttribute('id', id);
+      image.setAttribute('class', 'urlbar-icon');
 
-      var hbox = document.createElement('hbox');
-      hbox.id = HBOX_ID;
-      hbox.setAttribute('hidden', 'true');
-      panel.appendChild(hbox);
+      var iconPath = Config.hostExtensionRoot + Manifest.page_action.default_icon;
+      image.style.listStyleImage = 'url(' + iconPath + ')';
 
-      // Catch keypresses that propagate up to the panel so that they don't get processed
-      // by the toolbar button.
-      panel.addEventListener('keypress', function(event) {
-        event.stopPropagation();
-      }, false);
+      var icons = document.getElementById('urlbar-icons');
+      icons.insertBefore(image, icons.firstChild);
 
-      var self = this;
-      toolbarButton.addEventListener('click', function(event) { self.clickHandler(event); }, false);
-      this.setIcon(window, { path: iconPath });
+      this._installAction(window, image, iconPath);
     },
 
     showPopup: function(panel, iframe, document) {
@@ -127,7 +158,7 @@
       // Deferred loading of scripting.js since we have a circular reference that causes
       // problems if we load it earlier.
       var loadHtml = require('./scripting').loadHtml;
-      loadHtml(document, iframe, 'chrome-extension://ancho/' + Manifest.browser_action.default_popup, function() {
+      loadHtml(document, iframe, 'chrome-extension://ancho/' + Manifest[this.iconType].default_popup, function() {
         iframe.contentDocument.addEventListener('readystatechange', function(event) {
           iframe.contentDocument.removeEventListener('readystatechange', arguments.callee, false);
           panel.style.removeProperty('visibility');
@@ -156,7 +187,8 @@
 
         // Remember the height and width of the popup.
         // Check periodically and resize it if necessary.
-        var oldHeight = oldWidth = 0;
+        var oldHeight = 0,
+          oldWidth = 0;
         function getPanelBorderWidth(which) {
           return parseFloat(document.defaultView.getComputedStyle(panel)['border' + which + 'Width']);
         }
@@ -179,21 +211,21 @@
     },
 
     clickHandler: function(event) {
-      if (!event.target || event.target.tagName !== 'toolbarbutton') {
+      var document = event.target.ownerDocument;
+      if (event.target !== document.getElementById(BUTTON_ID)) {
         // Only react when button itself is clicked (i.e. not the panel).
         return;
       }
       var self = this;
-      var toolbarButton = event.target;
-      var panel = toolbarButton.firstChild;
+      var button = event.target;
+      var panel = document.getElementById(PANEL_ID);
       var iframe = panel.firstChild;
-      var document = event.target.ownerDocument;
       iframe.setAttribute('src', 'about:blank');
       panel.addEventListener('popupshowing', function(event) {
         panel.removeEventListener('popupshowing', arguments.callee, false);
         self.showPopup(panel, iframe, document);
       }, false);
-      panel.openPopup(toolbarButton, 'after_start', 0, 0, false, false);
+      panel.openPopup(button, 'after_start', 0, 0, false, false);
     },
 
     _drawButton: function(tabId, button, canvas) {
@@ -241,7 +273,7 @@
       canvas.setAttribute('height', BROWSER_ACTION_ICON_HEIGHT);
       var ctx = canvas.getContext('2d');
 
-      var button = document.getElementById(this.buttonId);
+      var button = document.getElementById(BUTTON_ID);
       var browser = document.getElementById('content');
       var tabId = Utils.getWindowId(browser.contentWindow);
 
@@ -274,19 +306,27 @@
     },
 
     shutdown: function(window) {
-      if (this.iconEnabled) {
-        var document = window.document;
-        var toolbarButton = document.getElementById(this.buttonId);
-        var toolbar = document.getElementById(TOOLBAR_ID);
-        if (toolbar.contains(toolbarButton)) {
-          toolbar.removeChild(toolbarButton);
-        }
+      var document = window.document;
+      var button = document.getElementById(BUTTON_ID);
+      var parent = button.parentNode;
+      if (parent.contains(button)) {
+        button.parentNode.removeChild(button);
+      }
+      var panel = document.getElementById(PANEL_ID);
+      parent = panel.parentNode;
+      if (parent.contains(panel)) {
+        parent.removeChild(panel);
       }
     },
 
     startup: function(window) {
-      if (this.iconEnabled) {
-        this.installIcon(window);
+      switch(this.iconType) {
+        case 'browser_action':
+          this.installBrowserAction(window);
+          break;
+        case 'page_action':
+          this.installPageAction(window);
+          break;
       }
     },
 
@@ -363,7 +403,7 @@
           // TODO: Support alpha.
           var str = '#';
           for (var i = 0; i < 3; ++i) {
-            var tmp = Math.max(0, Math.min(color[i], 255))
+            var tmp = Math.max(0, Math.min(color[i], 255));
             str += tmp.toString(16);
           }
           return str;
