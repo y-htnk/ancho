@@ -44,10 +44,12 @@ window.addEventListener('load', function(event) {
   function runBackground() {
     loadHtml(document, browser, spec, function(targetWindow) {
       // load background scripts, if any
-      for (var i = 0; i < Manifest.background.scripts.length; i++) {
-        var script = targetWindow.document.createElement('script');
-        script.src = Config.hostExtensionRoot + Manifest.background.scripts[i];
-        targetWindow.document.head.appendChild(script);
+      if (Manifest.background.scripts) {
+        for (var i = 0; i < Manifest.background.scripts.length; i++) {
+          var script = targetWindow.document.createElement('script');
+          script.src = Config.hostExtensionRoot + Manifest.background.scripts[i];
+          targetWindow.document.head.appendChild(script);
+        }
       }
       AnchoExternal.__set(targetWindow.ancho.external);
     });

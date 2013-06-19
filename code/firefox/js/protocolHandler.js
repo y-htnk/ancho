@@ -21,7 +21,7 @@
 
   exports.getExtensionURI = function(id) {
     return extensionURIs[id];
-  }
+  };
 
   function AnchoProtocolHandler() {
   }
