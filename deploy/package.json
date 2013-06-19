@@ -1,6 +1,6 @@
 {
   "name": "ancho",
-  "version": "0.0.0",
+  "version": "0.7.1",
   "description": "Cross-browser extension framework based on the Chrome extension API",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
