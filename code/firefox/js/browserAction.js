@@ -8,11 +8,12 @@
   var Utils = require('./utils');
   var WindowWatcher = require('./windowWatcher').WindowWatcher;
   var Config = require('./config');
+  var Manifest = Config.manifest;
 
   const BUTTON_ID = '__ANCHO_BROWSER_ACTION_BUTTON__';
   const CANVAS_ID = '__ANCHO_BROWSER_ACTION_CANVAS__';
   const HBOX_ID = '__ANCHO_BROWSER_ACTION_HBOX__';
-  const IMAGE_ID = '__ANCHO_BROWSER_ACTION_IMAGE__'
+  const IMAGE_ID = '__ANCHO_BROWSER_ACTION_IMAGE__';
   const NAVIGATOR_TOOLBOX = 'navigator-toolbox';
   const TOOLBAR_ID = 'nav-bar';
 
@@ -29,7 +30,7 @@
 
     init: function() {
       // TODO: this.onClicked = new Event();
-      this.iconEnabled = Config.browser_action && Config.browser_action.default_icon;
+      this.iconEnabled = Manifest.browser_action && Manifest.browser_action.default_icon;
 
       this.buttonId = BUTTON_ID;
       var self = this;
@@ -66,9 +67,9 @@
       toolbarButton.setAttribute('type', 'button');
       toolbarButton.setAttribute('removable', 'true');
       toolbarButton.setAttribute('class', 'toolbarbutton-1 chromeclass-toolbar-additional');
-      toolbarButton.setAttribute('label', Config.extensionName);
+      toolbarButton.setAttribute('label', Manifest.name);
 
-      var iconPath = this.iconEnabled ? Config.hostExtensionRoot + Config.browser_action.default_icon : '';
+      var iconPath = this.iconEnabled ? Config.hostExtensionRoot + Manifest.browser_action.default_icon : '';
       toolbarButton.style.listStyleImage = 'url(' + iconPath + ')';
 
       var palette = document.getElementById(NAVIGATOR_TOOLBOX).palette;
@@ -126,7 +127,7 @@
       // Deferred loading of scripting.js since we have a circular reference that causes
       // problems if we load it earlier.
       var loadHtml = require('./scripting').loadHtml;
-      loadHtml(document, iframe, 'chrome-extension://ancho/' + Config.browser_action.default_popup, function() {
+      loadHtml(document, iframe, 'chrome-extension://ancho/' + Manifest.browser_action.default_popup, function() {
         iframe.contentDocument.addEventListener('readystatechange', function(event) {
           iframe.contentDocument.removeEventListener('readystatechange', arguments.callee, false);
           panel.style.removeProperty('visibility');

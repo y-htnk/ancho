@@ -93,62 +93,26 @@ function loadConfig(addon, firstRun) {
 
   if (addon.hasResource('chrome-ext/manifest.json')) {
     var manifestUrl = addon.getResourceURI('chrome-ext/manifest.json');
-    var manifest = readStringFromUrl(manifestUrl);
-    var config = JSON.parse(manifest);
-    Config.extensionName = config.name;
-    // Set the module search path if any
-    if ('module_search_path' in config) {
-      for (var i=0; i<config.module_search_path.length; i++) {
-        Require.moduleSearchPath.push(Services.io.newURI(config.module_search_path[i], '', manifestUrl));
-      }
-    }
-    if ('content_scripts' in config) {
-      for (var i=0; i<config.content_scripts.length; i++) {
-        var scriptInfo = config.content_scripts[i];
-        var matches = [];
-        for (var j=0; j<scriptInfo.matches.length; j++) {
-          // Convert from Google's simple wildcard syntax to a proper regular expression
-          matches.push(matchPatternToRegexp(scriptInfo.matches[j]));
-        }
-        var js = [];
-        for (j=0; j<scriptInfo.js.length; j++) {
-          js.push(scriptInfo.js[j]);
-        }
-        Config.contentScripts.push({
-          matches: matches,
-          js: js,
-          all_frames: scriptInfo.all_frames || false
-        });
-      }
-    }
-    if (config.background) {
-      var bg = config.background;
-      if (bg.page) {
-        Config.backgroundPage = bg.page;
-      }
-      if (bg.scripts) {
-        for (i=0; i<bg.scripts.length; i++) {
-          Config.backgroundScripts.push(bg.scripts[i]);
+    var manifestString = readStringFromUrl(manifestUrl);
+    Config.manifest = JSON.parse(manifestString);
+    var i, j;
+    if ('content_scripts' in Config.manifest) {
+      for (i=0; i<Config.manifest.content_scripts.length; i++) {
+        var scriptInfo = Config.manifest.content_scripts[i];
+        for (j=0; j<scriptInfo.matches.length; j++) {
+          // Convert from Google's simple wildcard syntax to a regular expression
+          // TODO: Implement proper match pattern matcher.
+          scriptInfo.matches[j] = matchPatternToRegexp(scriptInfo.matches[j]);
         }
       }
-    } // background
-    if (config.default_locale) {
-      Config.defaultLocale = config.default_locale;
     }
-    if (config.browser_action) {
-      Config.browser_action = {
-        default_icon : config.browser_action.default_icon,
-        default_popup : config.browser_action.default_popup
+    if ('web_accessible_resources' in Config.manifest) {
+      for (i=0; i<Config.manifest.web_accessible_resources.length; i++) {
+        Config.manifest.web_accessible_resources[i] =
+          matchPatternToRegexp(Config.manifest.web_accessible_resources[i]);
       }
     }
-    if (config.web_accessible_resources) {
-      for (i=0; i<config.web_accessible_resources.length; i++) {
-        Config.webAccessibleResources.push(
-          matchPatternToRegexp(config.web_accessible_resources[i])
-        );
-      }
-    }
-  } // has manifest.json?
+  }
 }
 
 function registerComponents(addon) {

@@ -10,8 +10,8 @@
   var ExtensionState = require('./state');
   var API = require('./api');
   var readStringFromUrl = require('./utils').readStringFromUrl;
-  var contentScripts = require('./config').contentScripts;
   var Config = require('./config');
+  var contentScripts = Config.manifest.content_scripts;
 
   exports.prepareWindow = function(window) {
     if (!('chrome' in window)) {

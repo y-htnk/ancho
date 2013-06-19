@@ -5,8 +5,6 @@
   Cu.import('resource://gre/modules/XPCOMUtils.jsm');
   Cu.import('resource://gre/modules/Services.jsm');
 
-  var config = require('./config');
-
   const SCHEME = 'chrome-extension';
 
   var classID = Components.ID('{b0a95b24-4270-4e74-8179-f170d6dab4a1}');

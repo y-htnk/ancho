@@ -9,7 +9,6 @@
 
   var Utils = require('./utils');
   var Event = require('./event');
-  var Config = require('./config');
 
   function sendHelper(self, tabId, request, callback, event) {
     // tabId is optional
@@ -20,7 +19,7 @@
     }
     callback = callback || function() {};
 
-    var sender = Utils.getSender(self._state['id'], self._tab);
+    var sender = Utils.getSender(self._state.id, self._tab);
     event.fire([ request, sender, callback ], tabId);
   }
 
