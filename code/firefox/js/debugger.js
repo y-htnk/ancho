@@ -61,9 +61,9 @@
         return;
       }
 
-      var _ref;
-      if (_ref = DebugData.getHandler(parsed[0])) {
-        _ref(target, parsed[1], commandParams, callback);
+      var handler = DebugData.getHandler(parsed[0]);
+      if (handler) {
+        handler(target, parsed[1], commandParams, callback);
       } else {
         dump('ERROR: unsupported debugger domain "' + parsed[0] +'"\n');
       }
