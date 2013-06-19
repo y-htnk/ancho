@@ -15,6 +15,7 @@ var loadHtml = require('./scripting').loadHtml;
 var BrowserEvents = require('./browserEvents');
 var Toolbar = require('./toolbarSingleton');
 var Config = require('./config');
+var Manifest = Config.manifest;
 var WindowWatcher = require('./windowWatcher').WindowWatcher;
 
 window.addEventListener('load', function(event) {
@@ -32,21 +33,20 @@ window.addEventListener('load', function(event) {
     ExtensionState.unloadWindow(win);
   });
 
-  var spec = Config.backgroundPage
-        ? 'chrome-extension://ancho/' + Config.backgroundPage
-        // Cannot use 'about:blank' here, because DOM for 'about:blank'
-        // is inappropriate for script inserting: neither 'document.head'
-        // nor 'document.body' are defined.
-        : 'chrome://ancho/content/html/blank.html';
+  var spec = Manifest.background.page ? 'chrome-extension://ancho/' + Manifest.background.page :
+    // Cannot use 'about:blank' here, because DOM for 'about:blank'
+    // is inappropriate for script inserting: neither 'document.head'
+    // nor 'document.body' are defined.
+    'chrome://ancho/content/html/blank.html';
 
   var browser = document.getElementById('content');
 
   function runBackground() {
     loadHtml(document, browser, spec, function(targetWindow) {
       // load background scripts, if any
-      for (var i = 0; i < Config.backgroundScripts.length; i++) {
+      for (var i = 0; i < Manifest.background.scripts.length; i++) {
         var script = targetWindow.document.createElement('script');
-        script.src = Config.hostExtensionRoot + Config.backgroundScripts[i];
+        script.src = Config.hostExtensionRoot + Manifest.background.scripts[i];
         targetWindow.document.head.appendChild(script);
       }
       AnchoExternal.__set(targetWindow.ancho.external);

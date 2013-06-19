@@ -4,7 +4,7 @@
 
   const Cc = Components.classes;
 
-  let config = require('./config');
+  let Manifest = require('./config').manifest;
 
   let messages = {};
   let loaded = false;
@@ -40,7 +40,7 @@
 
   I18nAPI.prototype = {
     getMessage: function(messageName, substitutions) {
-      let currentLocale = config.defaultLocale;
+      let currentLocale = Manifest.default_locale;
       if (messages[currentLocale]) {
         var info = messages[currentLocale][messageName];
         if (info && info.message) {
