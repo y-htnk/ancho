@@ -82,9 +82,9 @@ private:
 
   // -------------------------------------------------------------------------
   // Private members.
-  CString                               m_sExtensionName;
-  CString                               m_sExtensionID;
-  CString                               m_sExtensionPath;
+  std::wstring                          m_sExtensionName;
+  std::wstring                          m_sExtensionID;
+  boost::filesystem::wpath              m_sExtensionPath;
 
   ULONG                                 m_InstanceID;
 
