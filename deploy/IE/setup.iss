@@ -1,6 +1,5 @@
 #define installRoot "install"
 #define installBin "install\bin"
-#define installExtension "install\extension"
 
 ; NOTE: The value of AppId uniquely identifies this application.
 ; Do not use the same AppId value in installers for other applications.
@@ -8,14 +7,17 @@
 #define AppUUID "BB94A47D-EC8E-4476-A48F-DDE09BEBCE46"
 
 #define appCompany "Salsita" 
-#define appName "Ancho-IE" 
+#define appName "Ancho" 
 #define setupPrefix "ancho-ie" 
-#define appVersion "0.1"
+#define appVersion "0.7.0"
+
 ; command line has to /D efine:
 ; appName
 ; appCompany
 ; setupPrefix
 ; appVersion
+
+
 ; crtPath
 
 [Setup]
@@ -37,17 +39,17 @@ ArchitecturesInstallIn64BitMode=x64
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "{#installBin}\x86\ancho.dll"; DestDir: "{app}\x86"; Flags: ignoreversion regserver
-Source: "{#installBin}\x64\ancho.dll"; DestDir: "{app}\x64"; Flags: ignoreversion regserver; Check: Is64BitInstallMode
-Source: "{#installBin}\x86\AnchoBgSrv.exe"; DestDir: "{app}\x86"; Flags: ignoreversion
-Source: "{#installBin}\x64\AnchoBgSrv.exe"; DestDir: "{app}\x64"; Flags: ignoreversion; Check: Is64BitInstallMode
-Source: "{#installBin}\x86\AnchoShared.dll"; DestDir: "{app}\x86"; Flags: ignoreversion
-Source: "{#installBin}\x64\AnchoShared.dll"; DestDir: "{app}\x64"; Flags: ignoreversion; Check: Is64BitInstallMode
-Source: "{#installBin}\x86\Magpie.dll"; DestDir: "{app}\x86"; Flags: ignoreversion
-Source: "{#installBin}\x64\Magpie.dll"; DestDir: "{app}\x64"; Flags: ignoreversion; Check: Is64BitInstallMode
+Source: "{#installBin}\x86\ancho.dll"; DestDir: "{app}\x86"; Flags: ignoreversion regserver; Check: ShouldInstallAncho
+Source: "{#installBin}\x64\ancho.dll"; DestDir: "{app}\x64"; Flags: ignoreversion regserver; Check: ShouldInstallAncho64
+Source: "{#installBin}\x86\AnchoBgSrv.exe"; DestDir: "{app}\x86"; Flags: ignoreversion; Check: ShouldInstallAncho
+Source: "{#installBin}\x64\AnchoBgSrv.exe"; DestDir: "{app}\x64";Flags: ignoreversion; Check: ShouldInstallAncho64
+Source: "{#installBin}\x86\AnchoShared.dll"; DestDir: "{app}\x86"; Flags: ignoreversion; Check: ShouldInstallAncho
+Source: "{#installBin}\x64\AnchoShared.dll"; DestDir: "{app}\x64"; Flags: ignoreversion; Check: ShouldInstallAncho64
+Source: "{#installBin}\x86\Magpie.dll"; DestDir: "{app}\x86"; Flags: ignoreversion; Check: ShouldInstallAncho
+Source: "{#installBin}\x64\Magpie.dll"; DestDir: "{app}\x64"; Flags: ignoreversion; Check: ShouldInstallAncho64
 Source: "{#installBin}\iesetuphelper.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#installBin}\vcredist_x86.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
-Source: "{#installBin}\vcredist_x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: Is64BitInstallMode
+Source: "{#installBin}\vcredist_x86.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: ShouldInstallAncho
+Source: "{#installBin}\vcredist_x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: ShouldInstallAncho64
 
 [Run]
 Filename: "{app}\x86\AnchoBgSrv.exe"; Parameters: "/RegServer /s"; Flags: waituntilterminated
@@ -56,13 +58,30 @@ Filename: "{app}\x64\AnchoBgSrv.exe"; Parameters: "/RegServer /s"; Flags: waitun
 ;Filename: "regsvr32"; Parameters: "/s ""{app}\x64\ancho.dll"""; Flags: waituntilterminated; Check: Is64BitInstallMode
 
 [UninstallRun]
-Filename: "{app}\x86\AnchoBgSrv.exe"; Parameters: "/UnRegServer"
+Filename: "{app}\x86\AnchoBgSrv.exe"; Parameters: "/UnRegServer /s"
 Filename: "regsvr32"; Parameters: "/s /u ""{app}\x86\ancho.dll"""
-Filename: "{app}\x64\AnchoBgSrv.exe"; Parameters: "/UnRegServer"; Check: Is64BitInstallMode
+Filename: "{app}\x64\AnchoBgSrv.exe"; Parameters: "/UnRegServer /s"; Check: Is64BitInstallMode
 Filename: "regsvr32"; Parameters: "/s /u ""{app}\x64\ancho.dll"""; Check: Is64BitInstallMode
 
 [Code]
+var 
+  shouldInstallAnchoFlag : Boolean;
+  shouldUninstallAnchoFlag : Boolean;
+  uninstallPath : String;
+  alreadyInstalledVersion: String;
+
+
 #include installBin + "\helpercode.isi"
+
+function ShouldInstallAncho(): Boolean;
+begin
+  Result := shouldInstallAnchoFlag;
+end;   
+
+function ShouldInstallAncho64(): Boolean;
+begin
+  Result := shouldInstallAnchoFlag and Is64BitInstallMode();
+end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
@@ -78,9 +97,93 @@ begin
   end;
 end;
 
+function CompareVersions(aFirst : String; aSecond : String): Integer;
+//var
+  //tmp : Integer;
+begin
+  Result := -1; //TODO
+end;
+
+function CheckInstalledVersions(): Boolean;
+var
+  alreadyInstalled : Boolean;
+  uninstallKey : String;
+  rootKey : Integer;
+begin
+  Result := True;
+  uninstallKey := ExpandConstant('Software\Microsoft\Windows\CurrentVersion\Uninstall\{#emit SetupSetting("AppId")}_is1');
+  alreadyInstalled := False;
+  if RegKeyExists(HKEY_LOCAL_MACHINE, uninstallKey) then 
+  begin 
+    rootKey := HKEY_LOCAL_MACHINE;
+    alreadyInstalled := True;
+  end else begin
+    if RegKeyExists(HKEY_CURRENT_USER, uninstallKey) then 
+    begin 
+      rootKey := HKEY_CURRENT_USER;
+      alreadyInstalled := True;
+    end;
+  end;
+
+  if alreadyInstalled then 
+  begin
+    if RegQueryStringValue(rootKey, uninstallKey, 'DisplayVersion', alreadyInstalledVersion) then
+    begin
+      case CompareVersions(alreadyInstalledVersion, '{#emit SetupSetting("AppVersion")}') of
+      -1: 
+        begin
+          if RegQueryStringValue(rootKey, uninstallKey, 'UninstallString', uninstallPath) then
+          begin
+            StringChangeEx(uninstallPath, '"', '', True);
+            shouldUninstallAnchoFlag := True;
+          end; 
+        end;
+      0: 
+        begin
+          shouldInstallAnchoFlag := False;
+        end;
+      1: 
+        begin
+          shouldInstallAnchoFlag := False;
+        end;
+      end;
+    end;
+  end;
+end;
+
+function UninstallOlderVersion: Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := True;
+  
+  if shouldUninstallAnchoFlag then
+  begin
+    if MsgBox('Previous version of the application must be uninstalled.', mbConfirmation, MB_OKCANCEL) = IDOK then
+    begin
+      Exec(uninstallPath, '', GetCurrentDir(), SW_SHOW, ewWaitUntilTerminated, ResultCode);
+    end else begin
+      Result := False;
+    end;
+  end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result:= '';  
+  if not UninstallOlderVersion() then
+  begin
+    Result := 'Previous version must be uninstalled.';
+  end;
+end;
+
 function InitializeSetup: Boolean;
 begin
+  shouldInstallAnchoFlag := True;
+  shouldUninstallAnchoFlag := False;
   Result := EnsureIENotRunning(True, WizardSilent());
+
+  Result := CheckInstalledVersions() and Result;
 end;
 
 procedure KillBackgroundServiceUninst;
@@ -161,14 +264,14 @@ function VCRedistX86NeedsInstall: Boolean;
 begin
   // here the Result must be True when you need to install your VCRedist
   // or False when you don't need to, so now it's upon you how you build
-  Result := not (VCVersionInstalled(VC_2010_SP1_REDIST_X86));
+  Result := not (VCVersionInstalled(VC_2010_SP1_REDIST_X86)) and ShouldInstallAncho();
 end;
 
 function VCRedistX64NeedsInstall: Boolean;
 begin
   // here the Result must be True when you need to install your VCRedist
   // or False when you don't need to, so now it's upon you how you build
-  Result := not (VCVersionInstalled(VC_2010_SP1_REDIST_X64));
+  Result := not (VCVersionInstalled(VC_2010_SP1_REDIST_X64)) and ShouldInstallAncho();
 end;
 
 procedure SimulateProgress(const From, UpTo: Integer);

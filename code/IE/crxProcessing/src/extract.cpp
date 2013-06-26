@@ -12,7 +12,7 @@ namespace detail {
 class CRXFile
 {
 public:
-  static CRXFile* create(boost::filesystem::path aPath, std::string aMode)
+  static CRXFile* create(boost::filesystem::wpath aPath, std::string aMode)
   {
     try {
       return new CRXFile(aPath, aMode);
@@ -39,9 +39,8 @@ public:
 
   CRXFile(boost::filesystem::wpath aPath, std::string aMode)
   {
-    mFile = fopen(aPath.string().c_str(), aMode.c_str());
-    if (mFile == NULL) {
-      throw std::runtime_error("File not opened");
+    if (!fopen_s(&mFile, aPath.string().c_str(), aMode.c_str())) {
+      BOOST_THROW_EXCEPTION(ExtractionError() << crx::CrxPathInfo(aPath));
     }
     Header header;
     size_t size = fread(&header, sizeof(Header), 1, mFile);
@@ -49,7 +48,8 @@ public:
 
     mOffset = sizeof(Header) + header.pubKeyLength + header.signatureLength;
 
-    /*boost::scoped_array<char> pubKey(new char[header.pubKeyLength]);
+    /* TODO - signature checking
+    boost::scoped_array<char> pubKey(new char[header.pubKeyLength]);
     boost::scoped_array<char> signature(new char[header.signatureLength]);
     size = fread(pubKey.get(), sizeof(char), header.pubKeyLength, mFile);
     if (size != header.pubKeyLength) {
@@ -84,7 +84,7 @@ public:
     return ftell(mFile) - mOffset;
   }
 
-  int zipSeek(ZPOS64_T offset, int origin)
+  int zipSeek(long offset, int origin)
   {
     if (origin == SEEK_SET) {
       return fseek(mFile, offset + mOffset, SEEK_SET);
@@ -99,7 +99,7 @@ public:
   }
 protected:
   FILE *mFile;
-  ZPOS64_T mOffset;
+  long mOffset;
 };
 
 
@@ -125,7 +125,7 @@ static voidpf ZCALLBACK fopen64_file_func (voidpf opaque, const void* filename, 
 static int ZCALLBACK fclose_file_func(voidpf opaque, voidpf stream)
 {
     int ret;
-    ret = CRXFile::destroy(reinterpret_cast<CRXFile*>(stream)); //fclose((FILE *)stream);
+    ret = CRXFile::destroy(reinterpret_cast<CRXFile*>(stream));
     return ret;
 }
 
@@ -193,7 +193,7 @@ void extractCurrentFile(unzFile aFileHandle, const boost::filesystem::wpath &aOu
   int err = UNZ_OK;
   err = unzGetCurrentFileInfo64(aFileHandle, &file_info, filename_inzip, sizeof(filename_inzip), NULL, 0, NULL, 0);
   if (err != UNZ_OK){
-    throw "Error";
+    BOOST_THROW_EXCEPTION(ExtractionError());
   }
   boost::filesystem::wpath p = (aOutputPath / filename_inzip).make_preferred();
   boost::filesystem::wpath filename = p.filename();
@@ -208,7 +208,7 @@ void extractCurrentFile(unzFile aFileHandle, const boost::filesystem::wpath &aOu
 
     err = unzOpenCurrentFile(aFileHandle);
     if (err != UNZ_OK){
-      throw "Error";
+      BOOST_THROW_EXCEPTION(ExtractionError());
     }
     BOOST_SCOPE_EXIT_ALL(=) { unzCloseCurrentFile(aFileHandle); };
     boost::scoped_array<char> buffer(new char[sBufferSize]);
@@ -225,7 +225,7 @@ void extractCurrentFile(unzFile aFileHandle, const boost::filesystem::wpath &aOu
       }
     } while (bytes > 0);
     if (bytes < 0) {
-      throw "Error";
+      BOOST_THROW_EXCEPTION(ExtractionError());
     }
     outputStream.flush();
   }
@@ -251,19 +251,19 @@ void extract(const boost::filesystem::wpath &aCRXFilePath, const boost::filesyst
   crxFileHandle = unzOpen2_64(aCRXFilePath.wstring().c_str(), &helperFunctions);
 
   if (!crxFileHandle) {
-    throw "Error";
+    BOOST_THROW_EXCEPTION(ExtractionError());
   }
 
   BOOST_SCOPE_EXIT_ALL(=) {
     if (UNZ_OK != unzClose(crxFileHandle)) {
-        throw "Error";
+      BOOST_THROW_EXCEPTION(ExtractionError());
     }
   };
   int err = UNZ_OK;
   unz_global_info64 globalInfo;
   err = unzGetGlobalInfo64(crxFileHandle, &globalInfo);
   if (err != UNZ_OK){
-    throw "Error";
+    BOOST_THROW_EXCEPTION(ExtractionError());
   }
 
   for (int i = 0; i < globalInfo.number_entry; ++i) {
@@ -272,177 +272,11 @@ void extract(const boost::filesystem::wpath &aCRXFilePath, const boost::filesyst
       if ((i+1) < globalInfo.number_entry) {
           err = unzGoToNextFile(crxFileHandle);
           if (err != UNZ_OK) {
-              throw "Error";
+            BOOST_THROW_EXCEPTION(ExtractionError());
           }
       }
   }
 
-
-
-  /*int ZEXPORT unzGoToFirstFile OF((unzFile file));
-  int ZEXPORT unzGoToNextFile OF((unzFile file));*/
 }
-
-//int do_extract_currentfile(unzFile uf,
-//    const int* popt_extract_without_path,
-//    int* popt_overwrite,
-//    const char* password)
-//{
-//    char filename_inzip[256];
-//    char* filename_withoutpath;
-//    char* p;
-//    int err=UNZ_OK;
-//    FILE *fout=NULL;
-//    void* buf;
-//    uInt size_buf;
-//
-//    unz_file_info64 file_info;
-//    uLong ratio=0;
-//    err = unzGetCurrentFileInfo64(uf, &file_info, filename_inzip,sizeof(filename_inzip),NULL,0,NULL,0);
-//
-//    if (err!=UNZ_OK)
-//    {
-//        printf("error %d with zipfile in unzGetCurrentFileInfo\n",err);
-//        return err;
-//    }
-//
-//    size_buf = WRITEBUFFERSIZE;
-//    buf = (void*)malloc(size_buf);
-//    if (buf==NULL)
-//    {
-//        printf("Error allocating memory\n");
-//        return UNZ_INTERNALERROR;
-//    }
-//
-//    p = filename_withoutpath = filename_inzip;
-//    while ((*p) != '\0')
-//    {
-//        if (((*p)=='/') || ((*p)=='\\'))
-//            filename_withoutpath = p+1;
-//        p++;
-//    }
-//
-//    if ((*filename_withoutpath)=='\0')
-//    {
-//        if ((*popt_extract_without_path)==0)
-//        {
-//            printf("creating directory: %s\n",filename_inzip);
-//            mymkdir(filename_inzip);
-//        }
-//    }
-//    else
-//    {
-//        const char* write_filename;
-//        int skip=0;
-//
-//        if ((*popt_extract_without_path)==0)
-//            write_filename = filename_inzip;
-//        else
-//            write_filename = filename_withoutpath;
-//
-//        err = unzOpenCurrentFilePassword(uf,password);
-//        if (err!=UNZ_OK)
-//        {
-//            printf("error %d with zipfile in unzOpenCurrentFilePassword\n",err);
-//        }
-//
-//        if (((*popt_overwrite)==0) && (err==UNZ_OK))
-//        {
-//            char rep=0;
-//            FILE* ftestexist;
-//            ftestexist = fopen64(write_filename,"rb");
-//            if (ftestexist!=NULL)
-//            {
-//                fclose(ftestexist);
-//                do
-//                {
-//                    char answer[128];
-//                    int ret;
-//
-//                    printf("The file %s exists. Overwrite ? [y]es, [n]o, [A]ll: ",write_filename);
-//                    ret = scanf("%1s",answer);
-//                    if (ret != 1)
-//                    {
-//                       exit(EXIT_FAILURE);
-//                    }
-//                    rep = answer[0] ;
-//                    if ((rep>='a') && (rep<='z'))
-//                        rep -= 0x20;
-//                }
-//                while ((rep!='Y') && (rep!='N') && (rep!='A'));
-//            }
-//
-//            if (rep == 'N')
-//                skip = 1;
-//
-//            if (rep == 'A')
-//                *popt_overwrite=1;
-//        }
-//
-//        if ((skip==0) && (err==UNZ_OK))
-//        {
-//            fout=fopen64(write_filename,"wb");
-//
-//            /* some zipfile don't contain directory alone before file */
-//            if ((fout==NULL) && ((*popt_extract_without_path)==0) &&
-//                                (filename_withoutpath!=(char*)filename_inzip))
-//            {
-//                char c=*(filename_withoutpath-1);
-//                *(filename_withoutpath-1)='\0';
-//                makedir(write_filename);
-//                *(filename_withoutpath-1)=c;
-//                fout=fopen64(write_filename,"wb");
-//            }
-//
-//            if (fout==NULL)
-//            {
-//                printf("error opening %s\n",write_filename);
-//            }
-//        }
-//
-//        if (fout!=NULL)
-//        {
-//            printf(" extracting: %s\n",write_filename);
-//
-//            do
-//            {
-//                err = unzReadCurrentFile(uf,buf,size_buf);
-//                if (err<0)
-//                {
-//                    printf("error %d with zipfile in unzReadCurrentFile\n",err);
-//                    break;
-//                }
-//                if (err>0)
-//                    if (fwrite(buf,err,1,fout)!=1)
-//                    {
-//                        printf("error in writing extracted file\n");
-//                        err=UNZ_ERRNO;
-//                        break;
-//                    }
-//            }
-//            while (err>0);
-//            if (fout)
-//                    fclose(fout);
-//
-//            if (err==0)
-//                change_file_date(write_filename,file_info.dosDate,
-//                                 file_info.tmu_date);
-//        }
-//
-//        if (err==UNZ_OK)
-//        {
-//            err = unzCloseCurrentFile (uf);
-//            if (err!=UNZ_OK)
-//            {
-//                printf("error %d with zipfile in unzCloseCurrentFile\n",err);
-//            }
-//        }
-//        else
-//            unzCloseCurrentFile(uf); /* don't lose the error */
-//    }
-//
-//    free(buf);
-//    return err;
-//}
 
 } //namespace crx
