@@ -81,7 +81,7 @@ HRESULT CAnchoBackgroundAPI::Init(LPCTSTR lpszThisPath, LPCTSTR lpszRootURL, BST
 
   // load manifest
   CString sManifestFilename;
-  sManifestFilename.Format(_T("%smanifest.json"), sPath);
+  sManifestFilename.Format(_T("%s\\manifest.json"), sPath);
   CString code;
   IF_FAILED_RET(appendJSONFileToVariableAssignment(sManifestFilename, L"exports.manifest", code));
   IF_FAILED_RET(m_Magpie->RunScript(L"manifest", (LPWSTR)(LPCWSTR)code));

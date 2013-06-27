@@ -39,7 +39,7 @@ public:
 
   CRXFile(boost::filesystem::wpath aPath, std::string aMode)
   {
-    if (!fopen_s(&mFile, aPath.string().c_str(), aMode.c_str())) {
+    if (fopen_s(&mFile, aPath.string().c_str(), aMode.c_str())) {
       BOOST_THROW_EXCEPTION(ExtractionError() << crx::CrxPathInfo(aPath));
     }
     Header header;
