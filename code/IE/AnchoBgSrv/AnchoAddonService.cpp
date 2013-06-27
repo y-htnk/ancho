@@ -12,6 +12,8 @@
 
 #include "PopupWindow.h"
 
+#include <crxProcessing/extract.hpp>
+
 struct CookieNotificationCallback: public ACookieCallbackFunctor
 {
   CookieNotificationCallback(CAnchoAddonService &aService): service(aService)
@@ -178,6 +180,7 @@ HRESULT CAnchoAddonService::FinalConstruct()
 
     Ancho::Service::WindowManager::initSingleton();
     mIWindowManager = &Ancho::Service::WindowManager::instance();
+
   END_TRY_BLOCK_CATCH_TO_HRESULT;
   return S_OK;
 }
