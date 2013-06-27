@@ -6,10 +6,10 @@
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 #define AppUUID "BB94A47D-EC8E-4476-A48F-DDE09BEBCE46"
 
-#define appCompany "Salsita" 
-#define appName "Ancho" 
-#define setupPrefix "ancho-ie" 
-#define appVersion "0.7.0"
+;#define appCompany "Salsita" 
+;#define appName "Ancho" 
+;#define setupPrefix "ancho-ie" 
+;#define appVersion "0.7.0"
 
 ; command line has to /D efine:
 ; appName
@@ -73,6 +73,8 @@ var
 
 #include installBin + "\helpercode.isi"
 
+#include "versionComparison.isi"
+
 function ShouldInstallAncho(): Boolean;
 begin
   Result := shouldInstallAnchoFlag;
@@ -95,13 +97,6 @@ begin
       UnloadDLL(ExpandConstant('{app}\iesetuphelper_x86.dll'));
     end;
   end;
-end;
-
-function CompareVersions(aFirst : String; aSecond : String): Integer;
-//var
-  //tmp : Integer;
-begin
-  Result := -1; //TODO
 end;
 
 function CheckInstalledVersions(): Boolean;
@@ -129,7 +124,7 @@ begin
   begin
     if RegQueryStringValue(rootKey, uninstallKey, 'DisplayVersion', alreadyInstalledVersion) then
     begin
-      case CompareVersions(alreadyInstalledVersion, '{#emit SetupSetting("AppVersion")}') of
+      case CompareVersion(alreadyInstalledVersion, '{#emit SetupSetting("AppVersion")}') of
       -1: 
         begin
           if RegQueryStringValue(rootKey, uninstallKey, 'UninstallString', uninstallPath) then

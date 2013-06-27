@@ -72,7 +72,7 @@ add_subdirectory(zlib EXCLUDE_FROM_ALL)
 include_directories(zlib ${zlib_BINARY_DIR})
 
 add_subdirectory(crxProcessing)
-add_dependencies(crxProcessing zlib)
+add_dependencies(crxProcessing zlibstatic)
 include_directories(${crxProcessing_INC_DIR})
 
 add_subdirectory(AnchoBgSrv)

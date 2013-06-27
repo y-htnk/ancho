@@ -186,7 +186,7 @@ add_executable(${PROJECT_NAME} WIN32
 #set_target_properties( ${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX ${ANCHO_DEBUG_POSTFIX} )
 #set_target_properties( ${PROJECT_NAME} PROPERTIES RELEASE_POSTFIX ${ANCHO_RELEASE_POSTFIX} )
 
-target_link_libraries(${PROJECT_NAME} libbhohelper anchocommons libprothandlers Wininet AnchoShared crxProcessing zlib)
+target_link_libraries(${PROJECT_NAME} libbhohelper anchocommons libprothandlers Wininet AnchoShared crxProcessing zlibstatic)
 
 # set UNICODE
 set_target_properties(${PROJECT_NAME} PROPERTIES COMPILE_DEFINITIONS _UNICODE,UNICODE)

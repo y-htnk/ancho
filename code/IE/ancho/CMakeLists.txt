@@ -152,7 +152,7 @@ add_library(${PROJECT_NAME} SHARED
   ${${PROJECT_NAME}_DEF_FILES}
   ${${PROJECT_NAME}_IDL_FILE}
   )
-target_link_libraries(${PROJECT_NAME} libbhohelper anchocommons libprothandlers AnchoShared crxProcessing zlib)
+target_link_libraries(${PROJECT_NAME} libbhohelper anchocommons libprothandlers AnchoShared crxProcessing zlibstatic)
 
 # set UNICODE
 set_target_properties(${PROJECT_NAME} PROPERTIES COMPILE_DEFINITIONS _UNICODE,UNICODE)
