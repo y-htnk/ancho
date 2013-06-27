@@ -36,6 +36,7 @@ static boost::filesystem::wpath processCRXFile(std::wstring aExtensionName, boos
 STDMETHODIMP CAnchoAddon::Init(LPCOLESTR lpsExtensionID, IAnchoAddonService * pService,
   IWebBrowser2 * pWebBrowser)
 {
+  BEGIN_TRY_BLOCK;
   m_pWebBrowser = pWebBrowser;
   m_pAnchoService = pService;
   m_sExtensionName = lpsExtensionID;
@@ -132,6 +133,7 @@ STDMETHODIMP CAnchoAddon::Init(LPCOLESTR lpsExtensionID, IAnchoAddonService * pS
 #endif
 
   return S_OK;
+  END_TRY_BLOCK_CATCH_TO_HRESULT;
 }
 
 
