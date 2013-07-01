@@ -1,44 +1,92 @@
 (function() {
-  var Cc = Components.classes;
-  var Ci = Components.interfaces;
-  var Cu = Components.utils;
+  const Cc = Components.classes;
+  const Ci = Components.interfaces;
+  const Cu = Components.utils;
 
-  var getWindowId = require('./utils').getWindowId;
+  Cu.import('resource://gre/modules/Services.jsm');
 
-  function EventDispatcher() {
-    this._listeners = {};
+  let inherits = require('inherits');
+  let EventEmitter2 = require('eventemitter2').EventEmitter2;
+  let Utils = require('./utils');
+  let WindowWatcher = require('./windowWatcher');
+
+  function Extension(id) {
+    EventEmitter2.call(this, { wildcard: true });
+    this._id = id;
+    this._rootDirectory = null;
+    this._manifest = null;
+    this._windowWatcher = null;
+    this._backgroundWindow = null;
   }
+  inherits(Extension, EventEmitter2);
 
-  EventDispatcher.prototype = {
-    addListener: function(type, callback) {
-      if (!(type in this._listeners)) {
-        this._listeners[type] = [];
+  Object.defineProperty(Extension.prototype, 'id', {
+    get: function id() {
+      return this._id;
+    }
+  });
+
+  Object.defineProperty(Extension.prototype, 'rootDirectory', {
+    get: function rootDirectory() {
+      return this._rootDirectory;
+    }
+  });
+
+  Object.defineProperty(Extension.prototype, 'manifest', {
+    get: function manifest() {
+      return this._manifest;
+    }
+  });
+
+  Object.defineProperty(Extension.prototype, 'windowWatcher', {
+    get: function windowWatcher() {
+      if (!this._windowWatcher) {
+        this._windowWatcher = new WindowWatcher(this);
       }
-      this._listeners[type].push(callback);
-    },
+      return this._windowWatcher;
+    }
+  });
 
-    removeListener: function(type, callback) {
-      if (type in this._listeners) {
-        var index = this._listeners[type].indexOf(callback);
-        if (index != -1) {
-          this._listeners[type].splice(index, 1);
+  Extension.prototype.getURL = function(path) {
+    var baseURI = NetUtil.newURI('chrome-extension://' + this._id + '/', null, null);
+    var URI = NetUtil.newURI('chrome-extension://' + this._id + '/' + path, '', null);
+    return URI.spec;
+  };
+
+  Extension.prototype.load = function(rootDirectory) {
+    this._rootDirectory = rootDirectory;
+    this._loadManifest();
+  };
+
+  Extension.prototype.unload = function() {
+    if (this._windowWatcher) {
+      this._windowWatcher.unload();
+    }
+    this.emit('unload');
+  };
+
+  Extension.prototype._loadManifest = function() {
+    var manifestFile = this._rootDirectory.clone();
+    manifestFile.append('manifest.json');
+    var manifestURI = Services.io.newFileURI(manifestFile);
+    var manifestString = Utils.readStringFromUrl(manifestURI);
+    this._manifest = JSON.parse(manifestString);
+    var i, j;
+    if ('content_scripts' in this._manifest) {
+      for (i=0; i<this._manifest.content_scripts.length; i++) {
+        var scriptInfo = this._manifest.content_scripts[i];
+        for (j=0; j<scriptInfo.matches.length; j++) {
+          // Convert from Google's simple wildcard syntax to a regular expression
+          // TODO: Implement proper match pattern matcher.
+          scriptInfo.matches[j] = Utils.matchPatternToRegexp(scriptInfo.matches[j]);
         }
       }
-    },
-
-    hasListeners: function(type) {
-      return (type in this._listeners);
-    },
-
-    notifyListeners: function(type, targetTab, params) {
-      var res, results = [];
-      if (type in this._listeners) {
-        for (var i = 0; i < this._listeners[type].length; i++) {
-          res = this._listeners[type][i](targetTab, params);
-          results = results.concat(res);
-        }
+    }
+    if ('web_accessible_resources' in this._manifest) {
+      for (i=0; i<this._manifest.web_accessible_resources.length; i++) {
+        this._manifest.web_accessible_resources[i] =
+          Utils.matchPatternToRegexp(this._manifest.web_accessible_resources[i]);
       }
-      return results;
     }
   };
 
@@ -48,54 +96,59 @@
 
   GlobalId.prototype.getNext = function() {
     return this._id++;
-  }
-
-  var ExtensionState = {
-    id: null,               // set by bootstrap.js
-    backgroundWindow: null, // set by backgroundPrivileged.js
-    eventDispatcher: new EventDispatcher(),
-    storageConnection: null,
-    _unloaders: {},
-    _globalIds: {},
-
-    registerUnloader: function(win, unloader) {
-      var windowId = getWindowId(win);
-      if (!(windowId in this._unloaders)) {
-        this._unloaders[windowId] = [];
-      }
-      var unloaders = this._unloaders[windowId];
-      unloaders.push(unloader);
-    },
-
-    unloadWindow: function(win) {
-      var windowId = getWindowId(win);
-      if (windowId in this._unloaders) {
-        this._unloadWindowId(windowId);
-      }
-    },
-
-    unloadAll: function() {
-      for (var windowId in this._unloaders) {
-        this._unloadWindowId(windowId);
-      }
-    },
-
-    getGlobalId: function(name) {
-      if (!this._globalIds[name]) {
-        this._globalIds[name] = new GlobalId();
-      }
-      return this._globalIds[name].getNext();
-    },
-
-    _unloadWindowId: function(windowId) {
-      var unloaders = this._unloaders[windowId];
-      for (var i=0; i<unloaders.length; i++) {
-        unloaders[i]();
-      }
-      delete this._unloaders[windowId];
-    }
   };
 
-  module.exports = ExtensionState;
+  function Global() {
+    EventEmitter2.call(this, { wildcard: true });
+    this._extensions = {};
+    this._globalIds = {};
+  }
+  inherits(Global, EventEmitter2);
+
+  Global.prototype.getGlobalId = function(name) {
+    if (!this._globalIds[name]) {
+      this._globalIds[name] = new GlobalId();
+    }
+    return this._globalIds[name].getNext();
+  };
+
+  Global.prototype.getExtension = function(id) {
+    return this._extensions[id];
+  };
+
+  Global.prototype.loadExtension = function(id, rootDirectory, backgroundWindow) {
+    this._extensions[id] = new Extension(id, backgroundWindow);
+    this._extensions[id].load(rootDirectory);
+    return this._extensions[id];
+  };
+
+  Global.prototype.watchExtensions = function(callback) {
+    for (var id in this._extensions) {
+      callback(this._extensions[id]);
+    }
+
+    this.addListener('load', callback);
+  };
+
+  Global.prototype.unloadExtension = function(id) {
+    this._extensions[id].unload(function() {
+      delete this._extensions[id];
+    }.bind(this));
+  };
+
+  Global.prototype.unloadAllExtensions = function() {
+    let id;
+    for (id in _extensions) {
+      this.unloadExtension(id);
+    }
+    this.emit('unload');
+  };
+
+  Global.prototype.shutdown = function() {
+    this.unloadAllExtensions();
+    this.removeAllListeners();
+  };
+
+  exports.Global = new Global();
 
 }).call(this);

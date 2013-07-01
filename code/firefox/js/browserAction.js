@@ -6,9 +6,7 @@
 
   //var Event = require('./event');
   var Utils = require('./utils');
-  var WindowWatcher = require('./windowWatcher').WindowWatcher;
   var Config = require('./config');
-  var Manifest = Config.manifest;
 
   const BUTTON_ID = '__ANCHO_BROWSER_ACTION_BUTTON__';
   const CANVAS_ID = '__ANCHO_BROWSER_ACTION_CANVAS__';
@@ -21,23 +19,28 @@
   const BROWSER_ACTION_ICON_HEIGHT = 19;
 
   var BrowserActionService = {
+    initialized: false,
     iconType: null,
     badgeText: null,
     badgeBackgroundColor: '#f00',
     tabBadgeText: {},
     tabBadgeBackgroundColor: {},
 
-    init: function() {
+    _manifest: null,
+
+    init: function(extension) {
       // TODO: this.onClicked = new Event();
-      if (Manifest.browser_action && Manifest.browser_action.default_icon) {
+      this._extension = extension;
+      this._manifest = extension.manifest;
+      if (this._manifest.browser_action && this._manifest.browser_action.default_icon) {
         this.iconType = 'browser_action';
       }
-      else if (Manifest.page_action && Manifest.page_action.default_icon) {
+      else if (this._manifest.page_action && this._manifest.page_action.default_icon) {
         this.iconType = 'page_action';
       }
 
       if (this.iconType) {
-        WindowWatcher.register(function(win, context) {
+        extension.windowWatcher.register(function(win, context) {
           this.startup(win);
           var tabbrowser = win.document.getElementById('content');
           var container = tabbrowser.tabContainer;
@@ -52,6 +55,7 @@
           this.shutdown(win);
         }.bind(this));
       }
+      this.initialized = true;
     },
 
     _installAction: function(window, button, iconPath) {
@@ -98,9 +102,9 @@
       toolbarButton.setAttribute('type', 'button');
       toolbarButton.setAttribute('removable', 'true');
       toolbarButton.setAttribute('class', 'toolbarbutton-1 chromeclass-toolbar-additional');
-      toolbarButton.setAttribute('label', Manifest.name);
+      toolbarButton.setAttribute('label', this._manifest.name);
 
-      var iconPath = Config.hostExtensionRoot + Manifest.browser_action.default_icon;
+      var iconPath = this._extension.getURL(this._manifest.browser_action.default_icon);
       toolbarButton.style.listStyleImage = 'url(' + iconPath + ')';
 
       var palette = document.getElementById(NAVIGATOR_TOOLBOX).palette;
@@ -144,7 +148,7 @@
       image.setAttribute('id', id);
       image.setAttribute('class', 'urlbar-icon');
 
-      var iconPath = Config.hostExtensionRoot + Manifest.page_action.default_icon;
+      var iconPath = this._extension.getURL(this._manifest.page_action.default_icon);
       image.style.listStyleImage = 'url(' + iconPath + ')';
 
       var icons = document.getElementById('urlbar-icons');
@@ -158,7 +162,7 @@
       // Deferred loading of scripting.js since we have a circular reference that causes
       // problems if we load it earlier.
       var loadHtml = require('./scripting').loadHtml;
-      loadHtml(document, iframe, 'chrome-extension://ancho/' + Manifest[this.iconType].default_popup, function() {
+      loadHtml(this._extension, document, iframe, this._extension.getURL(this._manifest[this.iconType].default_popup), function() {
         iframe.contentDocument.addEventListener('readystatechange', function(event) {
           iframe.contentDocument.removeEventListener('readystatechange', arguments.callee, false);
           panel.style.removeProperty('visibility');
@@ -300,7 +304,7 @@
 
     updateIcon: function(details) {
       var self = this;
-      WindowWatcher.forAllWindows(function(window) {
+      this._extension.windowWatcher.forAllWindows(function(window) {
         self.setIcon(window, details);
       });
     },
@@ -369,10 +373,10 @@
     }
   };
 
-  // Start the service once
-  BrowserActionService.init();
-
-  var BrowserActionAPI = function() {
+  var BrowserActionAPI = function(extension) {
+    if (!BrowserActionService.initialized) {
+      BrowserActionService.init(extension);
+    }
   };
 
   BrowserActionAPI.prototype.getBadgeBackgroundColor = function(details, callback) {

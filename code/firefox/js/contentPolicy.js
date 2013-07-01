@@ -5,15 +5,23 @@
   Cu.import('resource://gre/modules/XPCOMUtils.jsm');
   Cu.import('resource://gre/modules/Services.jsm');
 
-  var config = require('./config');
+  var Global = require('./state').Global;
 
   var classID = Components.ID('{d60ca65e-2ab6-4909-9d61-d7ac337a7056}');
   var contractID = '@salsitasoft.com/ancho/content-policy;1';
   var className = 'com.salsitasoft.ancho.contentPolicy';
 
-  function isWebAccessible(path) {
-    for (let i=0; i<config.webAccessibleResources.length; i++) {
-      if (path.match(config.webAccessibleResources[i])) {
+  function isWebAccessible(extensionId, path) {
+    var manifest;
+    try {
+      manifest = Global.getExtension(extensionId).manifest;
+    }
+    catch(e) {
+      // TODO: Log failure.
+      return false;
+    }
+    for (let i=0; i<manifest.web_accessible_resources.length; i++) {
+      if (path.match(manifest.web_accessible_resources[i])) {
         return true;
       }
     }
@@ -27,7 +35,7 @@
   AnchoContentPolicy.prototype = {
     shouldLoad: function(aContentType, aContentLocation, aRequestOrigin, aContext, aMimeTypeGuess, aExtra, aRequestPrincipal) {
       if (aRequestPrincipal && aRequestPrincipal !== this.systemPrincipal && aContentLocation.schemeIs('chrome-extension')) {
-        if (!isWebAccessible(aContentLocation.path)) {
+        if (!isWebAccessible(aContentLocation.host, aContentLocation.path)) {
           return Ci.nsIContentPolicy.REJECT_REQUEST;
         }
       }

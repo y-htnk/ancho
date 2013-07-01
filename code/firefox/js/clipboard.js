@@ -2,7 +2,7 @@
 
   var Cc = Components.classes;
 
-  function ClipboardAPI(state, contentWindow) {
+  function ClipboardAPI(extension) {
   }
 
   ClipboardAPI.prototype = {

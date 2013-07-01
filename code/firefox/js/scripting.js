@@ -7,15 +7,13 @@
   Cu.import('resource://gre/modules/Services.jsm');
   Cu.import('resource://ancho/modules/Require.jsm');
 
-  var ExtensionState = require('./state');
   var API = require('./api');
   var readStringFromUrl = require('./utils').readStringFromUrl;
   var Config = require('./config');
-  var contentScripts = Config.manifest.content_scripts;
 
-  exports.prepareWindow = function(window) {
+  exports.prepareWindow = function(extension, window) {
     if (!('chrome' in window)) {
-      var api = new API(window, ExtensionState);
+      var api = new API(extension, window);
       window.chrome = api.chrome;
       window.ancho = api.ancho;
       window.console = api.console;
@@ -29,7 +27,7 @@
     }
   };
 
-  exports.applyContentScripts = function(win, spec, isFrame) {
+  exports.applyContentScripts = function(extension, win, spec, isFrame) {
     var baseUrl = Services.io.newURI(spec, '', null);
     var principal;
     // Preserving backwards compatibility with FF18 and older.
@@ -37,25 +35,27 @@
       principal = CC('@mozilla.org/systemprincipal;1', 'nsIPrincipal')();
     }
     else {
-      principal = ExtensionState.backgroundWindow;
+      principal = extension.backgroundWindow;
     }
     var sandbox = Cu.Sandbox(principal, { sandboxPrototype: win });
     var eventUnloaders = [];
     // Destroy the sandbox when the window goes away or the extension is disabled.
-    ExtensionState.registerUnloader(win, function() {
+    // TODO: Unloader for window instead of whole extension.
+    extension.once('unload', function() {
       // Remove event handlers registered by jQuery.
       for (var i=0; i<eventUnloaders.length; i++) {
         eventUnloaders[i]();
       }
       Cu.nukeSandbox(sandbox);
     });
-    var api = new API(win, ExtensionState);
+    var api = new API(extension, win);
     sandbox.chrome = api.chrome;
     sandbox.ancho = api.ancho;
     sandbox.console = api.console;
     sandbox.XMLHttpRequest = Require.XMLHttpRequest;
     var processedJQuery = false;
     var events = [];
+    var contentScripts = extension.manifest.content_scripts;
     for (var i=0; i<contentScripts.length; i++) {
       var scriptInfo = contentScripts[i];
       if (isFrame && !scriptInfo.all_frames) {
@@ -76,8 +76,7 @@
               };
               processedJQuery = true;
             }
-            var scriptUri = Services.io.newURI(Config.hostExtensionRoot
-                  + scriptInfo.js[k], '', null);
+            var scriptUri = Services.io.newURI(extension.getURL(scriptInfo.js[k]), '', null);
             var script = readStringFromUrl(scriptUri);
             try {
               Cu.evalInSandbox(script, sandbox);
@@ -91,11 +90,7 @@
     }
   };
 
-  // When we load a privileged HTML page we want all scripts to load as content
-  // scripts so that they have access to the require function and chrome / ancho APIs.
-  // So we strip the <script> tags out of the document and load them separately
-  // as content scripts.
-  exports.loadHtml = function(document, iframe, htmlSpec, callback) {
+  exports.loadHtml = function(extension, document, iframe, htmlSpec, callback) {
     var targetWindow = iframe.contentWindow;
     iframe.addEventListener('DOMWindowCreated', function(event) {
       var window = event.target.defaultView;
@@ -104,7 +99,7 @@
         return;
       }
       iframe.removeEventListener('DOMWindowCreated', arguments.callee, false);
-      exports.prepareWindow(targetWindow.wrappedJSObject);
+      exports.prepareWindow(extension, targetWindow.wrappedJSObject);
     }, false);
 
     if (callback) {
@@ -114,8 +109,7 @@
       }, false);
     }
 
-    iframe.webNavigation.loadURI(htmlSpec,
-        Ci.nsIWebNavigation.LOAD_FLAGS_NONE, null, null, null);
+    iframe.webNavigation.loadURI(htmlSpec, Ci.nsIWebNavigation.LOAD_FLAGS_NONE, null, null, null);
   };
 
 }).call(this);

@@ -4,18 +4,14 @@
 
   const Cc = Components.classes;
 
-  let Manifest = require('./config').manifest;
+  let utils = require('./utils');
 
   let messages = {};
   let loaded = false;
 
-  function loadMessages() {
+  function loadMessages(extension) {
     loaded = true;
-    let protocolHandler = require('./protocolHandler');
-    let utils = require('./utils');
-    // TODO: Use the real extension ID.
-    let rootURI = protocolHandler.getExtensionURI('ancho');
-    let localeDir = rootURI.QueryInterface(Ci.nsIFileURL).file;
+    let localeDir = extension.rootDirectory;
     localeDir.append('_locales');
     if (localeDir.exists()) {
       let entries = localeDir.directoryEntries;
@@ -32,17 +28,17 @@
     }
   }
 
-  function I18nAPI(state, contentWindow) {
+  function I18nAPI(extension) {
     if (!loaded) {
-      loadMessages();
+      loadMessages(extension);
     }
+    this._defaultLocale = extension.manifest.default_locale;
   }
 
   I18nAPI.prototype = {
     getMessage: function(messageName, substitutions) {
-      let currentLocale = Manifest.default_locale;
-      if (messages[currentLocale]) {
-        var info = messages[currentLocale][messageName];
+      if (messages[this._defaultLocale]) {
+        var info = messages[this._defaultLocale][messageName];
         if (info && info.message) {
           // TODO - substitutions
           return info.message.replace(/\$\$/g, '$');

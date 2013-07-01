@@ -6,21 +6,21 @@
 
   Cu.import('resource://gre/modules/Services.jsm');
 
-  var Event = require('./event');
+  var Event = require('./events').Event;
   var Utils = require('./utils');
-  var chrome;
 
-  function TabsAPI(state, window, api) {
-    chrome = api;
-    this._window = window;
-    this._state = state;
+  function TabsAPI(extension, window) {
+    this._extension = extension;
+
+    // TODO: Make sure this is really a tab.
     this._tab = Utils.getWindowId(window);
+    this._chromeWindow = Utils.getChromeWindow(window);
 
     // Event handlers
-    this.onCreated = new Event(window, this._tab, this._state, 'tab.created');
-    this.onActivated = new Event(window, this._tab, this._state, 'tab.activated');
-    this.onRemoved = new Event(window, this._tab, this._state, 'tab.removed');
-    this.onUpdated = new Event(window, this._tab, this._state, 'tab.updated');
+    this.onCreated = new Event(extension, 'tab.created');
+    this.onActivated = new Event(extension, 'tab.activated');
+    this.onRemoved = new Event(extension, 'tab.removed');
+    this.onUpdated = new Event(extension, 'tab.updated');
   }
 
   TabsAPI.prototype = {
@@ -30,15 +30,13 @@
     },
 
     sendRequest: function(tabId, request, callback) {
-      var sender = Utils.getSender(this._state['id'], this._tab);
-      this._state.eventDispatcher.notifyListeners('extension.request', tabId,
-        [ request, sender, callback ]);
+      var sender = Utils.getSender(this._extension.id, this._tab);
+      this._extension.emit('extension.request.' + tabId, request, sender, callback);
     },
 
-    sendMessage: function(tabId, request, callback) {
-      var sender = Utils.getSender(this._state['id'], this._tab);
-      this._state.eventDispatcher.notifyListeners('extension.message', tabId,
-        [ request, sender, callback ]);
+    sendMessage: function(tabId, message, callback) {
+      var sender = Utils.getSender(this._extension.id, this._tab);
+      this._extension.emit('extension.message.' + tabId, message, sender, callback);
     },
 
     query: function(queryInfo, callback) {
@@ -47,16 +45,14 @@
       let windows = [];
       let result = [];
       if (queryInfo.currentWindow ||
-        (queryInfo.windowId && queryInfo.windowId === chrome.windows.WINDOW_ID_CURRENT)) {
+        (queryInfo.windowId && queryInfo.windowId === Utils.WINDOW_ID_CURRENT)) {
         // Just the current window.
-        let chromeWindow = Utils.getChromeWindow(this._window);
-        let windowType = chromeWindow.document.documentElement.getAttribute('windowtype');
-        if ('ancho-hidden' === windowType) {
-          // We're in the background window, so use the most recent browser window.
-          chromeWindow = Services.wm.getMostRecentWindow('navigator:browser');
-          windows.push(chromeWindow);
+        if (this._chromeWindow) {
+          windows.push(this._chromeWindow);
         }
         else {
+          // We're in the background window, so use the most recent browser window.
+          var chromeWindow = Services.wm.getMostRecentWindow('navigator:browser');
           windows.push(chromeWindow);
         }
       }
@@ -71,7 +67,7 @@
         return {
           id: Utils.getWindowId(browser.contentWindow),
           url: browser.contentDocument.location.href
-        }
+        };
       }
 
       for (let i=0; i<windows.length; i++) {
@@ -115,21 +111,17 @@
       var tabbrowser = this._getBrowserForWindowId(null);
       var browser = this._getBrowserForTabId(tabbrowser, tabId);
 
-      var self = this;
-      this._waitForDocShell(browser, 5, 200, function() {
-        // TODO: before changing the URI, we shall unload the window
-        // and make sure it is initialized again when the DOM is ready
-        browser.loadURI(updateProperties.url);
-        if (updateProperties.active) {
-          tabbrowser.selectedBrowser = browser;
-        }
-        if (callback) {
-          callback({ id: tabId ? tabId : Utils.getWindowId(browser.contentWindow) });
-        }
-      });
+      browser.loadURI(updateProperties.url);
+      if (updateProperties.active) {
+        tabbrowser.selectedBrowser = browser;
+      }
+      if (callback) {
+        callback({ id: tabId ? tabId : Utils.getWindowId(browser.contentWindow) });
+      }
     },
 
     executeScript: function(tabId, executeScriptProperties, callback) {
+      // TODO: This looks totally wrong to me. The code should be run in a sandbox.
       var tabbrowser = this._getBrowserForWindowId(null);
       var browser = this._getBrowserForTabId(tabbrowser, tabId);
       var doc = browser.contentDocument;
@@ -143,26 +135,6 @@
       if (callback) {
         callback();
       }
-    },
-
-    _waitForDocShell: function(object, pollTime, maxAttempts, callback) {
-      var self = this;
-      var timer = null;
-      var iteration = 0;
-
-      function _nextTick() {
-        if (object.docShell) {
-          self._window.clearInterval(timer);
-          callback();
-          return;
-        }
-        if (++iteration === maxAttempts) {
-          self._window.clearInterval(timer);
-        }
-      };
-
-      timer = self._window.setInterval(_nextTick, pollTime);
-      _nextTick();
     },
 
     _getBrowserForTabId: function(tabbrowser, tabId) {

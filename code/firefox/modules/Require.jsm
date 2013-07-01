@@ -1,6 +1,9 @@
 EXPORTED_SYMBOLS = ['Require'];
 
-const { classes: Cc, interfaces: Ci, utils: Cu } = Components;
+const Cc = Components.classes;
+const Ci = Components.interfaces;
+const Cu = Components.utils;
+
 Cu.import('resource://gre/modules/Services.jsm');
 
 // XHR implementation with no XSS restrictions
@@ -25,31 +28,36 @@ WrappedXMLHttpRequest.prototype = {
 var Require = {
   _moduleCache: {},
 
-  _resProtocolHandler: Services.io.getProtocolHandler("resource"),
-
-  moduleSearchPath: [],
-
   XMLHttpRequest: WrappedXMLHttpRequest,
 
   createWrappedXMLHttpRequest: function() { return new WrappedXMLHttpRequest(); },
 
-  findModuleInPath: function(id) {
-    for (var i=0; i<this.moduleSearchPath.length; i++) {
-      var url = Services.io.newURI(id + '.js', '', this.moduleSearchPath[i]);
-      var channel = Services.io.newChannelFromURI(url);
+  findModuleInPath: function(id, scriptUrl) {
+    var url = null;
+    do {
+      if (url) {
+        url = Services.io.newURI('..', '', url);
+      }
+      else {
+        url = scriptUrl;
+      }
+      var nodeModules = Services.io.newURI('node_modules/', '', url);
+      var moduleUrl = Services.io.newURI(id + '.js', '', nodeModules);
+      var channel = Services.io.newChannelFromURI(moduleUrl);
       try {
         var inputStream = channel.open();
-        return url;
+        return moduleUrl;
       }
       catch(e) {
         // No stream so the module doesn't exist
       }
-    }
+    }while(!url.equals(this._baseUrl));
     return null;
   },
 
   createRequireForWindow: function(sandbox, baseUrl) {
     var self = this;
+    this._baseUrl = baseUrl;
     return function require(id, scriptUrl) {
       if (baseUrl && !scriptUrl) {
         scriptUrl = baseUrl;
@@ -70,7 +78,7 @@ var Require = {
       var url;
       if (id[0] != '.' && id[0] != '/') {
         // Try to find the module in the search path
-        url = self.findModuleInPath(id);
+        url = self.findModuleInPath(id, scriptUrl);
       }
       else {
         url = Services.io.newURI(id + '.js', '', scriptUrl);
@@ -89,7 +97,9 @@ var Require = {
         getService(Ci.mozIJSSubScriptLoader);
 
       var context = {};
-      context.require = function(id) { return require(id, url); };
+      var directoryUrl = Services.io.newURI('.', '', url);
+      context.require = function(id) { return require(id, directoryUrl); };
+      context.process = { title: 'Ancho' };
 
       if ('window' in sandbox) {
         context.window = sandbox.window;
@@ -136,6 +146,6 @@ var Require = {
       }
       self._moduleCache[spec] = context.exports;
       return context.exports;
-    }
+    };
   }
 };
