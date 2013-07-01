@@ -12,7 +12,6 @@
   var I18nAPI = require('./i18n');
 
   // Ancho APIs
-  var ToolbarAPI = require('./toolbar');
   var ClipboardAPI = require('./clipboard');
   var ExternalAPI = require('./external');
 
@@ -35,33 +34,32 @@
   }
 
   // export
-  function API(contentWindow, extensionState) {
+  function API(extension, window) {
     let chrome = {};
-    chrome.extension = new ExtensionAPI(extensionState, contentWindow);
-    chrome.tabs = new TabsAPI(extensionState, contentWindow, chrome);
-    chrome.windows = new WindowsAPI(extensionState, contentWindow);
-    chrome.webRequest = new WebRequestAPI(extensionState, contentWindow);
-    chrome.browserAction = new BrowserActionAPI(extensionState, contentWindow);
-    chrome.cookies = new CookiesAPI(extensionState, contentWindow);
-    chrome.history = new HistoryAPI(extensionState, contentWindow);
-    chrome.i18n = new I18nAPI(extensionState, contentWindow);
-    chrome.debugger = new DebuggerAPI(extensionState, contentWindow);
+    // Keeping the window here for now to support deprecated onMessage.
+    chrome.extension = new ExtensionAPI(extension, window);
+    chrome.tabs = new TabsAPI(extension, window);
+    chrome.windows = new WindowsAPI(extension);
+    chrome.webRequest = new WebRequestAPI(extension);
+    chrome.browserAction = new BrowserActionAPI(extension);
+    chrome.cookies = new CookiesAPI(extension);
+    chrome.history = new HistoryAPI(extension);
+    chrome.i18n = new I18nAPI(extension);
+    chrome.debugger = new DebuggerAPI(extension);
     chrome.storage = {
-      // FIXME TODO: conflicting prefix when more Ancho extensions are installed
-      local: new StorageAPI(extensionState, contentWindow, 'local'),
-      sync: new StorageAPI(extensionState, contentWindow, 'sync')
+      local: new StorageAPI(extension, 'local'),
+      sync: new StorageAPI(extension, 'sync')
     };
     this.chrome = chrome;
     exposeProperties(this.chrome);
 
     this.ancho = {
-      toolbar: new ToolbarAPI(extensionState, contentWindow),
-      clipboard: new ClipboardAPI(extensionState, contentWindow),
-      external: new ExternalAPI(extensionState, contentWindow)
+      clipboard: new ClipboardAPI(extension),
+      external: new ExternalAPI(extension)
     };
     exposeProperties(this.ancho);
 
-    this.console = new ConsoleAPI(extensionState, contentWindow);
+    this.console = new ConsoleAPI(extension);
     exposeProperties(this.console);
   }
 

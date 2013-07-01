@@ -6,6 +6,8 @@
 
   Cu.import('resource://gre/modules/Services.jsm');
 
+  exports.WINDOW_ID_CURRENT = -2;
+
   exports.getWindowId = function(window) {
     return window.QueryInterface(Ci.nsIInterfaceRequestor).
       getInterface(Ci.nsIDOMWindowUtils).outerWindowID;
@@ -59,7 +61,11 @@
   };
 
   exports.getSender = function(extensionId, tabId) {
-    return { id: extensionId, tab: { id: tabId } };
+    var sender = { id: extensionId };
+    if (tabId) {
+      sender.tab = { id: tabId };
+    }
+    return sender;
   };
 
   exports.matchPatternToRegexp = function(matchPattern) {
@@ -68,7 +74,7 @@
     return matchPattern
       .replace('<all_urls>', '*')
       .replace(/\./g, '\\.')
-      .replace(/\*/g, '.*')
+      .replace(/\*/g, '.*');
   };
 
   exports.getLoadContext = function(aRequest) {

@@ -33,14 +33,24 @@
       Ci.nsIProtocolHandler.URI_IS_LOCAL_RESOURCE,
 
     newURI: function(aSpec, aOriginCharset, aBaseURI) {
-      let uri = Cc['@mozilla.org/network/standard-url;1'].createInstance(Ci.nsIStandardURL);
-      uri.init(Ci.nsIStandardURL.URLTYPE_STANDARD, null, aSpec, aOriginCharset, aBaseURI);
-      return uri.QueryInterface(Ci.nsIURI);
+      let uri = Cc["@mozilla.org/network/simple-uri;1"].createInstance(Ci.nsIURI);
+      if (aBaseURI) {
+        let url = Cc['@mozilla.org/network/standard-url;1'].createInstance(Ci.nsIStandardURL);
+        url.init(Ci.nsIStandardURL.URLTYPE_STANDARD, null, aBaseURI.spec, null, null);
+        uri.spec = url.QueryInterface(Ci.nsIURI).resolve(aSpec);
+      }
+      else {
+        uri.spec = aSpec;
+      }
+      return uri;
     },
 
     _mapToFileURI: function(aURI) {
-      var path = '.' + aURI.path;
-      let baseURI = extensionURIs[aURI.host];
+      let url = Cc['@mozilla.org/network/standard-url;1'].createInstance(Ci.nsIStandardURL);
+      url.init(Ci.nsIStandardURL.URLTYPE_STANDARD, null, aURI.spec, null, null);
+      let uri = url.QueryInterface(Ci.nsIURI);
+      let path = '.' + uri.path;
+      let baseURI = exports.getExtensionURI(uri.host);
       return NetUtil.newURI(path, null, baseURI);
     },
 

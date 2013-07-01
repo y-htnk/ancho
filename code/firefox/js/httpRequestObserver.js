@@ -6,8 +6,10 @@
   var Cr = Components.results;
 
   Cu.import('resource://gre/modules/Services.jsm');
-  var Event = require('./event');
+  var Event = require('./events').Event;
+  var SynchronousEvent = require('./events').SynchronousEvent;
   var Utils = require('./utils');
+  var Global = require('./state').Global;
   var DebugData = require('./debuggerData');
 
   var HTTP_ON_MODIFY_REQUEST = 'http-on-modify-request';
@@ -24,8 +26,6 @@
   /* Exported: instance of HttpRequestObserver */
 
   function HttpRequestObserver() {
-    this._state = null;
-
     // request map
     // tabId --> URI --> { request info }
     this._requests = {};
@@ -35,23 +35,21 @@
         .getService(Ci.nsIHttpActivityDistributor);
   }
 
-  HttpRequestObserver.prototype.register = function(state, bgWindow) {
-    this._state = state;
-
+  HttpRequestObserver.prototype.register = function() {
     // webRequest API
-    this.onCompleted = new Event(bgWindow, null, this._state, 'webRequest.completed');
-    this.onHeadersReceived = new Event(bgWindow, null, this._state, 'webRequest.headersReceived');
-    this.onBeforeRedirect = new Event(bgWindow, null, this._state, 'webRequest.beforeRedirect');
-    this.onAuthRequired = new Event(bgWindow, null, this._state, 'webRequest.authRequired');
-    this.onBeforeSendHeaders = new Event(bgWindow, null, this._state, 'webRequest.beforeSendHeaders');
-    this.onErrorOccurred = new Event(bgWindow, null, this._state, 'webRequest.errorOccurred');
-    this.onResponseStarted = new Event(bgWindow, null, this._state, 'webRequest.responseStarted');
-    this.onSendHeaders = new Event(bgWindow, null, this._state, 'webRequest.sendHeaders');
-    this.onBeforeRequest = new Event(bgWindow, null, this._state, 'webRequest.beforeRequest');
+    this.onCompleted = new Event(Global, 'webRequest.completed');
+    this.onHeadersReceived = new SynchronousEvent(Global, 'webRequest.headersReceived');
+    this.onBeforeRedirect = new Event(Global, 'webRequest.beforeRedirect');
+    this.onAuthRequired = new SynchronousEvent(Global, 'webRequest.authRequired');
+    this.onBeforeSendHeaders = new SynchronousEvent(Global, 'webRequest.beforeSendHeaders');
+    this.onErrorOccurred = new Event(Global, 'webRequest.errorOccurred');
+    this.onResponseStarted = new Event(Global, 'webRequest.responseStarted');
+    this.onSendHeaders = new Event(Global, 'webRequest.sendHeaders');
+    this.onBeforeRequest = new SynchronousEvent(Global, 'webRequest.beforeRequest');
 
     // debugger API
-    this.onEvent  = new Event(bgWindow, null, this._state, 'debugger.event');
-    this.onDetach = new Event(bgWindow, null, this._state, 'debugger.detach');
+    this.onEvent  = new Event(Global, 'debugger.event');
+    this.onDetach = new Event(Global, 'debugger.detach');
 
     // observer (i.e. instance of this class) registration
     Services.obs.addObserver(this, HTTP_ON_MODIFY_REQUEST, false);
@@ -195,7 +193,7 @@
     function getElementId(win) {
       if (!win.frameElement.__apicaWID) {
         try {
-          win.frameElement.__apicaWID = self._state.getGlobalId('webRequest.frameId');
+          win.frameElement.__apicaWID = Global.getGlobalId('webRequest.frameId');
         } catch (e) {
           dump('Warning: ' + JSON.stringify(e) + '\n');
         }
@@ -232,7 +230,7 @@
     var requestData = this._getRequest(tabId, Utils.removeFragment(url));
     var requestId = requestData
                     ? requestData.requestId
-                    : this._state.getGlobalId('webRequest.requestId');
+                    : Global.getGlobalId('webRequest.requestId');
 
     var type = 'other';
 
@@ -338,7 +336,7 @@
     }
 
     // fire onBeforeRequest; TODO: implement redirection
-    var results = this.onBeforeRequest.fire([ params ]);
+    var results = this.onBeforeRequest.synchronousFire([ params ]);
     if (resultCancelledRequest(results, this)) {
       return;
     }
@@ -349,7 +347,7 @@
     // fire onBeforeSendHeaders; TODO: implement changing the request headers
     params.timeStamp = (new Date()).getTime();
     params.requestHeaders = visitor.headers;
-    results = this.onBeforeSendHeaders.fire([ params ]);
+    results = this.onBeforeSendHeaders.synchronousFire([ params ]);
     if (resultCancelledRequest(results, this)) {
       return;
     }
@@ -435,7 +433,7 @@
     params.statusLine = '' + statusCode + ' ' + statusText;
 
     // fire onHeadersReceived
-    var results = this.onHeadersReceived.fire([ params ]);
+    var results = this.onHeadersReceived.synchronousFire([ params ]);
 
     params.statusCode = statusCode;
     params.fromCache = (HTTP_ON_EXAMINE_CACHED_RESPONSE === topic);

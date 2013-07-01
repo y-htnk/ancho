@@ -13,7 +13,7 @@
 
   Cu.import('resource://gre/modules/Services.jsm');
 
-  var Event = require('./event');
+  var Event = require('./events').Event;
   var Utils = require('./utils');
   var DebugData = require('./debuggerData');
 
@@ -22,12 +22,9 @@
   // add more...
 
 
-  var DebuggerAPI = function(state, window) {
-    this._state = state;
-    this._tab = Utils.getWindowId(window);
-
-    this.onEvent  = new Event(window, this._tab, this._state, 'debugger.event');
-    this.onDetach = new Event(window, this._tab, this._state, 'debugger.detach');
+  var DebuggerAPI = function(extension) {
+    this.onEvent  = new Event(extension, 'debugger.event');
+    this.onDetach = new Event(extension, 'debugger.detach');
   };
 
   DebuggerAPI.prototype = {
