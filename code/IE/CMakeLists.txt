@@ -29,6 +29,20 @@ endif(${ANCHO_WTL_SEARCH})
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zm1000")
 #-----------------------------------------
 
+if( CMAKE_CL_64 )
+  set(ANCHO_PLATFORM "x64" )
+else( CMAKE_CL_64 )
+  set( ANCHO_PLATFORM "x86" )
+endif( CMAKE_CL_64 )
+
+set(ANCHO_DEBUG_POSTFIX "_${ANCHO_PLATFORM}d" )
+set(ANCHO_RELEASE_POSTFIX "_${ANCHO_PLATFORM}" ) 
+
+#set(CMAKE_DEBUG_POSTFIX ${ANCHO_DEBUG_POSTFIX})
+#set(CMAKE_RELEASE_POSTFIX ${ANCHO_RELEASE_POSTFIX})
+#-----------------------------------------
+
+include_directories(${${PROJECT_NAME}_SOURCE_DIR})
 
 add_subdirectory(libbhohelper)
 include_directories(${libbhohelper_INC_DIR})
@@ -53,8 +67,16 @@ add_dependencies(AnchoShared Magpie anchocommons)
 include_directories(${AnchoShared_INC_DIR})
 include_directories(${AnchoShared_GENERATED_FILES_DIR})
 
+set(BUILD_SHARED_LIBS false CACHE BOOL "ZLib build option")
+add_subdirectory(zlib EXCLUDE_FROM_ALL)
+include_directories(zlib ${zlib_BINARY_DIR})
+
+add_subdirectory(crxProcessing)
+add_dependencies(crxProcessing zlibstatic)
+include_directories(${crxProcessing_INC_DIR})
+
 add_subdirectory(AnchoBgSrv)
-add_dependencies(AnchoBgSrv anchocommons Magpie libbhohelper libprothandlers AnchoShared)# passthruapp)
+add_dependencies(AnchoBgSrv anchocommons Magpie libbhohelper libprothandlers AnchoShared crxProcessing)# passthruapp)
 include_directories(${AnchoBgSrv_INC_DIR})
 
 add_subdirectory(ancho)

@@ -10,6 +10,22 @@
 #include "ProtocolHandlerRegistrar.h"
 #include "AnchoShared_i.h"
 #include "AnchoShared/AnchoShared.h"
+#include <crxProcessing/extract.hpp>
+
+
+static boost::filesystem::wpath processCRXFile(std::wstring aExtensionName, boost::filesystem::wpath aPath)
+{
+  boost::filesystem::wpath extractedExtensionPath = getSystemPathWithFallback(FOLDERID_LocalAppDataLow, CSIDL_LOCAL_APPDATA);
+  extractedExtensionPath /= L"Salsita";
+  extractedExtensionPath /= L"AnchoExtensions";
+  extractedExtensionPath /= aExtensionName;
+
+  if (!boost::filesystem::exists(extractedExtensionPath)) {
+    boost::filesystem::create_directories(extractedExtensionPath);
+    crx::extract(aPath, extractedExtensionPath);
+  }
+  return extractedExtensionPath;
+}
 
 /*============================================================================
  * class CAnchoAddon
@@ -20,6 +36,7 @@
 STDMETHODIMP CAnchoAddon::Init(LPCOLESTR lpsExtensionID, IAnchoAddonService * pService,
   IWebBrowser2 * pWebBrowser)
 {
+  BEGIN_TRY_BLOCK;
   m_pWebBrowser = pWebBrowser;
   m_pAnchoService = pService;
   m_sExtensionName = lpsExtensionID;
@@ -27,7 +44,7 @@ STDMETHODIMP CAnchoAddon::Init(LPCOLESTR lpsExtensionID, IAnchoAddonService * pS
   // lookup ID in registry
   CRegKey regKey;
   CString sKey;
-  sKey.Format(_T("%s\\%s"), s_AnchoExtensionsRegistryKey, m_sExtensionName);
+  sKey.Format(_T("%s\\%s"), s_AnchoExtensionsRegistryKey, m_sExtensionName.c_str());
   LONG res = regKey.Open(HKEY_CURRENT_USER, sKey, KEY_READ);
   if (ERROR_SUCCESS != res)
   {
@@ -45,33 +62,46 @@ STDMETHODIMP CAnchoAddon::Init(LPCOLESTR lpsExtensionID, IAnchoAddonService * pS
     return E_ABORT;
   }
 
-  // get addon GUID
-  ULONG nChars = 37;  // length of a GUID + terminator
-  res = regKey.QueryStringValue(s_AnchoExtensionsRegistryEntryGUID, m_sExtensionID.GetBuffer(nChars), &nChars);
-  m_sExtensionID.ReleaseBuffer();
-  if (ERROR_SUCCESS != res)
+  // get addon path
   {
-    return HRESULT_FROM_WIN32(res);
+    ULONG nChars = _MAX_PATH;
+    CString tmp;
+    LPTSTR pst = tmp.GetBuffer(nChars+1);
+    res = regKey.QueryStringValue(s_AnchoExtensionsRegistryEntryPath, pst, &nChars);
+    pst[nChars] = 0;
+    //PathAddBackslash(pst);
+    tmp.ReleaseBuffer();
+    if (ERROR_SUCCESS != res) {
+      return HRESULT_FROM_WIN32(res);
+    }
+    m_sExtensionPath = tmp;
   }
 
-  // get addon path
-  nChars = _MAX_PATH;
-  LPTSTR pst = m_sExtensionPath.GetBuffer(nChars+1);
-  res = regKey.QueryStringValue(s_AnchoExtensionsRegistryEntryPath, pst, &nChars);
-  pst[nChars] = 0;
-  PathAddBackslash(pst);
-  m_sExtensionPath.ReleaseBuffer();
-  if (ERROR_SUCCESS != res)
-  {
-    return HRESULT_FROM_WIN32(res);
+  boost::filesystem::wpath path(m_sExtensionPath);
+  if (!boost::filesystem::is_directory(m_sExtensionPath)) {
+    std::wstring extension = boost::to_lower_copy(path.extension().wstring());
+    if (extension != L".crx") {
+      return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+    m_sExtensionPath = processCRXFile(m_sExtensionName, path);
   }
-  if (!PathIsDirectory(m_sExtensionPath))
+
   {
-    return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    // get addon GUID
+    ULONG nChars = 37;  // length of a GUID + terminator
+    CString tmp;
+    res = regKey.QueryStringValue(s_AnchoExtensionsRegistryEntryGUID, tmp.GetBuffer(nChars), &nChars);
+    tmp.ReleaseBuffer();
+    if (ERROR_SUCCESS != res)
+    {
+      return HRESULT_FROM_WIN32(res);
+    }
+    m_sExtensionID = tmp;
   }
+
 
   IF_FAILED_RET(CProtocolHandlerRegistrar::
-    RegisterTemporaryFolderHandler(s_AnchoProtocolHandlerScheme, m_sExtensionName, m_sExtensionPath));
+    RegisterTemporaryFolderHandler(s_AnchoProtocolHandlerScheme, m_sExtensionName.c_str(), m_sExtensionPath.wstring().c_str()));
 
   // get addon instance
   //IF_FAILED_RET(m_pAnchoService->GetAddonBackground(CComBSTR(m_sExtensionName), &m_pAddonBackground));
@@ -103,7 +133,9 @@ STDMETHODIMP CAnchoAddon::Init(LPCOLESTR lpsExtensionID, IAnchoAddonService * pS
 #endif
 
   return S_OK;
+  END_TRY_BLOCK_CATCH_TO_HRESULT;
 }
+
 
 //----------------------------------------------------------------------------
 //  Shutdown
@@ -193,7 +225,7 @@ STDMETHODIMP CAnchoAddon::InitializeContentScripting(IWebBrowser2* pBrowser, BST
   IF_FAILED_RET(m_Magpie->Init((LPWSTR)(LPCWSTR)s));
 
   // add a loader for scripts in the extension filesystem
-  IF_FAILED_RET(m_Magpie->AddFilesystemScriptLoader((LPWSTR)(LPCWSTR)m_sExtensionPath));
+  IF_FAILED_RET(m_Magpie->AddFilesystemScriptLoader((LPWSTR)(LPCWSTR)m_sExtensionPath.c_str()));
 
   // inject items: chrome, console and window with global members
   CComQIPtr<IWebBrowser2> pWebBrowser(pBrowser);
@@ -255,7 +287,7 @@ HRESULT CAnchoAddon::initializeEnvironment()
 {
   //If create AddonBackground sooner - background script will be executed before initialization of tab windows
   if(!m_pAddonBackground || !m_pBackgroundConsole) {
-    IF_FAILED_RET(m_pAnchoService->GetAddonBackground(CComBSTR(m_sExtensionName), &m_pAddonBackground));
+    IF_FAILED_RET(m_pAnchoService->GetAddonBackground(CComBSTR(m_sExtensionName.c_str()), &m_pAddonBackground));
 
     // get console
     m_pBackgroundConsole = m_pAddonBackground;
