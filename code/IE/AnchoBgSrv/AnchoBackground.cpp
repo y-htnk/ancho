@@ -49,7 +49,7 @@ HRESULT CAnchoAddonBackground::Init(
     return HRESULT_FROM_WIN32(res);
   }
 
-  // get addon path
+  /*// get addon path
   CString sPath;
   nChars = _MAX_PATH;
   LPTSTR pst = sPath.GetBuffer(nChars+1);
@@ -64,6 +64,35 @@ HRESULT CAnchoAddonBackground::Init(
   if (!PathIsDirectory(sPath))
   {
     return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+  }*/
+
+  boost::filesystem::wpath extensionPath;
+  // get addon path
+  {
+    ULONG nChars = _MAX_PATH;
+    CString tmp;
+    LPTSTR pst = tmp.GetBuffer(nChars+1);
+    res = regKey.QueryStringValue(s_AnchoExtensionsRegistryEntryPath, pst, &nChars);
+    pst[nChars] = 0;
+    //PathAddBackslash(pst);
+    tmp.ReleaseBuffer();
+    if (ERROR_SUCCESS != res) {
+      return HRESULT_FROM_WIN32(res);
+    }
+    extensionPath = tmp;
+  }
+
+  boost::filesystem::wpath path(extensionPath);
+  if (!boost::filesystem::is_directory(extensionPath)) {
+    //We opened CRX file - set path to its extracted contents
+    std::wstring extension = boost::to_lower_copy(path.extension().wstring());
+    if (extension != L".crx") {
+      return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+    extensionPath = getSystemPathWithFallback(FOLDERID_LocalAppDataLow, CSIDL_LOCAL_APPDATA);
+    extensionPath /= L"Salsita";
+    extensionPath /= L"AnchoExtensions";
+    extensionPath /= bsID;
   }
 
   // register a protocol handler for this extension
@@ -71,10 +100,10 @@ HRESULT CAnchoAddonBackground::Init(
   CStringW sRootURL;
   sRootURL.Format(L"%s://%s/", s_AnchoProtocolHandlerScheme, m_bsID);
   IF_FAILED_RET(CProtocolHandlerRegistrar::
-    RegisterTemporaryFolderHandler(s_AnchoProtocolHandlerScheme, m_bsID, sPath));
+    RegisterTemporaryFolderHandler(s_AnchoProtocolHandlerScheme, m_bsID, extensionPath.wstring().c_str()));
 
   // init API
-  IF_FAILED_RET(m_BackgroundAPI.Init(lpszThisPath, sRootURL, bsID, sGUID, sPath, pServiceApi));
+  IF_FAILED_RET(m_BackgroundAPI.Init(lpszThisPath, sRootURL, bsID, sGUID, extensionPath.wstring().c_str(), pServiceApi));
 
   return S_OK;
 }
