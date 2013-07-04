@@ -22,6 +22,14 @@ const wchar_t * s_AnchoExtensionsRegistryEntryFlags =
 const wchar_t * s_AnchoExtensionsRegistryEntryPath =
     L"Path";
 
+// registry entry "UpdateUrl"
+const wchar_t * s_AnchoUpdateUrlRegistryEntry =
+    L"UpdateUrl";
+
+// registry entry "Version"
+const wchar_t * s_AnchoRegistryEntryVersion =
+    L"Version";
+
 // scheme name for protocol handler
 const wchar_t * s_AnchoProtocolHandlerScheme =
     L"chrome-extension";

@@ -130,6 +130,11 @@ public:
     return *gAnchoAddonService;
   }
 
+  template<typename TCallable>
+  void addBackgroundTask(TCallable aCallable)
+  {
+    mAsyncTaskManager.addTask(aCallable);
+  }
 public:
 
   HRESULT FindActiveBrowser(IWebBrowser2** webBrowser);

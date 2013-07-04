@@ -25,6 +25,7 @@ include_directories(
 
 set(${PROJECT_NAME}_HEADERS
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/AsynchronousTaskManager.hpp"
+  "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/UpdateChecking.hpp"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/COMConversions.hpp"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/JavaScriptCallback.hpp"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/PeriodicTimer.hpp"
@@ -53,6 +54,7 @@ set(${PROJECT_NAME}_SOURCES
   "${${PROJECT_NAME}_SRC_DIR}/src/AsynchronousTaskManager.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/src/TabManager.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/src/WindowManager.cpp"
+  "${${PROJECT_NAME}_SRC_DIR}/src/UpdateChecking.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoAddonService.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoBackgroundAPI.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoBackground.cpp"
