@@ -57,10 +57,10 @@ inline bool operator<(const VersionInfo &aArg1, const VersionInfo &aArg2)
 {
   bool same = true;
   for (size_t i = 0; same && i < 4; ++i) {
-    if (aArg1.mVersion[i] < aArg1.mVersion[i]) {
+    if (aArg1.mVersion[i] < aArg2.mVersion[i]) {
       return true;
     }
-    same = aArg1.mVersion[i] == aArg1.mVersion[i];
+    same = aArg1.mVersion[i] == aArg2.mVersion[i];
   }
   return false;
 }
@@ -68,7 +68,7 @@ inline bool operator<(const VersionInfo &aArg1, const VersionInfo &aArg2)
 inline bool operator==(const VersionInfo &aArg1, const VersionInfo &aArg2)
 {
   for (size_t i = 0; i < 4; ++i) {
-    if (aArg1.mVersion[i] != aArg1.mVersion[i]) {
+    if (aArg1.mVersion[i] != aArg2.mVersion[i]) {
       return false;
     }
   }

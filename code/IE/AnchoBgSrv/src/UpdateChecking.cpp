@@ -2,6 +2,7 @@
 #include "AnchoBackgroundServer/UpdateChecking.hpp"
 #include "AnchoBackgroundServer/COMConversions.hpp"
 #include "AnchoBackgroundServer/TabManager.hpp"
+#include "AnchoBackgroundServer/WindowManager.hpp"
 
 #import "msxml6.dll"
 #pragma comment(lib, "Version.lib")
@@ -126,7 +127,7 @@ void checkForUpdate(std::wstring aRegistryKey, std::wstring aName)
                               //Ancho::Service::WindowManager::instance().getCurrentWindowHWND(), //this blocks IE page loading :-(
                               boost::str(boost::wformat(L"New version of %1% was found. Do you want to go to the download page?") % aName).c_str(),
                               L"New version detected",
-                              MB_ICONQUESTION | MB_YESNO);
+                              MB_ICONQUESTION | MB_YESNO | MB_TOPMOST | MB_SYSTEMMODAL);
     if (result == IDYES) {
       Ancho::Utils::JSObject properties;
       properties[L"url"] = info.downloadUrl;
