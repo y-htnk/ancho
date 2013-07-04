@@ -11,7 +11,7 @@
 #include "AnchoShared_i.h"
 #include "AnchoShared/AnchoShared.h"
 #include <crxProcessing/extract.hpp>
-
+#include <fstream>
 
 static boost::filesystem::wpath processCRXFile(std::wstring aExtensionName, boost::filesystem::wpath aPath)
 {
@@ -20,9 +20,28 @@ static boost::filesystem::wpath processCRXFile(std::wstring aExtensionName, boos
   extractedExtensionPath /= L"AnchoExtensions";
   extractedExtensionPath /= aExtensionName;
 
-  if (!boost::filesystem::exists(extractedExtensionPath)) {
+  boost::filesystem::wpath extensionSignaturePath = extractedExtensionPath / L"AnchoExtensionSignature.base64";
+
+  std::string signature = crx::getCRXSignature(aPath);
+  bool shouldExtract = true;
+  if (boost::filesystem::exists(extensionSignaturePath) && !signature.empty()) {
+    //Check if we already extracted package with the same signature
+    std::ifstream signatureFile(extensionSignaturePath.string().c_str());
+    if (signatureFile.good()) {
+      std::string oldSignature;
+      signatureFile >> oldSignature;
+      shouldExtract = oldSignature != signature;
+    }
+  }
+
+  if (shouldExtract) {
     boost::filesystem::create_directories(extractedExtensionPath);
     crx::extract(aPath, extractedExtensionPath);
+    if (!signature.empty()) {
+      std::ofstream signatureFile(extensionSignaturePath.string().c_str());
+      signatureFile << signature;
+      signatureFile.close();
+    }
   }
   return extractedExtensionPath;
 }

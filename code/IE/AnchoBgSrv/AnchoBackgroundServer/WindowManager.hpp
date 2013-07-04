@@ -166,6 +166,8 @@ public:
                  int aApiId);
 
   WindowId getCurrentWindowId();
+
+  HWND getCurrentWindowHWND();
 public:
   // -------------------------------------------------------------------------
   // COM standard stuff

@@ -11,6 +11,8 @@
 //#include "AnchoBackgroundConsole.h"
 #include "ProtocolHandlerRegistrar.h"
 
+#include "AnchoBackgroundServer/UpdateChecking.hpp"
+
 /*============================================================================
  * class CAnchoAddonBackground
  */
@@ -49,22 +51,7 @@ HRESULT CAnchoAddonBackground::Init(
     return HRESULT_FROM_WIN32(res);
   }
 
-  /*// get addon path
-  CString sPath;
-  nChars = _MAX_PATH;
-  LPTSTR pst = sPath.GetBuffer(nChars+1);
-  res = regKey.QueryStringValue(s_AnchoExtensionsRegistryEntryPath, pst, &nChars);
-  pst[nChars] = 0;
-  PathAddBackslash(pst);
-  sPath.ReleaseBuffer();
-  if (ERROR_SUCCESS != res)
-  {
-    return HRESULT_FROM_WIN32(res);
-  }
-  if (!PathIsDirectory(sPath))
-  {
-    return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-  }*/
+  CAnchoAddonService::instance().addBackgroundTask([&]{ Ancho::Service::checkForUpdate(std::wstring(sKey), bsID); });
 
   boost::filesystem::wpath extensionPath;
   // get addon path

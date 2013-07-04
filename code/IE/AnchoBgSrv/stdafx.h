@@ -39,6 +39,7 @@
 #include <comutil.h>
 
 #include <anchocommons.h>
+#include <Exceptions.h>
 
 using namespace ATL;
 

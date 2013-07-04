@@ -13,6 +13,7 @@
 #include "PopupWindow.h"
 
 #include <crxProcessing/extract.hpp>
+#include "AnchoBackgroundServer/UpdateChecking.hpp"
 
 struct CookieNotificationCallback: public ACookieCallbackFunctor
 {
@@ -30,8 +31,6 @@ struct CookieNotificationCallback: public ACookieCallbackFunctor
 
   CAnchoAddonService &service;
 };
-
-
 
 
 /*============================================================================
@@ -180,6 +179,9 @@ HRESULT CAnchoAddonService::FinalConstruct()
 
     Ancho::Service::WindowManager::initSingleton();
     mIWindowManager = &Ancho::Service::WindowManager::instance();
+
+    //Check for Ancho updates
+    mAsyncTaskManager.addTask([&]{ Ancho::Service::checkForUpdate(s_AnchoExtensionsRegistryKey, L"Ancho"); });
 
   END_TRY_BLOCK_CATCH_TO_HRESULT;
   return S_OK;
