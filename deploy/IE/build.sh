@@ -8,5 +8,5 @@ if [ -z "${INNOSETUP}" ]; then
 fi
 
 # run Inno setup to create installer
-"${INNOSETUP}" -O"." -DappCompany="Salsita" -DappName="Ancho" -DsetupPrefix="ancho-ie" -DappVersion="${version}" setup.iss
+"${INNOSETUP}" -O"." -DappCompany="Salsita" -DappName="Ancho" -DsetupPrefix="ancho-ie" -DappVersion="${version}"  setup.iss
 
