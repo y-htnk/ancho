@@ -179,6 +179,7 @@ private:
 
   void tryToFillDocumentRecord(HWND aDocWindow);
 
+  STDMETHOD(tryToNotifyAboutFrameEnd)(CComBSTR aUrl, bool aIsRefreshingMainFrame);
   // -------------------------------------------------------------------------
   // Data members
   CComQIPtr<DAnchoBrowserEvents> m_BrowserEvents;

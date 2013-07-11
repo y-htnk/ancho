@@ -257,9 +257,8 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
       m_NextFrameId = 0;
     }
   }
-  CComBSTR bstrUrl;
-  removeUrlFragment(pURL->bstrVal, &bstrUrl);
-  m_Frames[(BSTR) bstrUrl] = FrameRecord(pWebBrowser, isTop != VARIANT_FALSE, m_NextFrameId++);
+  std::wstring frameUrl = stripTrailingSlash(stripFragmentFromUrl(pURL->bstrVal));
+  m_Frames[frameUrl] = FrameRecord(pWebBrowser, isTop != VARIANT_FALSE, m_NextFrameId++);
 
   pWebBrowser->PutProperty(CComBSTR(L"_anchoNavigateURL"), CComVariant(*pURL));
 
@@ -315,12 +314,11 @@ STDMETHODIMP CAnchoRuntime::OnFrameEnd(BSTR bstrUrl, VARIANT_BOOL bIsMainFrame)
 //  OnFrameRedirect
 STDMETHODIMP CAnchoRuntime::OnFrameRedirect(BSTR bstrOldUrl, BSTR bstrNewUrl)
 {
-  CComBSTR url;
-  removeUrlFragment(bstrOldUrl, &url);
-  FrameMap::iterator it = m_Frames.find(bstrOldUrl);
+  std::wstring oldUrl = stripTrailingSlash(stripFragmentFromUrl(bstrOldUrl));
+  FrameMap::iterator it = m_Frames.find(oldUrl);
   if (it != m_Frames.end()) {
-    removeUrlFragment(bstrNewUrl, &url);
-    m_Frames[(BSTR) url] = it->second;
+    std::wstring newUrl = stripTrailingSlash(stripFragmentFromUrl(bstrNewUrl));
+    m_Frames[newUrl] = it->second;
     m_Frames.erase(it);
   }
   return S_OK;
@@ -509,9 +507,8 @@ HRESULT CAnchoRuntime::InitializeContentScripting(BSTR bstrUrl, VARIANT_BOOL isR
     webBrowser = m_pWebBrowser;
   }
   else {
-    CComBSTR url;
-    removeUrlFragment(bstrUrl, &url);
-    FrameMap::iterator it = m_Frames.find((BSTR) url);
+    std::wstring url = stripTrailingSlash(stripFragmentFromUrl(bstrUrl));
+    FrameMap::iterator it = m_Frames.find(url);
     if (it == m_Frames.end()) {
       // Either this frame has already been removed, or the request isn't for a frame after all (e.g. an htc).
       return S_FALSE;

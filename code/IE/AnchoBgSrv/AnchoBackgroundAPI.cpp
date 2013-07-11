@@ -411,7 +411,10 @@ STDMETHODIMP CAnchoBackgroundAPI::invokeEventObject(BSTR aEventName, INT aSelect
   VariantVector args;
   VariantVector results;
 
-  IF_FAILED_RET(addJSArrayToVariantVector(aArgs, args, true));
+  HRESULT hr = addJSArrayToVariantVector(aArgs, args, true);
+  if (FAILED(hr)) {
+    return hr;
+  }
 
   IF_FAILED_RET(invokeEvent(aEventName, aSelectedInstance, aSkipInstance != FALSE, args, results));
 

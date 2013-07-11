@@ -527,22 +527,37 @@ STDMETHODIMP CAnchoPassthruAPP::Continue(PROTOCOLDATA* data)
 
       IF_FAILED_RET(m_BrowserEvents->OnFrameStart(bstrUrl, m_IsRefreshingMainFrame ? VARIANT_TRUE : VARIANT_FALSE));
 
-      if (m_Doc) { //in few situations the document is not yet ready
-        CComBSTR readyState;
-        m_Doc->get_readyState(&readyState);
-        if (wcscmp(readyState, L"complete") == 0) {
-          IF_FAILED_RET(m_BrowserEvents->OnFrameEnd(bstrUrl, m_IsRefreshingMainFrame ? VARIANT_TRUE : VARIANT_FALSE));
-        }
-        else {
-          m_DocSink = new DocumentSink(this, m_Doc, m_BrowserEvents, bstrUrl, m_IsRefreshingMainFrame);
-          m_DocSink->DispEventAdvise(m_Doc);
-        }
-      }
+      tryToNotifyAboutFrameEnd(bstrUrl, m_IsRefreshingMainFrame);
     }
-    else if (data->dwState == ANCHO_SWITCH_REDIRECT) {
-      IF_FAILED_RET(m_BrowserEvents->OnFrameRedirect(bstrUrl, bstrAdditional));
+    else {
+      if (data->dwState == ANCHO_SWITCH_REDIRECT) {
+        IF_FAILED_RET(m_BrowserEvents->OnFrameRedirect(bstrUrl, bstrAdditional));
+      } else if (data->dwState == ANCHO_SWITCH_REPORT_RESULT && !m_Doc) {
+        tryToNotifyAboutFrameEnd(bstrUrl, m_IsRefreshingMainFrame);
+      }
     }
   }
 
   return __super::Continue(data);
+}
+
+STDMETHODIMP CAnchoPassthruAPP::tryToNotifyAboutFrameEnd(CComBSTR aUrl, bool aIsRefreshingMainFrame)
+{
+  if (!m_Doc) {
+    m_Doc = m_DocumentRecord.getDocument();
+  }
+  if (m_Doc) {
+    CComBSTR readyState;
+    m_Doc->get_readyState(&readyState);
+    if (wcscmp(readyState, L"complete") == 0) {
+      IF_FAILED_RET(m_BrowserEvents->OnFrameEnd(aUrl, aIsRefreshingMainFrame ? VARIANT_TRUE : VARIANT_FALSE));
+    }
+    else {
+      m_DocSink = new DocumentSink(this, m_Doc, m_BrowserEvents, aUrl, aIsRefreshingMainFrame);
+      m_DocSink->DispEventAdvise(m_Doc);
+    }
+  } else {
+    return S_FALSE;
+  }
+  return S_OK;
 }

@@ -42,6 +42,20 @@ inline std::wstring stripFragmentFromUrl(std::wstring aUrl)
   return aUrl;
 }
 
+inline std::wstring stripTrailingSlash(std::wstring aUrl)
+{
+  size_t idx = aUrl.size();
+  while (idx-1 && aUrl[idx-1] == L'/') {
+    --idx;
+  }
+
+  if (idx < aUrl.size()) {
+    aUrl.erase(idx);
+  }
+  return aUrl;
+}
+
+
 inline int getWindowZOrder(HWND hWnd)
 {
     int z = 0;
