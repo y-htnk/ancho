@@ -334,17 +334,17 @@ struct QueryTabsTask
 
       if (mProperties[L"url"].which() == Utils::jsString) {
         if (infoWrapper[L"url"].isString()) {
-          passed = passed && infoWrapper[L"url"].toString() == boost::get<std::wstring>(mProperties[L"url"]);
+          passed = passed && (infoWrapper[L"url"].toString() == boost::get<std::wstring>(mProperties[L"url"]));
         }
       }
       if (mProperties[L"active"].which() == Utils::jsBool) {
         if (infoWrapper[L"active"].isBool()) {
-          passed = passed && infoWrapper[L"active"].toBool() == boost::get<bool>(mProperties[L"active"]);
+          passed = passed && (infoWrapper[L"active"].toBool() == boost::get<bool>(mProperties[L"active"]));
         }
       }
       if (mProperties[L"windowId"].which() == Utils::jsInt) {
         if (infoWrapper[L"windowId"].isInt()) {
-          passed = passed && infoWrapper[L"windowId"].toInt() == boost::get<int>(mProperties[L"windowId"]);
+          passed = passed && (infoWrapper[L"windowId"].toInt() == boost::get<int>(mProperties[L"windowId"]));
         }
       }
       if (passed) {
