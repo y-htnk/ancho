@@ -31,6 +31,16 @@ HKLM
             }
           }
         }
+        NoRemove MAIN
+        {
+          NoRemove FeatureControl
+          {
+            NoRemove FEATURE_BROWSER_EMULATION
+            {
+              val '%OBJECTFILENAME%' = d '9999'
+            }
+          }
+        }
       }
     }
   }
