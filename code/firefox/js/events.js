@@ -50,7 +50,7 @@
 
   function ProxiedEvent(owner, type) {
     Event.apply(this, arguments);
-    this._wrappers = {};
+    this._wrappers = [];
   }
   inherits(ProxiedEvent, Event);
 
@@ -59,17 +59,17 @@
   };
 
   ProxiedEvent.prototype.addListener = function(listener) {
-    let wrapper = this._wrapListener.apply(this, arguments);
-    this._wrappers[listener] = wrapper;
-    return this.constructor.super_.addListener(wrapper);
+    let wrapper = this.wrapListener.apply(this, arguments);
+    this._wrappers.push({ listener: listener, wrapper: wrapper });
+    return Event.prototype.addListener.call(this, wrapper);
   };
 
   ProxiedEvent.prototype.removeListener = function(listener) {
-    for (let key in this._wrappers) {
-      if (key === listener) {
-        let wrapper = this._wrappers[key];
-        delete this._wrappers[key];
-        return this.constructor.super_.removeListener(wrapper);
+    for (let i=0; i<this._wrappers.length; i++) {
+      if (this._wrappers[i].listener === listener) {
+        let wrapper = this._wrappers[i].wrapper;
+        this._wrappers.splice(i, 1);
+        return Event.prototype.removeListener(this, wrapper);
       }
     }
     // Not found.
