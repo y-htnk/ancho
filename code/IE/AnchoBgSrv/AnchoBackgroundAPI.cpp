@@ -87,7 +87,7 @@ HRESULT CAnchoBackgroundAPI::Init(LPCTSTR lpszThisPath, LPCTSTR lpszRootURL, BST
   IF_FAILED_RET(m_Magpie->RunScript(L"manifest", (LPWSTR)(LPCWSTR)code));
 
   CString localesRootDir;
-  localesRootDir.Format(L"%s_locales\\", sPath);
+  localesRootDir.Format(L"%s\\_locales\\", sPath);
   loadAddonLocales(localesRootDir);
 
   // set ourselfs in magpie as a global accessible object
@@ -411,7 +411,10 @@ STDMETHODIMP CAnchoBackgroundAPI::invokeEventObject(BSTR aEventName, INT aSelect
   VariantVector args;
   VariantVector results;
 
-  IF_FAILED_RET(addJSArrayToVariantVector(aArgs, args, true));
+  HRESULT hr = addJSArrayToVariantVector(aArgs, args, true);
+  if (FAILED(hr)) {
+    return hr;
+  }
 
   IF_FAILED_RET(invokeEvent(aEventName, aSelectedInstance, aSkipInstance != FALSE, args, results));
 

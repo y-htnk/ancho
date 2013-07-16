@@ -17,6 +17,7 @@
 ; setupPrefix
 ; appVersion
 
+; appUpdateUrl
 
 ; crtPath
 
@@ -50,6 +51,13 @@ Source: "{#installBin}\x64\Magpie.dll"; DestDir: "{app}\x64"; Flags: ignoreversi
 Source: "{#installBin}\iesetuphelper.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#installBin}\vcredist_x86.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: ShouldInstallAncho
 Source: "{#installBin}\vcredist_x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: ShouldInstallAncho64
+
+[Registry]
+Root: HKCU; Subkey: "Software\Salsita\AnchoAddonService";
+Root: HKCU; Subkey: "Software\Salsita\AnchoAddonService"; ValueName: "Version"; ValueType: string; ValueData: "{#emit SetupSetting("appVersion")}"; Flags: uninsdeletekey
+#IFDEF appUpdateUrl
+  Root: HKCU; Subkey: "Software\Salsita\AnchoAddonService"; ValueName: "UpdateUrl"; ValueType: string; ValueData: "{#appUpdateUrl}"; Flags: uninsdeletekey
+#ENDIF
 
 [Run]
 Filename: "{app}\x86\AnchoBgSrv.exe"; Parameters: "/RegServer /s"; Flags: waituntilterminated

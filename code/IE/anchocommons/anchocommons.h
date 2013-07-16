@@ -8,6 +8,8 @@ extern const wchar_t * s_AnchoExtensionsRegistryKey;
 extern const wchar_t * s_AnchoExtensionsRegistryEntryGUID;
 extern const wchar_t * s_AnchoExtensionsRegistryEntryFlags;
 extern const wchar_t * s_AnchoExtensionsRegistryEntryPath;
+extern const wchar_t * s_AnchoRegistryEntryVersion;
+extern const wchar_t * s_AnchoUpdateUrlRegistryEntry;
 extern const wchar_t * s_AnchoProtocolHandlerScheme;
 extern const wchar_t * s_AnchoProtocolHandlerPrefix;
 extern const wchar_t * s_AnchoInternalProtocolHandlerScheme;
@@ -19,6 +21,7 @@ extern const wchar_t * s_AnchoBackgroundConsoleObjectName;
 extern const wchar_t * s_AnchoFnGetContentAPI;
 extern const wchar_t * s_AnchoFnReleaseContentAPI;
 extern const wchar_t * s_AnchoTabIDPropertyName;
+
 
 
 #include <SHTypes.h>
@@ -38,6 +41,20 @@ inline std::wstring stripFragmentFromUrl(std::wstring aUrl)
   }
   return aUrl;
 }
+
+inline std::wstring stripTrailingSlash(std::wstring aUrl)
+{
+  size_t idx = aUrl.size();
+  while (idx-1 && aUrl[idx-1] == L'/') {
+    --idx;
+  }
+
+  if (idx < aUrl.size()) {
+    aUrl.erase(idx);
+  }
+  return aUrl;
+}
+
 
 inline int getWindowZOrder(HWND hWnd)
 {

@@ -216,7 +216,7 @@ var Tabs = function(instanceID) {
 
     var winId = args.queryInfo.windowId;
     if (windows.WINDOW_ID_CURRENT == winId) {
-      args.queryInfo.windowId = _currentWindowID || serviceAPI.getCurrentWindowId();
+      args.queryInfo.windowId = _currentWindowID || serviceAPI.windowManager.getCurrentWindowId();
     }
 
     serviceAPI.tabManager.queryTabs(args.queryInfo, args.callback, addonAPI.id, _instanceID);

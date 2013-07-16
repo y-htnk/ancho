@@ -4,8 +4,26 @@
 #include <minizip/ioapi.h>
 #include <boost/scoped_array.hpp>
 #include <fstream>
+#include <boost/archive/iterators/base64_from_binary.hpp>
+#include <boost/archive/iterators/transform_width.hpp>
+#include <iterator>
 
 namespace crx {
+
+std::string encodeToBase64(const char *aBuffer, size_t aLength)
+{
+  using namespace boost::archive::iterators;
+  typedef base64_from_binary<transform_width<const char *, 6, 8> > Encoder;
+
+  std::ostringstream os;
+  std::copy(
+        Encoder(aBuffer),
+        Encoder(aBuffer + aLength),
+        std::ostream_iterator<char>(os)
+    );
+
+  return os.str();
+}
 
 namespace detail {
 
@@ -48,17 +66,18 @@ public:
 
     mOffset = sizeof(Header) + header.pubKeyLength + header.signatureLength;
 
-    /* TODO - signature checking
+    //TODO - signature checking
     boost::scoped_array<char> pubKey(new char[header.pubKeyLength]);
     boost::scoped_array<char> signature(new char[header.signatureLength]);
     size = fread(pubKey.get(), sizeof(char), header.pubKeyLength, mFile);
     if (size != header.pubKeyLength) {
-      throw "Error";
+      BOOST_THROW_EXCEPTION(ExtractionError());
     }
     size = fread(signature.get(), sizeof(char), header.signatureLength, mFile);
     if (size != header.signatureLength) {
-      throw "Error";
-    }*/
+      BOOST_THROW_EXCEPTION(ExtractionError());
+    }
+    mEncodedSignature = encodeToBase64(signature.get(), header.signatureLength);
     fseek(mFile, mOffset, SEEK_SET);
   }
 
@@ -97,9 +116,15 @@ public:
   {
     return ferror(mFile);
   }
+
+  std::string encodedSignature() const
+  {
+    return mEncodedSignature;
+  }
 protected:
   FILE *mFile;
   long mOffset;
+  std::string mEncodedSignature;
 };
 
 
@@ -277,6 +302,13 @@ void extract(const boost::filesystem::wpath &aCRXFilePath, const boost::filesyst
       }
   }
 
+}
+
+std::string getCRXSignature(const boost::filesystem::wpath &aCRXFile)
+{
+  detail::CRXFile file(aCRXFile, "rb");
+
+  return file.encodedSignature();
 }
 
 } //namespace crx

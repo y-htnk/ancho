@@ -298,6 +298,11 @@ WindowId WindowManager::getCurrentWindowId()
   }
   ANCHO_THROW(EFail());
 }
+
+HWND WindowManager::getCurrentWindowHWND()
+{
+  return Utils::getCurrentWindowHWND();
+}
 //==========================================================================================
 STDMETHODIMP WindowManager::getWindowIdFromHWND(OLE_HANDLE aHWND, LONG *aWindowId)
 {

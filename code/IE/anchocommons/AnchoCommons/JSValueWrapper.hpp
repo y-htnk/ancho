@@ -125,13 +125,18 @@ public:
     : mCurrentValue(aValue) {}
 
   JS_VALUE_TYPE_METHODS(std::wstring, String, BSTR, VT_BSTR, ENotAString)
-#pragma warning( push )
-#pragma warning( disable : 4800 )
-  JS_VALUE_TYPE_METHODS(bool, Bool, BOOL, VT_BOOL, ENotABool)
-#pragma warning( pop )
+
+  JS_VALUE_IS_TYPE(Bool, VT_BOOL);
+  bool toBool() const {
+    if (!isBool()) {
+      ANCHO_THROW(ENotABool());
+    }
+    return mCurrentValue.boolVal != VARIANT_FALSE;
+  }
+
   JS_VALUE_TYPE_METHODS(int, Int, INT, VT_I4, ENotAnInt)
   JS_VALUE_TYPE_METHODS(double, Double, double, VT_R8, ENotADouble)
-  //JS_VALUE_TYPE_METHODS(CComPtr<IDispatch>, Object, IDispatch*, VT_DISPATCH, ENotAnObject)
+
 
   void attach(VARIANT &aVariant)
   {
