@@ -14,7 +14,7 @@
 
     // TODO: Make sure this is really a tab.
     this._tab = Utils.getWindowId(window);
-    this._chromeWindow = Utils.getChromeWindow(window);
+    this._chromeWindow = null; //Utils.getChromeWindow(window);
 
     // Event handlers
     this.onCreated = new Event(extension, 'tab.created');

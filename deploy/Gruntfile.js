@@ -3,11 +3,12 @@ module.exports = function(grunt) {
   var path = require('path');
   var _s = require('underscore.string');
 
-  var output_dir = grunt.option('outputDir') || '../build';
-
   var CODE_DIR = '../code/firefox/';
   var TEST_EXTENSION_DIR = '../tests/test-suite-extension';
   var MINIFIED_MODULES = 'minified_modules';
+
+  var outputDir = grunt.option('outputDir') || '../build';
+  var extensionDir = grunt.option('extensionDir') || TEST_EXTENSION_DIR;
 
   function buildModuleList(pkg) {
     var moduleList = [];
@@ -24,6 +25,7 @@ module.exports = function(grunt) {
     pkg: pkg,
     package_minifier: {
       node_modules: {
+        options: { target: 'browser' },
         src: buildModuleList(pkg),
         dest: MINIFIED_MODULES
       }
@@ -34,8 +36,8 @@ module.exports = function(grunt) {
           if (_s.startsWith(filepath, CODE_DIR)) {
             return path.relative(CODE_DIR, filepath);
           }
-          else if (_s.startsWith(filepath, TEST_EXTENSION_DIR)) {
-            return path.join('chrome-ext/test', path.relative(TEST_EXTENSION_DIR, filepath));
+          else if (_s.startsWith(filepath, extensionDir)) {
+            return path.join('chrome-ext/test', path.relative(extensionDir, filepath));
           }
           else if (_s.startsWith(filepath, MINIFIED_MODULES)) {
             return path.join('js/node_modules', path.relative(MINIFIED_MODULES, filepath));
@@ -52,10 +54,10 @@ module.exports = function(grunt) {
           path.join(CODE_DIR, 'js/**/*'),
           path.join(CODE_DIR, 'modules/**/*'),
           path.join(CODE_DIR, 'xul/**/*'),
-          path.join(TEST_EXTENSION_DIR, '/**/*'),
+          path.join(extensionDir, '/**/*'),
           path.join(MINIFIED_MODULES, '/**/*')
         ],
-        dest: path.join(output_dir, 'ancho-firefox-<%= pkg.version %>.xpi')
+        dest: path.join(outputDir, 'ancho-firefox-<%= pkg.version %>.xpi')
       }
     }
   });

@@ -20,6 +20,7 @@
 
   // Special event that knows about web request filters.
   function WebRequestEvent(owner, type) {
+    ProxiedEvent.apply(this, arguments);
   }
   inherits(WebRequestEvent, ProxiedEvent);
 
