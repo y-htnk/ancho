@@ -36,8 +36,8 @@
 
     _sendHelper: function(extensionId, message, callback, type) {
       if ('undefined' === typeof(message) || 'function' === typeof(message)) {
-        message = extensionId;
         callback = message;
+        message = extensionId;
       }
       callback = callback || function() {};
 

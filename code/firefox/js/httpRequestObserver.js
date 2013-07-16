@@ -100,7 +100,9 @@
   HttpRequestObserver.prototype.observeActivity = function(aHttpChannel,
       aActivityType, aActivitySubtype, aTimestampMicrosecs, aExtraSizeData,
       aExtraStringData) {
-
+    if (!aHttpChannel.URI) {
+      return;
+    }
     var url = aHttpChannel.URI.spec;
     var requestData = this._getRequestByUri(Utils.removeFragment(url));
     if (!requestData) {
