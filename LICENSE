@@ -8,7 +8,9 @@ copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions and restrictions:
 
 * The Software shall not be distributed together with a Chrome extension
-(.crx file), or otherwise repurposed, customized, packaged or distributed for any commercial purpose, without an explicit license from Salsita that expressly permits such activity.
+(.crx file), or otherwise repurposed, customized, packaged or distributed for
+any commercial purpose, without an explicit license from Salsita that
+expressly permits such activity.
 
 To find out about commercial terms for distributing the Software bundled with
 a Chrome extension, contact licensing@salsitasoft.com.
