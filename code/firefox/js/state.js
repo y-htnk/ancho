@@ -4,6 +4,7 @@
   const Cu = Components.utils;
 
   Cu.import('resource://gre/modules/Services.jsm');
+  Cu.import('resource://gre/modules/FileUtils.jsm');
 
   let inherits = require('inherits');
   let EventEmitter2 = require('eventemitter2').EventEmitter2;
@@ -14,9 +15,9 @@
     EventEmitter2.call(this, { wildcard: true });
     this._id = id;
     this._rootDirectory = null;
+    this._firstRun = false;
     this._manifest = null;
     this._windowWatcher = null;
-    this._backgroundWindow = null;
   }
   inherits(Extension, EventEmitter2);
 
@@ -29,6 +30,12 @@
   Object.defineProperty(Extension.prototype, 'rootDirectory', {
     get: function rootDirectory() {
       return this._rootDirectory;
+    }
+  });
+
+  Object.defineProperty(Extension.prototype, 'firstRun', {
+    get: function firstRun() {
+      return this._firstRun;
     }
   });
 
@@ -66,6 +73,17 @@
   };
 
   Extension.prototype._loadManifest = function() {
+    var initFile = this._rootDirectory.clone();
+    initFile.append('__init__');
+    if (!initFile.exists()) {
+      this._firstRun = true;
+      // Create the file so we know in subsequent runs that
+      // the extension was already installed.
+      var stream = FileUtils.openFileOutputStream(initFile);
+      stream.flush();
+      stream.close();
+    }
+
     var manifestFile = this._rootDirectory.clone();
     manifestFile.append('manifest.json');
     var manifestURI = Services.io.newFileURI(manifestFile);
@@ -116,8 +134,8 @@
     return this._extensions[id];
   };
 
-  Global.prototype.loadExtension = function(id, rootDirectory, backgroundWindow) {
-    this._extensions[id] = new Extension(id, backgroundWindow);
+  Global.prototype.loadExtension = function(id, rootDirectory) {
+    this._extensions[id] = new Extension(id);
     this._extensions[id].load(rootDirectory);
     return this._extensions[id];
   };
@@ -131,14 +149,13 @@
   };
 
   Global.prototype.unloadExtension = function(id) {
-    this._extensions[id].unload(function() {
-      delete this._extensions[id];
-    }.bind(this));
+    this._extensions[id].unload();
+    delete this._extensions[id];
   };
 
   Global.prototype.unloadAllExtensions = function() {
     let id;
-    for (id in _extensions) {
+    for (id in this._extensions) {
       this.unloadExtension(id);
     }
     this.emit('unload');

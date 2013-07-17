@@ -40,7 +40,6 @@
     },
 
     unload: function() {
-      this._tabbrowser.removeProgressListener(progressListener);
       this._tabbrowser.removeEventListener('DOMWindowCreated',
         Binder.unbind(this, 'onWindowCreated'), false);
 

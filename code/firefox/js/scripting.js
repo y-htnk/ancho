@@ -9,7 +9,6 @@
 
   var API = require('./api');
   var readStringFromUrl = require('./utils').readStringFromUrl;
-  var Config = require('./config');
 
   exports.prepareWindow = function(extension, window) {
     if (!('chrome' in window)) {
@@ -43,6 +42,7 @@
     // TODO: Unloader for window instead of whole extension.
     extension.once('unload', function() {
       // Remove event handlers registered by jQuery.
+      // Needed until https://bugzilla.mozilla.org/show_bug.cgi?id=864313 is fixed.
       for (var i=0; i<eventUnloaders.length; i++) {
         eventUnloaders[i]();
       }
