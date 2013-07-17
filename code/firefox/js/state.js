@@ -11,11 +11,11 @@
   let Utils = require('./utils');
   let WindowWatcher = require('./windowWatcher');
 
-  function Extension(id) {
+  function Extension(id, firstRun) {
     EventEmitter2.call(this, { wildcard: true });
     this._id = id;
     this._rootDirectory = null;
-    this._firstRun = false;
+    this._firstRun = firstRun;
     this._manifest = null;
     this._windowWatcher = null;
   }
@@ -62,6 +62,17 @@
 
   Extension.prototype.load = function(rootDirectory) {
     this._rootDirectory = rootDirectory;
+    var initFile = this._rootDirectory.clone();
+    initFile.append('__init__');
+    if (!initFile.exists()) {
+      // Note that firstRun may already have been forced to true
+      // by the global value (if we are installing Ancho).
+      this._firstRun = true;
+      // Create the file so we know in subsequent runs that
+      // the extension was already installed.
+      initFile.create(Ci.nsIFile.NORMAL_FILE_TYPE, FileUtils.PERMS_FILE);
+    }
+
     this._loadManifest();
   };
 
@@ -73,17 +84,6 @@
   };
 
   Extension.prototype._loadManifest = function() {
-    var initFile = this._rootDirectory.clone();
-    initFile.append('__init__');
-    if (!initFile.exists()) {
-      this._firstRun = true;
-      // Create the file so we know in subsequent runs that
-      // the extension was already installed.
-      var stream = FileUtils.openFileOutputStream(initFile);
-      stream.flush();
-      stream.close();
-    }
-
     var manifestFile = this._rootDirectory.clone();
     manifestFile.append('manifest.json');
     var manifestURI = Services.io.newFileURI(manifestFile);
@@ -134,8 +134,8 @@
     return this._extensions[id];
   };
 
-  Global.prototype.loadExtension = function(id, rootDirectory) {
-    this._extensions[id] = new Extension(id);
+  Global.prototype.loadExtension = function(id, rootDirectory, firstRun) {
+    this._extensions[id] = new Extension(id, firstRun);
     this._extensions[id].load(rootDirectory);
     return this._extensions[id];
   };
