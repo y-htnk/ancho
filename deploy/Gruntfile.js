@@ -37,7 +37,7 @@ module.exports = function(grunt) {
             return path.relative(CODE_DIR, filepath);
           }
           else if (_s.startsWith(filepath, extensionDir)) {
-            return path.join('chrome-ext/test', path.relative(extensionDir, filepath));
+            return path.join('chrome-extensions/test', path.relative(extensionDir, filepath));
           }
           else if (_s.startsWith(filepath, MINIFIED_MODULES)) {
             return path.join('js/node_modules', path.relative(MINIFIED_MODULES, filepath));

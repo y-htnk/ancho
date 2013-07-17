@@ -3,10 +3,10 @@ const Ci = Components.interfaces;
 const Cu = Components.utils;
 
 Cu.import('resource://gre/modules/Services.jsm');
-Cu.import('resource://gre/modules/NetUtil.jsm');
+Cu.import('resource://gre/modules/FileUtils.jsm');
 
 const EXTENSION_ID = 'ancho@salsitasoft.com';
-const CHROME_EXTENSION_ROOT = 'chrome-ext';
+const CHROME_EXTENSION_ROOT = 'chrome-extensions';
 
 var require = null;
 
@@ -55,6 +55,23 @@ function unregisterComponents(callback) {
   require('./js/httpRequestObserver').unregister();
 }
 
+function loadExtensions(extensionRoot, firstRun) {
+  if (!extensionRoot.exists()) {
+    extensionRoot.create(Ci.nsIFile.DIRECTORY_TYPE, FileUtils.PERMS_DIRECTORY);
+  }
+  var protocolHandler = require('./js/protocolHandler');
+  var directoryEntries = extensionRoot.directoryEntries;
+  while (directoryEntries.hasMoreElements()) {
+    var directory = directoryEntries.getNext().QueryInterface(Ci.nsIFile);
+    if (!directory.isDirectory()) {
+      continue;
+    }
+    var rootURI = Services.io.newFileURI(directory);
+    protocolHandler.registerExtensionURI(directory.leafName, rootURI);
+    createBackground(directory, firstRun);
+  }
+}
+
 // Required functions for bootstrapped extensions.
 function install(data, reason) {
 }
@@ -73,19 +90,10 @@ function startup(data, reason) {
 
   var firstRun = reason > APP_STARTUP;    
 
-  var protocolHandler = require('./js/protocolHandler');
-  var extensionRoot = data.installPath;
+  var extensionRoot = data.installPath.clone();
   extensionRoot.append(CHROME_EXTENSION_ROOT);
-  var directoryEntries = extensionRoot.directoryEntries;
-  while (directoryEntries.hasMoreElements()) {
-    var directory = directoryEntries.getNext().QueryInterface(Ci.nsIFile);
-    if (!directory.isDirectory()) {
-      continue;
-    }
-    var rootURI = Services.io.newFileURI(directory);
-    protocolHandler.registerExtensionURI(directory.leafName, rootURI);
-    createBackground(directory, firstRun);
-  }
+  loadExtensions(extensionRoot, firstRun);
+  loadExtensions(FileUtils.getFile("ProfD", [CHROME_EXTENSION_ROOT]), firstRun);
 }
 
 // When the extension is deactivated:
