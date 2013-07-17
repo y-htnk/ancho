@@ -10,13 +10,18 @@ const CHROME_EXTENSION_ROOT = 'chrome-ext';
 
 var require = null;
 
-function createBackground(extensionRoot) {
+function createBackground(extensionRoot, firstRun) {
+  var params = Cc["@mozilla.org/array;1"].createInstance(Ci.nsIMutableArray);
+  params.appendElement(extensionRoot, false);
+  var boolParam = Cc["@mozilla.org/supports-PRBool;1"].createInstance(Ci.nsISupportsPRBool);
+  boolParam.data = firstRun;
+  params.appendElement(boolParam, false);
   var backgroundWindow = Services.ww.openWindow(
     null, // parent
     'chrome://ancho/content/xul/background.xul',
     null, // window name
     null, // features
-    extensionRoot  // extra arguments
+    params  // extra arguments
   );
 
   // Make the window invisible
@@ -60,14 +65,13 @@ function uninstall(data, reason) {
 // When the extension is activated:
 //
 function startup(data, reason) {
-  var requireURI = NetUtil.newURI('modules/Require.jsm', '', data.resourceURI);
-  Cu.import(requireURI.spec);
-  require = Require.createRequireForWindow(this, data.resourceURI);
-  var Config = require('./js/config');
-  Config.firstRun = ((reason === ADDON_INSTALL || reason === ADDON_ENABLE));
-
-  registerComponents();
   setResourceSubstitution(data.resourceURI);
+  Cu.import('resource://ancho/modules/Require.jsm');
+  var baseURI = Services.io.newURI('resource://ancho/', '', null);
+  require = Require.createRequireForWindow(this, baseURI);
+  registerComponents();
+
+  var firstRun = reason > APP_STARTUP;    
 
   var protocolHandler = require('./js/protocolHandler');
   var extensionRoot = data.installPath;
@@ -75,9 +79,12 @@ function startup(data, reason) {
   var directoryEntries = extensionRoot.directoryEntries;
   while (directoryEntries.hasMoreElements()) {
     var directory = directoryEntries.getNext().QueryInterface(Ci.nsIFile);
+    if (!directory.isDirectory()) {
+      continue;
+    }
     var rootURI = Services.io.newFileURI(directory);
     protocolHandler.registerExtensionURI(directory.leafName, rootURI);
-    createBackground(directory);
+    createBackground(directory, firstRun);
   }
 }
 

@@ -25,9 +25,12 @@ WrappedXMLHttpRequest.prototype = {
   set onreadystatechange(callback) { this._inner.onreadystatechange = callback; }
 };
 
-var Require = {
-  _moduleCache: {},
+// TODO: Making this global so that everyone shares the same modules. In the specific case of
+// Ancho this is currently fine, but we need to decide whether we want to make this into a generic
+// require() implementation.
+var moduleCache = {};
 
+var Require = {
   XMLHttpRequest: WrappedXMLHttpRequest,
 
   createWrappedXMLHttpRequest: function() { return new WrappedXMLHttpRequest(); },
@@ -89,8 +92,8 @@ var Require = {
       }
 
       var spec = url.spec;
-      if (spec in self._moduleCache) {
-        return self._moduleCache[spec];
+      if (spec in moduleCache) {
+        return moduleCache[spec];
       }
 
       var scriptLoader = Cc['@mozilla.org/moz/jssubscript-loader;1'].
@@ -131,7 +134,7 @@ var Require = {
 
       // Need to add to the cache here to avoid stack overflow in case of require() cycles
       // (e.g. A requires B which requires A).
-      self._moduleCache[spec] = context.exports = {};
+      moduleCache[spec] = context.exports = {};
       // Support for 'module.exports' (overrides 'exports' if 'module.exports' is used).
       context.module = {};
 
@@ -144,7 +147,7 @@ var Require = {
       if (context.module.exports) {
         context.exports = context.module.exports;
       }
-      self._moduleCache[spec] = context.exports;
+      moduleCache[spec] = context.exports;
       return context.exports;
     };
   }

@@ -22,13 +22,12 @@ for (var prop in console) {
 var Global = require('./state').Global;
 var loadHtml = require('./scripting').loadHtml;
 var BrowserEvents = require('./browserEvents');
-var Config = require('./config');
 
 var BackgroundWindow = {
   _extension: null,
   _browserEvent: null,
 
-  init: function(rootDirectory) {
+  init: function(rootDirectory, firstRun) {
     var id;
 
     window.removeEventListener('load', arguments.callee, false);
@@ -55,7 +54,7 @@ var BackgroundWindow = {
     });
 
     // Instantiate and load the extension object.
-    this._extension = Global.loadExtension(rootDirectory.leafName, rootDirectory);
+    this._extension = Global.loadExtension(rootDirectory.leafName, rootDirectory, firstRun);
 
     // Instantiate a BrowserEvents object whenever a new content window is created.
     this._extension.windowWatcher.register(
@@ -113,7 +112,9 @@ var BackgroundWindow = {
 
 window.addEventListener('load', function() {
   window.removeEventListener('load', arguments.callee, false);
-  BackgroundWindow.init(window.arguments[0].QueryInterface(Ci.nsIFile));
+  var extensionRoot = window.arguments[0].QueryInterface(Ci.nsIFile);
+  var firstRun = window.arguments[1];
+  BackgroundWindow.init(extensionRoot, firstRun);
 }, false);
 
 window.addEventListener('unload', function(event) {
