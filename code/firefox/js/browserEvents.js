@@ -21,8 +21,7 @@
         Binder.bind(this, 'onWindowCreated'), false);
 
       var container = this._tabbrowser.tabContainer;
-      this.tabOpen = Binder.bind(this, 'onTabOpen');
-      container.addEventListener('TabOpen', this.tabOpen, false);
+      container.addEventListener('TabOpen', Binder.bind(this, 'onTabOpen'), false);
       container.addEventListener('TabClose', Binder.bind(this, 'onTabClose'), false);
       container.addEventListener('TabSelect', Binder.bind(this, 'onTabSelect'), false);
       // Apply content scripts on any tabs that are already open.
