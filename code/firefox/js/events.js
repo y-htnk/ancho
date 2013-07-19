@@ -36,6 +36,8 @@
     }
   };
 
+  // Event that should only be received if the correct tab ID
+  // is specified by the sender.
   function TabSpecificEvent(owner, type, tabId) {
     Event.apply(this, arguments);
     this._tabId = tabId;
@@ -48,6 +50,9 @@
     }
   });
 
+  // Event that let's us proxy the listener in a wrapper so we can
+  // do pre/post-processing. Just override `wrapListener` to create the
+  // new listener, invoking the original listener as appropriate.
   function ProxiedEvent(owner, type) {
     Event.apply(this, arguments);
     this._wrappers = [];
@@ -59,6 +64,8 @@
   };
 
   ProxiedEvent.prototype.addListener = function(listener) {
+    // Additional arguments are also passed to `wrapListener` so we
+    // can have the behavior of the wrapper depend on these arguments.
     let wrapper = this.wrapListener.apply(this, arguments);
     this._wrappers.push({ listener: listener, wrapper: wrapper });
     return Event.prototype.addListener.call(this, wrapper);

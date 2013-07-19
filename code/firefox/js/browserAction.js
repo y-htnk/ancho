@@ -56,7 +56,6 @@
           this.shutdown(win);
         }.bind(this));
       }
-      this.initialized = true;
     },
 
     _getElementId: function(id) {

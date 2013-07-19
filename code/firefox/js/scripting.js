@@ -54,7 +54,6 @@
     sandbox.console = api.console;
     sandbox.XMLHttpRequest = Require.XMLHttpRequest;
     var processedJQuery = false;
-    var events = [];
     var contentScripts = extension.manifest.content_scripts;
     for (var i=0; i<contentScripts.length; i++) {
       var scriptInfo = contentScripts[i];

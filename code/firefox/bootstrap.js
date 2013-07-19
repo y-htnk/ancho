@@ -71,7 +71,7 @@ function startup(data, reason) {
   require = Require.createRequireForWindow(this, baseURI);
   registerComponents();
 
-  var firstRun = reason > APP_STARTUP;    
+  var firstRun = reason > APP_STARTUP;
 
   var protocolHandler = require('./js/protocolHandler');
   var extensionRoot = data.installPath;
