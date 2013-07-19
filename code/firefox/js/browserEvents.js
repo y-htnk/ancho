@@ -21,10 +21,10 @@
         Binder.bind(this, 'onWindowCreated'), false);
 
       var container = this._tabbrowser.tabContainer;
-      container.addEventListener('TabOpen', Binder.bind(this, 'onTabOpen'), false);
+      this.tabOpen = Binder.bind(this, 'onTabOpen');
+      container.addEventListener('TabOpen', this.tabOpen, false);
       container.addEventListener('TabClose', Binder.bind(this, 'onTabClose'), false);
       container.addEventListener('TabSelect', Binder.bind(this, 'onTabSelect'), false);
-
       // Apply content scripts on any tabs that are already open.
       for (var i=0; i<this._tabbrowser.browsers.length; i++) {
         let browser = this._tabbrowser.browsers[i];
@@ -42,9 +42,9 @@
     unload: function() {
       this._tabbrowser.removeEventListener('DOMWindowCreated',
         Binder.unbind(this, 'onWindowCreated'), false);
-
       var container = this._tabbrowser.tabContainer;
-      container.removeEventListener('TabOpen', Binder.unbind(this, 'onTabOpen'), false);
+      var tabOpen = Binder.unbind(this, 'onTabOpen');
+      container.removeEventListener('TabOpen', tabOpen, false);
       container.removeEventListener('TabClose', Binder.unbind(this, 'onTabClose'), false);
       container.removeEventListener('TabSelect', Binder.unbind(this, 'onTabSelect'), false);
     },
@@ -88,18 +88,22 @@
       var win = document.defaultView;
       var isFrame = !!((document instanceof Ci.nsIDOMHTMLDocument) && win.frameElement);
       if (isFrame) {
-        win.frameElement.addEventListener('load', function(event) {
-          win.frameElement.removeEventListener('load', arguments.callee, false);
+        win.frameElement.addEventListener('load', Binder.bindAnonymous(this, function(event) {
+          win.frameElement.removeEventListener('load', Binder.unbindAnonymous(), false);
           this.onContentLoaded(win.frameElement.contentDocument, true);
-        }.bind(this), false);
+        }), false);
       }
       else {
-        document.addEventListener('readystatechange', function(event) {
-          if ('interactive' === document.readyState) {
-            document.removeEventListener('readystatechange', arguments.callee, false);
-            this.onContentLoaded(document, false);
-          }
-        }.bind(this), false);
+        // Tabs loaded by the session saver are in the 'uninitialized' state so we ignore
+        // them. Other windows are 'loading' when this event is received.
+        if ('loading' === document.readyState) {
+          document.addEventListener('readystatechange', Binder.bindAnonymous(this, function(event) {
+            if ('interactive' === document.readyState) {
+              document.removeEventListener('readystatechange', Binder.unbindAnonymous(), false);
+              this.onContentLoaded(document, false);
+            }
+          }), false);
+        }
       }
 
       if ('chrome-extension:' === document.location.protocol) {

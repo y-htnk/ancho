@@ -39,8 +39,7 @@
     var sandbox = Cu.Sandbox(principal, { sandboxPrototype: win });
     var eventUnloaders = [];
     // Destroy the sandbox when the window goes away or the extension is disabled.
-    // TODO: Unloader for window instead of whole extension.
-    extension.once('unload', function() {
+    extension.forWindow(win).once('unload', function() {
       // Remove event handlers registered by jQuery.
       // Needed until https://bugzilla.mozilla.org/show_bug.cgi?id=864313 is fixed.
       for (var i=0; i<eventUnloaders.length; i++) {

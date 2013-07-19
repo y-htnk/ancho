@@ -6,6 +6,7 @@
 
   //var Event = require('./event');
   var Utils = require('./utils');
+  var Binder = require('./binder');
 
   const BUTTON_ID = '__ANCHO_BROWSER_ACTION_BUTTON__';
   const CANVAS_ID = '__ANCHO_BROWSER_ACTION_CANVAS__';
@@ -167,10 +168,10 @@
       // problems if we load it earlier.
       var loadHtml = require('./scripting').loadHtml;
       loadHtml(this._extension, document, iframe, this._extension.getURL(this._manifest[this._iconType].default_popup), function() {
-        iframe.contentDocument.addEventListener('readystatechange', function(event) {
-          iframe.contentDocument.removeEventListener('readystatechange', arguments.callee, false);
+        iframe.contentDocument.addEventListener('readystatechange', Binder.bindAnonymous(this, function(event) {
+          iframe.contentDocument.removeEventListener('readystatechange', Binder.unbindAnonymous(), false);
           panel.style.removeProperty('visibility');
-        }, false);
+        }), false);
         var body = iframe.contentDocument.body;
         // Need to float the body so that it will resize to the contents of its children.
         if (!body.style.cssFloat) {
@@ -229,10 +230,10 @@
       var panel = document.getElementById(this._getElementId(PANEL_ID));
       var iframe = panel.firstChild;
       iframe.setAttribute('src', 'about:blank');
-      panel.addEventListener('popupshowing', function(event) {
-        panel.removeEventListener('popupshowing', arguments.callee, false);
+      panel.addEventListener('popupshowing', Binder.bindAnonymous(this, function(event) {
+        panel.removeEventListener('popupshowing', Binder.unbindAnonymous(), false);
         self.showPopup(panel, iframe, document);
-      }, false);
+      }), false);
       panel.openPopup(button, 'after_start', 0, 0, false, false);
     },
 

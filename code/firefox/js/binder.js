@@ -11,6 +11,22 @@
       return this._findMethod(thisArg, methodName, true);
     },
 
+    bindAnonymous: function(thisArg, callback) {
+      var wrappedCallback = function() {
+        // TODO: Assert that _currentInvocation is null.
+        // Or maybe setTimeout (or equivalent) and try again?
+        Binder._currentInvocation = wrappedCallback;
+        var ret = callback.apply(thisArg, arguments);
+        Binder._currentInvocation = null;
+        return ret;
+      };
+      return wrappedCallback;
+    },
+
+    unbindAnonymous: function() {
+      return this._currentInvocation;
+    },
+
     _findMethod: function(thisArg, methodName, remove) {
       var methods = this._methodCache[methodName],
         method = null;
