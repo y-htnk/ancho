@@ -27,4 +27,12 @@ describe('Binder', function() {
     expect(Binder.unbind(testObject, 'method')).not.to.be.null;
     expect(Binder.unbind(testObject, 'method')).to.be.null;
   });
+  it('should bind to an anonymous function', function() {
+    var func = Binder.bindAnonymous(testObject, function() {
+      expect(Binder.unbindAnonymous()).to.eql(func);
+      expect(this).to.eql(testObject);
+      return 42;
+    });
+    expect(func()).to.eql(42);
+  });
 });

@@ -22,6 +22,7 @@ for (var prop in console) {
 var Global = require('./state').Global;
 var loadHtml = require('./scripting').loadHtml;
 var BrowserEvents = require('./browserEvents');
+var Binder = require('./binder');
 
 var BackgroundWindow = {
   _extension: null,
@@ -46,6 +47,8 @@ var BackgroundWindow = {
     // if all other windows are closed.
     Services.startup.QueryInterface(Ci.nsIObserver).observe(null, 'xul-window-destroyed', null);
 
+    var extensionId = rootDirectory.leafName;
+
     Global.once('unload', function() {
       // Register the window again so that the window count remains accurate.
       // Otherwise the window mediator will think we have one less window than we really do.
@@ -54,7 +57,7 @@ var BackgroundWindow = {
     });
 
     // Instantiate and load the extension object.
-    this._extension = Global.loadExtension(rootDirectory.leafName, rootDirectory, firstRun);
+    this._extension = Global.loadExtension(extensionId, rootDirectory, firstRun);
 
     // Instantiate a BrowserEvents object whenever a new content window is created.
     this._extension.windowWatcher.register(
@@ -74,15 +77,15 @@ var BackgroundWindow = {
       this._runBackground();
     }
     else {
-      browserWindow.document.addEventListener('readystatechange', function(e) {
+      browserWindow.document.addEventListener('readystatechange', Binder.bindAnonymous(this, function(e) {
         if ('complete' === browserWindow.document.readyState) {
-          browserWindow.document.removeEventListener('readystatechange', arguments.callee, false);
+          browserWindow.document.removeEventListener('readystatechange', Binder.unbindAnonymous(), false);
           // TODO: Figure out why loading the background window directly from the event listener
           // causes its compartment to leak when the extension is disabled.
           // Using setTimeout() is a workaround and appears to fix the problem.
           setTimeout(this._runBackground.bind(this), 500);
         }
-      }.bind(this), false);
+      }), false);
     }
   },
 

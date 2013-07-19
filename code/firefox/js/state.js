@@ -10,6 +10,24 @@
   let EventEmitter2 = require('eventemitter2').EventEmitter2;
   let Utils = require('./utils');
   let WindowWatcher = require('./windowWatcher');
+  let Binder = require('./binder');
+
+  function WindowEventEmitter(win) {
+    this._window = win;
+  }
+  inherits(WindowEventEmitter, EventEmitter2);
+
+  WindowEventEmitter.prototype.init = function() {
+    this._window.addEventListener('unload', Binder.bind(this, 'shutdown'), false);
+  };
+
+  WindowEventEmitter.prototype.shutdown = function() {
+    if (this._window) {
+      this.emit('unload');
+      this._window.removeEventListener('unload', Binder.unbind(this, 'shutdown'), false);
+      this._window = null;
+    }
+  };
 
   function Extension(id, firstRun) {
     EventEmitter2.call(this, { wildcard: true });
@@ -17,6 +35,7 @@
     this._rootDirectory = null;
     this._firstRun = firstRun;
     this._manifest = null;
+    this._windowEventEmitters = {};
     this._windowWatcher = null;
   }
   inherits(Extension, EventEmitter2);
@@ -80,7 +99,27 @@
     if (this._windowWatcher) {
       this._windowWatcher.unload();
     }
+
+    for (var windowId in this._windowEventEmitters) {
+      this._windowEventEmitters[windowId].shutdown();
+    }
+    this._windowEventEmitters = {};
+
     this.emit('unload');
+  };
+
+  Extension.prototype.forWindow = function(win) {
+    var windowId = Utils.getWindowId(win);
+    var windowEventEmitter;
+    if (!(windowId in this._windowEventEmitters)) {
+      windowEventEmitter = new WindowEventEmitter(win);
+      windowEventEmitter.init();
+      this._windowEventEmitters[windowId] = windowEventEmitter;
+    }
+    else {
+      windowEventEmitter = this._windowEventEmitters[windowId];
+    }
+    return windowEventEmitter;
   };
 
   Extension.prototype._loadManifest = function() {
