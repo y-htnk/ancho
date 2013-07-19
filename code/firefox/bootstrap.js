@@ -88,7 +88,7 @@ function startup(data, reason) {
   require = Require.createRequireForWindow(this, baseURI);
   registerComponents();
 
-  var firstRun = reason > APP_STARTUP;    
+  var firstRun = reason > APP_STARTUP;
 
   var extensionRoot = data.installPath.clone();
   extensionRoot.append(CHROME_EXTENSION_ROOT);

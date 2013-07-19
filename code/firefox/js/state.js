@@ -74,7 +74,6 @@
   });
 
   Extension.prototype.getURL = function(path) {
-    var baseURI = NetUtil.newURI('chrome-extension://' + this._id + '/', null, null);
     var URI = NetUtil.newURI('chrome-extension://' + this._id + '/' + path, '', null);
     return URI.spec;
   };
