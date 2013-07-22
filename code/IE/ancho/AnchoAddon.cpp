@@ -132,13 +132,24 @@ STDMETHODIMP CAnchoAddon::Init(LPCOLESTR lpsExtensionID, IAnchoAddonService * pS
 #ifdef MAGPIE_REGISTERED
   IF_FAILED_RET(m_Magpie.CoCreateInstance(CLSID_MagpieApplication));
 #else
-  CComBSTR bs;
-  IF_FAILED_RET(m_pAnchoService->GetModulePath(&bs));
+  CRegKey hklmAncho;
+  res = hklmAncho.Open(HKEY_LOCAL_MACHINE, _T("SOFTWARE\\Salsita\\AnchoAddonService"), KEY_READ);
+  if (ERROR_SUCCESS != res)
+  {
+    return HRESULT_FROM_WIN32(res);
+  }
 
-  // Load magpie from the same path where this exe file is.
-  CString s(bs);
-  s += _T("Magpie.dll");
-  HMODULE hModMagpie = ::LoadLibrary(s);
+  // Get install dir and load magpie from there (is different for 32 and 64bit!)
+  ULONG nChars = MAX_PATH;
+  LPTSTR pst = m_sInstallPath.GetBuffer(nChars);
+  res = hklmAncho.QueryStringValue(_T("install"), pst, &nChars);
+  pst[nChars] = 0;
+  PathAddBackslash(pst);
+  m_sInstallPath.ReleaseBuffer();
+
+  CString magpieModule(m_sInstallPath);
+  magpieModule += _T("Magpie.dll");
+  HMODULE hModMagpie = ::LoadLibrary(magpieModule);
   if (!hModMagpie)
   {
     return E_FAIL;
@@ -306,7 +317,7 @@ HRESULT CAnchoAddon::initializeEnvironment()
 {
   //If create AddonBackground sooner - background script will be executed before initialization of tab windows
   if(!m_pAddonBackground || !m_pBackgroundConsole) {
-    IF_FAILED_RET(m_pAnchoService->GetAddonBackground(CComBSTR(m_sExtensionName.c_str()), &m_pAddonBackground));
+    IF_FAILED_RET(m_pAnchoService->GetCreateAddonBackground(CComBSTR(m_sExtensionName.c_str()), &m_pAddonBackground));
 
     // get console
     m_pBackgroundConsole = m_pAddonBackground;

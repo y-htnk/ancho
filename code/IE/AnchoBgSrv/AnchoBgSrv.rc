@@ -98,6 +98,7 @@ I18N_SPEC.JS            HTML                    "res\\js\\specifications\\i18n_s
 WEBREQUEST_SPEC.JS      HTML                    "res\\js\\specifications\\webRequest_spec.js"
 JSON.JS                 HTML                    "res\\js\\3rdParty\\json2.js"
 STORAGE_SPEC.JS         HTML                    "res\\js\\specifications\\storage_spec.js"
+PAGEACTION_SPEC.JS      HTML                    "res\\js\\specifications\\pageAction_spec.js"
 
 #ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////

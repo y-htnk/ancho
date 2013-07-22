@@ -9,3 +9,17 @@ HKCR
 		}
 	}
 }
+
+HKLM
+{
+  NoRemove SOFTWARE
+  {
+	  ForceRemove Salsita
+	  {
+	    ForceRemove AnchoAddonService
+	    {
+		    val 'install' =  s '%MODULEPATH%'
+	    }
+	  }
+  }
+}

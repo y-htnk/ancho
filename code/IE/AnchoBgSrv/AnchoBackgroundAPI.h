@@ -103,6 +103,7 @@ public:
   // IAnchoBackgroundAPI methods. See .idl for description.
   STDMETHOD(get_id)(BSTR * pVal);
   STDMETHOD(get_guid)(BSTR * pVal);
+  STDMETHOD(get_path)(BSTR * aPath);
   STDMETHOD(startBackgroundWindow)(BSTR bsPartialURL);
 
   STDMETHOD(addEventObject)(BSTR aEventName, INT aInstanceId, LPDISPATCH aListener);
@@ -162,6 +163,7 @@ private:
 
   // My generated extension ID
   CString             m_GUID;
+  CString             mPath;
 
   CStringW            m_sRootURL;
 

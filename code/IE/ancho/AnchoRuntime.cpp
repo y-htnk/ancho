@@ -79,7 +79,10 @@ void CAnchoRuntime::DestroyAddons()
     mTabManager->unregisterRuntime(m_TabID);
   }
   mTabManager.Release();
-  m_pAnchoService.Release();
+  if (m_pAnchoService) {
+    m_pAnchoService->releasePageActions(m_TabID);
+    m_pAnchoService.Release();
+  }
   if (m_pWebBrowser)
   {
     m_pWebBrowser.Release();
@@ -148,9 +151,12 @@ HRESULT CAnchoRuntime::Init()
 
   // Registering tab in service - obtains tab id and assigns it to the tab as property
   IF_FAILED_RET(mTabManager->registerRuntime((OLE_HANDLE)getFrameTabWindow(), this, m_HeartbeatSlave.id(), &m_TabID));
-  HWND hwnd;
-  m_pWebBrowser->get_HWND((SHANDLE_PTR*)&hwnd);
-  ::SetProp(hwnd, s_AnchoTabIDPropertyName, (HANDLE)m_TabID);
+  HWND hwndIeMain = NULL;
+  m_pWebBrowser->get_HWND((SHANDLE_PTR*)&hwndIeMain);
+  ::SetProp(hwndIeMain, s_AnchoTabIDPropertyName, (HANDLE)m_TabID);
+
+  // initialize page actions for this process/window/tab
+  m_pAnchoService->initPageActions((OLE_HANDLE)hwndIeMain, m_TabID);
 
   //Get WindowId
   IF_FAILED_RET(mWindowManager->getWindowIdFromHWND(reinterpret_cast<OLE_HANDLE>(getMainWindow()), &mWindowID));
@@ -175,6 +181,17 @@ HRESULT CAnchoRuntime::Init()
 STDMETHODIMP_(void) CAnchoRuntime::OnBrowserDownloadBegin()
 {
   m_ExtensionPageAPIPrepared = false;
+}
+
+//----------------------------------------------------------------------------
+//
+STDMETHODIMP_(void) CAnchoRuntime::OnWindowStateChanged(LONG dwFlags, LONG dwValidFlagsMask)
+{
+  if (m_pAnchoService
+      && (dwFlags & dwValidFlagsMask & OLECMDIDF_WINDOWSTATE_USERVISIBLE)
+      && (dwFlags & dwValidFlagsMask & OLECMDIDF_WINDOWSTATE_ENABLED)) {
+    m_pAnchoService->onTabActivate(m_TabID);
+  }
 }
 
 //----------------------------------------------------------------------------
@@ -284,8 +301,8 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
     if (tabWindow) {
       gWindowDocumentMap.put(WindowDocumentRecord(tabWindow, m_TabID, m_pWebBrowser, pWebBrowser, doc));
     }
+    m_pAnchoService->onTabNavigate(m_TabID);
   }
-
 }
 
 //----------------------------------------------------------------------------

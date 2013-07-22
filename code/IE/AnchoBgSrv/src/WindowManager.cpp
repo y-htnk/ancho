@@ -268,12 +268,12 @@ STDMETHODIMP WindowManager::createPopupWindow(BSTR aUrl, INT aX, INT aY, LPDISPA
   CIDispatchHelper closeCallback(aCloseCallback);
   DispatchMap injectedDataMap;
 
-  IDispatch* api;
-  IF_FAILED_RET((injectedData.Get<IDispatch*, VT_DISPATCH>((LPOLESTR)s_AnchoBackgroundPageAPIName, api)));
+  CComPtr<IDispatch> api;
+  IF_FAILED_RET((injectedData.Get<CComPtr<IDispatch>, VT_DISPATCH, IDispatch*>((LPOLESTR)s_AnchoBackgroundPageAPIName, api)));
   injectedDataMap[s_AnchoBackgroundPageAPIName] = api;
 
-  IDispatch* console;
-  IF_FAILED_RET((injectedData.Get<IDispatch*, VT_DISPATCH>((LPOLESTR)s_AnchoBackgroundConsoleObjectName, console)));
+  CComPtr<IDispatch> console;
+  IF_FAILED_RET((injectedData.Get<CComPtr<IDispatch>, VT_DISPATCH, IDispatch*>((LPOLESTR)s_AnchoBackgroundConsoleObjectName, console)));
   injectedDataMap[s_AnchoBackgroundConsoleObjectName] = console;
 
   HWND hwnd = Utils::getCurrentWindowHWND();

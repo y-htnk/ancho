@@ -79,10 +79,21 @@ add_subdirectory(AnchoBgSrv)
 add_dependencies(AnchoBgSrv anchocommons Magpie libbhohelper libprothandlers AnchoShared crxProcessing)# passthruapp)
 include_directories(${AnchoBgSrv_INC_DIR})
 
+#Ancho page actions
+add_subdirectory(anchoPageActions)
+add_dependencies(anchoPageActions libbhohelper AnchoBgSrv)
+include_directories(${anchoPageActions_INC_DIR})
+
+add_subdirectory(anchoPageActionsBroker)
+include_directories(${anchoPageActionsBroker_INC_DIR})
+
+#Ancho BHO
 add_subdirectory(ancho)
 add_dependencies(ancho anchocommons Magpie libbhohelper libprothandlers AnchoShared AnchoBgSrv) #also dependent on AnchoBgSrv - but this will often cause needless rebuild
 
 set_target_properties(Magpie PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${${PROJECT_NAME}_BINARY_DIR}/")
+set_target_properties(anchoPageActions PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${${PROJECT_NAME}_BINARY_DIR}/")
+set_target_properties(anchoPageActionsBroker PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${${PROJECT_NAME}_BINARY_DIR}/")
 set_target_properties(AnchoShared PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${${PROJECT_NAME}_BINARY_DIR}/")
 set_target_properties(ancho PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${${PROJECT_NAME}_BINARY_DIR}/")
 set_target_properties(AnchoBgSrv PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${${PROJECT_NAME}_BINARY_DIR}/")

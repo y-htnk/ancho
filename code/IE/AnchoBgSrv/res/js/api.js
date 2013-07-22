@@ -14,6 +14,7 @@
 // get manifest
 var manifest = require("manifest").manifest;
 
+console.info("Engine \"" + ScriptEngine() + " " + ScriptEngineMajorVersion() + "." + ScriptEngineMinorVersion() + " build " + ScriptEngineBuildVersion() + "\" loaded.");
 console.info("Loading extension [" + addonAPI.id + "] [" + addonAPI.guid + "]");
 
 //------------------------------------------------------------------------------
@@ -145,6 +146,9 @@ exports.releaseFullAPI = function(aInstanceID) {
 var browserAction = require("browserAction.js");
 browserAction.initBrowserAction(manifest.browser_action);
 
+var pageAction = require("pageAction.js");
+pageAction.initPageAction(manifest.page_action);
+
 
 //------------------------------------------------------------------------------
 // CONTENT API
@@ -183,6 +187,7 @@ exports.getContentInfo = function(aInstanceID, aUrl) {
     } else {
       contentInstances[aInstanceID] = new restrictedAPI(aInstanceID);
     }
+    pageAction.register(aInstanceID);
   }
   var api = contentInstances[aInstanceID];
   var scripts = (
@@ -199,6 +204,7 @@ exports.getContentInfo = function(aInstanceID, aUrl) {
 // The name of this method must match the one defined in anchocommons/strings.cpp
 // Called from the addon when a browser window or tab closes
 exports.releaseContentInfo = function(instanceID) {
+  pageAction.unregister(instanceID);
   console.debug("Content API release requested for [" + instanceID + "]");
   if (contentInstances[instanceID]) {
     releaseAPISubset(instanceID, contentInstances[instanceID]);

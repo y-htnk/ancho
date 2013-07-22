@@ -44,7 +44,12 @@ class ATL_NO_VTABLE CAnchoRuntime :
 public:
   // -------------------------------------------------------------------------
   // ctor
-  CAnchoRuntime() : m_WebBrowserEventsCookie(0), m_AnchoBrowserEventsCookie(0), m_ExtensionPageAPIPrepared(false), m_NextFrameId(0), m_IsExtensionPage(false)
+  CAnchoRuntime() :
+      m_WebBrowserEventsCookie(0),
+      m_AnchoBrowserEventsCookie(0),
+      m_ExtensionPageAPIPrepared(false),
+      m_NextFrameId(0),
+      m_IsExtensionPage(false)
   {
   }
 
@@ -68,6 +73,7 @@ public:
     SINK_ENTRY_EX(1, DIID_DWebBrowserEvents2, DISPID_NAVIGATECOMPLETE2, OnNavigateComplete)
     SINK_ENTRY_EX(1, DIID_DWebBrowserEvents2, DISPID_PROGRESSCHANGE, OnBrowserProgressChange)
     SINK_ENTRY_EX(1, DIID_DWebBrowserEvents2, DISPID_DOWNLOADBEGIN, OnBrowserDownloadBegin)
+    SINK_ENTRY_EX(1, DIID_DWebBrowserEvents2, DISPID_WINDOWSTATECHANGED, OnWindowStateChanged)
     SINK_ENTRY_EX(2, IID_DAnchoBrowserEvents, 1, OnFrameStart)
     SINK_ENTRY_EX(2, IID_DAnchoBrowserEvents, 2, OnFrameEnd)
     SINK_ENTRY_EX(2, IID_DAnchoBrowserEvents, 3, OnFrameRedirect)
@@ -109,6 +115,7 @@ public:
     VARIANT *TargetFrameName, VARIANT *PostData, VARIANT *Headers, BOOL *Cancel);
 
   STDMETHOD_(void, OnBrowserDownloadBegin)();
+  STDMETHOD_(void, OnWindowStateChanged)(LONG dwFlags, LONG dwValidFlagsMask);
   STDMETHOD_(void, OnBrowserProgressChange)(LONG Progress, LONG ProgressMax);
 
   // -------------------------------------------------------------------------

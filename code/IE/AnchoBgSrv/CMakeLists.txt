@@ -20,6 +20,7 @@ set(${PROJECT_NAME}_RC_DIR ${${PROJECT_NAME}_SOURCE_DIR})
 
 include_directories(
   ${${PROJECT_NAME}_INC_DIR}
+  ${anchocommons_INC_DIR}
   ${${PROJECT_NAME}_GENERATED_FILES_DIR}
   )
 
@@ -31,6 +32,7 @@ set(${PROJECT_NAME}_HEADERS
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/PeriodicTimer.hpp"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/TabManager.hpp"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/WindowManager.hpp"
+  "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/PageActionProxy.hpp"
   "${${PROJECT_NAME}_INC_DIR}/AnchoAddonService.h"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackgroundAPI.h"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackground.h"
@@ -55,6 +57,7 @@ set(${PROJECT_NAME}_SOURCES
   "${${PROJECT_NAME}_SRC_DIR}/src/TabManager.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/src/WindowManager.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/src/UpdateChecking.cpp"
+  "${${PROJECT_NAME}_SRC_DIR}/src/PageActionProxy.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoAddonService.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoBackgroundAPI.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoBackground.cpp"
@@ -185,8 +188,7 @@ add_executable(${PROJECT_NAME} WIN32
   ${${PROJECT_NAME}_RC_FILES}
   ${${PROJECT_NAME}_IDL_FILE}
   )
-#set_target_properties( ${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX ${ANCHO_DEBUG_POSTFIX} )
-#set_target_properties( ${PROJECT_NAME} PROPERTIES RELEASE_POSTFIX ${ANCHO_RELEASE_POSTFIX} )
+target_link_libraries(${PROJECT_NAME} Gdiplus libbhohelper anchocommons libprothandlers Wininet AnchoShared)
 
 target_link_libraries(${PROJECT_NAME} libbhohelper anchocommons libprothandlers Wininet AnchoShared crxProcessing zlibstatic)
 
@@ -202,12 +204,12 @@ add_custom_command(TARGET ${PROJECT_NAME}
                    )
 
 # Register service - using start to handle bug in cmake (wrong quote escaping in COMMAND section
-if (NOT ${DISABLE_REGISTRATION})
+if (NOT ${DISABLE_REGISTRATION} AND NOT ${CMAKE_CL_64})
   add_custom_command(TARGET ${PROJECT_NAME}
                      POST_BUILD
                      COMMAND "start" ARGS "\"DUMMY\"" "/B" "/WAIT" "\"\$(TargetPath)\"" "/RegServer" "/s"
                      )
-endif (NOT ${DISABLE_REGISTRATION})
+endif (NOT ${DISABLE_REGISTRATION} AND NOT ${CMAKE_CL_64})
 
 # export variables
 set(${PROJECT_NAME}_INC_DIRS ${${PROJECT_NAME}_INC_DIRS} PARENT_SCOPE)

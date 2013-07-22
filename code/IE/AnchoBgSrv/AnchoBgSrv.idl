@@ -25,7 +25,7 @@ interface IAnchoTabManagerInternal;
 ]
 interface IAnchoAddonService : IUnknown
 {
-  HRESULT GetAddonBackground([in] BSTR bsID, [out, retval] IAnchoAddonBackground ** ppRet);
+  HRESULT GetCreateAddonBackground([in] BSTR bsID, [out, retval] IAnchoAddonBackground ** ppRet);
   HRESULT GetModulePath([out, retval] BSTR * pbsPath);
 
   HRESULT invokeEventObjectInAllExtensions([in] BSTR aEventName, [in] LPDISPATCH aArgs, [out] VARIANT* aRet);
@@ -36,8 +36,14 @@ interface IAnchoAddonService : IUnknown
   HRESULT registerBrowserActionToolbar([in] OLE_HANDLE aFrameTab, [out] BSTR * aUrl, [out] INT*aTabId);
   HRESULT unregisterBrowserActionToolbar([in] INT aTabId);
   HRESULT getDispatchObject([out, retval] IDispatch **aRet);
-};
 
+  HRESULT initPageActions([in] OLE_HANDLE aHwndBrowser, [in] INT aTabId);
+  HRESULT releasePageActions([in] INT aTabId);
+  HRESULT advicePageActionBar([in] OLE_HANDLE hwndBrowser, [in] IDispatch * aDispatch);
+  HRESULT unadvicePageActionBar([in] OLE_HANDLE hwndBrowser);
+  HRESULT onTabNavigate([in] INT aTabId);
+  HRESULT onTabActivate([in] INT aNewTabId);
+};
 
 
 /*==========================================================================*/
@@ -125,6 +131,8 @@ library AnchoBgSrvLib
     HRESULT addBrowserActionInfo([in] LPDISPATCH aBrowserActionInfo);
     HRESULT setBrowserActionUpdateCallback([in] INT aTabId, [in] LPDISPATCH aBrowserActionUpdateCallback);
     HRESULT browserActionNotification();
+    HRESULT isImageData([in] LPDISPATCH aObject, [out, retval] VARIANT_BOOL * aRetVal);
+    HRESULT pageActionToolbar([in] INT aTabId, [out, retval] VARIANT * pVal);
 
     HRESULT testFunction([in] LPDISPATCH aObject, [in] LPDISPATCH aCallback);
   };
@@ -201,6 +209,7 @@ library AnchoBgSrvLib
     HRESULT captureVisibleTab([in] LONG windowId, [in] LPDISPATCH aOptions, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);*/
 
   };
+
   /*==========================================================================*/
   [
 	  object,
@@ -215,6 +224,28 @@ library AnchoBgSrvLib
     [id(1), helpstring("getWindowIdFromHWND - synchronous call")]
     HRESULT getWindowIdFromHWND([in] OLE_HANDLE aHWND, [out, retval] LONG *aWindowId);
   };
+  
+  /*==========================================================================*/
+  [
+	  object,
+	  uuid(BD729A5F-9F8D-4CC8-8AD4-AAD68903C73C),
+	  oleautomation,
+	  nonextensible,
+	  helpstring("IAnchoPageActionToolbar Interface"),
+	  pointer_default(unique)
+  ]
+  interface IAnchoPageActionToolbar : IDispatch
+  {
+    [id(1)] HRESULT registerAction([in] BSTR aAddonID, [in] INT aTabId, [in] VARIANT aIcon, [in] BSTR aTitle, [in] LPDISPATCH aOnClickHandler);
+    [id(2)] HRESULT unregisterAction([in] BSTR aAddonID, [in] INT aTabId);
+    [id(3)] HRESULT show([in] BSTR addonID, [in] INT aTabId);
+    [id(4)] HRESULT hide([in] BSTR addonID, [in] INT aTabId);
+    [id(5)] HRESULT setIcon([in] BSTR addonID, [in] INT aTabId, [in] VARIANT aIcon);
+
+    [id(100), restricted] HRESULT onTabNavigate([in] INT aTabId);
+    [id(101), restricted] HRESULT onTabActivate([in] INT aNewTabId);
+  };
+
   /*==========================================================================*/
   [
     object,
@@ -282,6 +313,11 @@ library AnchoBgSrvLib
       "Property guid. The addon's GUID."
     )]
     HRESULT guid([out, retval] BSTR * pVal);
+
+    [propget, id(3), helpstring(
+      "Property path. The addon's file system full path."
+    )]
+    HRESULT path([out, retval] BSTR * pVal);
 
     [id(100), helpstring(
       "Method startBackgroundWindow. Loads the background window and"

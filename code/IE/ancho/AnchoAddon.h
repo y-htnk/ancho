@@ -85,6 +85,7 @@ private:
   std::wstring                          m_sExtensionName;
   std::wstring                          m_sExtensionID;
   boost::filesystem::wpath              m_sExtensionPath;
+  CString                               m_sInstallPath;
 
   ULONG                                 m_InstanceID;
 

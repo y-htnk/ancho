@@ -32,6 +32,8 @@
 #include <atlctrls.h>
 #include <atltypes.h>
 
+using namespace ATL;
+
 #include <Wininet.h>
 #include <KnownFolders.h>
 #include <ShlObj.h>
@@ -41,7 +43,8 @@
 #include <anchocommons.h>
 #include <Exceptions.h>
 
-using namespace ATL;
+#include <gdiplus.h>
+using namespace Gdiplus;
 
 // Magpie
 #import "Magpie.tlb" named_guids raw_interfaces_only raw_native_types no_smart_pointers exclude("tagSAFEARRAYBOUND")

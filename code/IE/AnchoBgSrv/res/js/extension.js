@@ -92,11 +92,8 @@ callback and prohibits multiple invocations.
 var CallbackWrapper = function(responseCallback) {
   var self = this;
 
-  var responseCallback = responseCallback;
-
   this.shouldInvokeCallback = true;
   this.callback = function() {
-    return function() {
       if (!self.shouldInvokeCallback) {
         return;
       }
@@ -111,9 +108,8 @@ var CallbackWrapper = function(responseCallback) {
       //Solves the 'Different array constructors' problem:
       //apply cannot be called because if array was created in different script engine
       //it fails comparison with array constructor
-      addonAPI.callFunction(responseCallback, arguments);
-    }
-  } ();
+      addonAPI.callFunction(responseCallback, processedArguments);
+    };
 }
 exports.CallbackWrapper = CallbackWrapper;
 

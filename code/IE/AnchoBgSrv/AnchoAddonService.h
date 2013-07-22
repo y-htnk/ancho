@@ -23,6 +23,7 @@
 #include "AnchoBackgroundServer/WindowManager.hpp"
 #include "AnchoBackgroundServer/COMConversions.hpp"
 #include "AnchoBackgroundServer/JavaScriptCallback.hpp"
+#include "AnchoBackGroundServer/PageActionProxy.hpp"
 
 #if defined(_WIN32_WCE) && !defined(_CE_DCOM) && !defined(_CE_ALLOW_SINGLE_THREADED_OBJECTS_IN_MTA)
 #error "Single-threaded COM objects are not properly supported on Windows CE platform, such as the Windows Mobile platforms that do not include full DCOM support. Define _CE_ALLOW_SINGLE_THREADED_OBJECTS_IN_MTA to force ATL to support creating single-thread COM object's and allow use of it's single-threaded COM object implementations. The threading model in your rgs file was set to 'Free' as that is the only threading model supported in non DCOM Windows CE platforms."
@@ -51,7 +52,7 @@ class ATL_NO_VTABLE CAnchoAddonService :
 public:
   // -------------------------------------------------------------------------
   // ctor
-  CAnchoAddonService()
+  CAnchoAddonService() : mGDIpToken(NULL)
   {
   }
 
@@ -102,6 +103,8 @@ public:
   STDMETHOD(addBrowserActionInfo)(LPDISPATCH aBrowserActionInfo);
   STDMETHOD(setBrowserActionUpdateCallback)(INT aTabId, LPDISPATCH aBrowserActionUpdateCallback);
   STDMETHOD(browserActionNotification)();
+  STDMETHOD(isImageData)(LPDISPATCH aObject, VARIANT_BOOL * aRetVal);
+  STDMETHOD(pageActionToolbar)(INT aTabId, VARIANT * aRetVal);
 
   STDMETHOD(testFunction)(LPDISPATCH aObject, LPDISPATCH aCallback)
   {
@@ -112,7 +115,7 @@ public:
   }
   // -------------------------------------------------------------------------
   // IAnchoAddonService methods. See .idl for description.
-  STDMETHOD(GetAddonBackground)(BSTR bsID, IAnchoAddonBackground ** ppRet);
+  STDMETHOD(GetCreateAddonBackground)(BSTR bsID, IAnchoAddonBackground ** ppRet);
   STDMETHOD(GetModulePath)(BSTR * pbsPath);
   STDMETHOD(getInternalProtocolParameters)(BSTR * aServiceHost, BSTR * aServicePath);
   STDMETHOD(invokeEventObjectInAllExtensions)(BSTR aEventName, LPDISPATCH aArgs, VARIANT* aRet);
@@ -123,6 +126,13 @@ public:
   STDMETHOD(registerBrowserActionToolbar)(OLE_HANDLE aFrameTab, BSTR * aUrl, INT*aTabId);
   STDMETHOD(unregisterBrowserActionToolbar)(INT aTabId);
   STDMETHOD(getDispatchObject)(IDispatch **aRet);
+
+  STDMETHOD(initPageActions)(OLE_HANDLE aHwndBrowser, INT aTabId);
+  STDMETHOD(releasePageActions)(INT aTabId);
+  STDMETHOD(advicePageActionBar)(OLE_HANDLE hwndBrowser, IDispatch * aDispatch);
+  STDMETHOD(unadvicePageActionBar)(OLE_HANDLE hwndBrowser);
+  STDMETHOD(onTabNavigate)(INT aTabId);
+  STDMETHOD(onTabActivate)(INT aNewTabId);
 
   static CComObject<CAnchoAddonService> & instance()
   {
@@ -146,8 +156,6 @@ private:
   typedef std::map<int, CIDispatchHelper> BrowserActionCallbackMap;
 
   typedef CComCritSecLock<CComAutoCriticalSection> CSLock;
-private:
-  //private methods
 
 private:
   // -------------------------------------------------------------------------
@@ -164,12 +172,20 @@ private:
 
   // Path to this exe and also to magpie.
   CString                       m_sThisPath;
+  // Install path from registry
+  CString                       mInstallPath32;
+  CString                       mInstallPath64;
 
   CComPtr<IIECookieManager>     m_Cookies;
 
   CComPtr<ITabManager>          mITabManager;
 
-  CComPtr<IWindowManager>          mIWindowManager;
+  CComPtr<IWindowManager>       mIWindowManager;
+
+  Ancho::PageAction::ProxyManager
+                                mPageActionProxies;
+  
+  ULONG_PTR                     mGDIpToken;
 };
 
 OBJECT_ENTRY_AUTO(__uuidof(AnchoAddonService), CAnchoAddonService)

@@ -15,6 +15,8 @@
 #include <crxProcessing/extract.hpp>
 #include "AnchoBackgroundServer/UpdateChecking.hpp"
 
+using namespace Ancho::PageAction;
+
 struct CookieNotificationCallback: public ACookieCallbackFunctor
 {
   CookieNotificationCallback(CAnchoAddonService &aService): service(aService)
@@ -32,7 +34,6 @@ struct CookieNotificationCallback: public ACookieCallbackFunctor
   CAnchoAddonService &service;
 };
 
-
 /*============================================================================
  * class CAnchoAddonService
  */
@@ -45,6 +46,7 @@ void CAnchoAddonService::OnAddonFinalRelease(BSTR bsID)
 {
   m_BackgroundObjects.erase(std::wstring(bsID, SysStringLen(bsID)));
 }
+
 //----------------------------------------------------------------------------
 //
 HRESULT CAnchoAddonService::get_cookieManager(LPDISPATCH* ppRet)
@@ -52,6 +54,7 @@ HRESULT CAnchoAddonService::get_cookieManager(LPDISPATCH* ppRet)
   ENSURE_RETVAL(ppRet);
   return m_Cookies.QueryInterface(ppRet);
 }
+
 //----------------------------------------------------------------------------
 //
 HRESULT CAnchoAddonService::get_tabManager(LPDISPATCH* ppRet)
@@ -59,6 +62,7 @@ HRESULT CAnchoAddonService::get_tabManager(LPDISPATCH* ppRet)
   ENSURE_RETVAL(ppRet);
   return mITabManager.QueryInterface(ppRet);
 }
+
 //----------------------------------------------------------------------------
 //
 HRESULT CAnchoAddonService::get_windowManager(LPDISPATCH* ppRet)
@@ -66,6 +70,21 @@ HRESULT CAnchoAddonService::get_windowManager(LPDISPATCH* ppRet)
   ENSURE_RETVAL(ppRet);
   return mIWindowManager.QueryInterface(ppRet);
 }
+
+//----------------------------------------------------------------------------
+//
+/*
+HRESULT CAnchoAddonService::get_pageActionManager(LPDISPATCH* ppRet)
+{
+  ENSURE_RETVAL(ppRet);
+  if (mPageActionToolbar) {
+    return mPageActionToolbar.QueryInterface(ppRet);
+  }
+  (*ppRet) = NULL;
+  return S_OK;
+  return E_FAIL;
+}
+*/
 //----------------------------------------------------------------------------
 //
 HRESULT CAnchoAddonService::invokeExternalEventObject(BSTR aExtensionId, BSTR aEventName, LPDISPATCH aArgs, VARIANT* aRet)
@@ -117,22 +136,6 @@ STDMETHODIMP CAnchoAddonService::getBrowserActions(VARIANT* aBrowserActionsArray
   CComVariant tmp(m_BrowserActionInfos.p);
   return tmp.Detach(aBrowserActionsArray);
 }
-//----------------------------------------------------------------------------
-//
-STDMETHODIMP CAnchoAddonService::setBrowserActionUpdateCallback(INT aTabId, LPDISPATCH aBrowserActionUpdateCallback)
-{
-  m_BrowserActionCallbacks[aTabId] = CIDispatchHelper(aBrowserActionUpdateCallback);
-  return S_OK;
-}
-//----------------------------------------------------------------------------
-//
-STDMETHODIMP CAnchoAddonService::browserActionNotification()
-{
-  for (BrowserActionCallbackMap::iterator it = m_BrowserActionCallbacks.begin(); it != m_BrowserActionCallbacks.end(); ++it) {
-    it->second.Invoke0(DISPID(0));
-  }
-  return S_OK;
-}
 
 //----------------------------------------------------------------------------
 //
@@ -147,6 +150,24 @@ HRESULT CAnchoAddonService::addBrowserActionInfo(LPDISPATCH aBrowserActionInfo)
   Ancho::Service::TabManager::instance().forEachTab(
               [](Ancho::Service::TabManager::TabRecord &aRec){ aRec.runtime()->showBrowserActionBar(TRUE); }
             );
+  return S_OK;
+}
+
+//----------------------------------------------------------------------------
+//
+STDMETHODIMP CAnchoAddonService::setBrowserActionUpdateCallback(INT aTabId, LPDISPATCH aBrowserActionUpdateCallback)
+{
+  m_BrowserActionCallbacks[aTabId] = CIDispatchHelper(aBrowserActionUpdateCallback);
+  return S_OK;
+}
+
+//----------------------------------------------------------------------------
+//
+STDMETHODIMP CAnchoAddonService::browserActionNotification()
+{
+  for (BrowserActionCallbackMap::iterator it = m_BrowserActionCallbacks.begin(); it != m_BrowserActionCallbacks.end(); ++it) {
+    it->second.Invoke0(DISPID(0));
+  }
   return S_OK;
 }
 
@@ -183,6 +204,11 @@ HRESULT CAnchoAddonService::FinalConstruct()
     //Check for Ancho updates
     mAsyncTaskManager.addTask([&]{ Ancho::Service::checkForUpdate(s_AnchoExtensionsRegistryKey, L"Ancho"); });
 
+    GdiplusStartupInput gsi;
+    if (Ok != GdiplusStartup( &mGDIpToken, &gsi, NULL )) {
+      ANCHO_THROW(EHResult(E_FAIL));
+    }
+
   END_TRY_BLOCK_CATCH_TO_HRESULT;
   return S_OK;
 }
@@ -191,6 +217,13 @@ HRESULT CAnchoAddonService::FinalConstruct()
 //
 void CAnchoAddonService::FinalRelease()
 {
+  // shutdown GDI+
+  GdiplusShutdown(mGDIpToken);
+
+  // delete pageaction proxies
+  mPageActionProxies.clear();
+
+  // release background objects
   BackgroundObjectsMap::iterator it = m_BackgroundObjects.begin();
   while(it != m_BackgroundObjects.end())
   {
@@ -203,7 +236,7 @@ void CAnchoAddonService::FinalRelease()
 
 //----------------------------------------------------------------------------
 //
-STDMETHODIMP CAnchoAddonService::GetAddonBackground(BSTR bsID, IAnchoAddonBackground ** ppRet)
+STDMETHODIMP CAnchoAddonService::GetCreateAddonBackground(BSTR bsID, IAnchoAddonBackground ** ppRet)
 {
   ENSURE_RETVAL(ppRet);
 
@@ -211,7 +244,6 @@ STDMETHODIMP CAnchoAddonService::GetAddonBackground(BSTR bsID, IAnchoAddonBackgr
   std::wstring id = std::wstring(bsID, SysStringLen(bsID));
   BackgroundObjectsMap::iterator it = m_BackgroundObjects.find(id);
   if (it == m_BackgroundObjects.end()) {
-    // not found, create new instance
     ATLTRACE(_T("ADD OBJECT %s\n"), bsID);
     CAnchoAddonBackgroundComObject* pObject = NULL;
     HRESULT hr = CAnchoAddonBackgroundComObject::CreateInstance(&pObject);
@@ -324,6 +356,7 @@ STDMETHODIMP CAnchoAddonService::unregisterBrowserActionToolbar(INT aTabId)
   m_BrowserActionCallbacks.erase(aTabId);
   return S_OK;
 }
+
 //----------------------------------------------------------------------------
 //
 STDMETHODIMP CAnchoAddonService::getDispatchObject(IDispatch **aRet)
@@ -333,9 +366,89 @@ STDMETHODIMP CAnchoAddonService::getDispatchObject(IDispatch **aRet)
   AddRef();
   return S_OK;
 }
+
 //----------------------------------------------------------------------------
 //
+STDMETHODIMP CAnchoAddonService::initPageActions(OLE_HANDLE aHwndBrowser, INT aTabId)
+{
+  ATLTRACE(_T("INIT PAGEACTIONS for HWND 0x&08x, tab %i\n"), aHwndBrowser, aTabId);
+  mPageActionProxies.initPageActions((HWND)aHwndBrowser, aTabId);
+  return S_OK;
+}
 
+//----------------------------------------------------------------------------
+//
+STDMETHODIMP CAnchoAddonService::releasePageActions(INT aTabId)
+{
+  ATLTRACE(_T("RELEASE PAGEACTIONS for tab %i\n"), aTabId);
+  mPageActionProxies.removeTab(aTabId);
+  return S_OK;
+}
+
+//----------------------------------------------------------------------------
+//
+STDMETHODIMP CAnchoAddonService::advicePageActionBar(OLE_HANDLE hwndBrowser, IDispatch * aDispatch) {
+  if(!hwndBrowser || !aDispatch) {
+    return E_INVALIDARG;
+  }
+
+  Proxy * proxy = mPageActionProxies.getProxyForHWND((HWND)hwndBrowser);
+  if (!proxy) {
+    return E_INVALIDARG;
+  }
+
+  return proxy->advicePageActionBar(aDispatch);
+}
+
+//----------------------------------------------------------------------------
+//
+STDMETHODIMP CAnchoAddonService::unadvicePageActionBar(OLE_HANDLE hwndBrowser) {
+  mPageActionProxies.removeProxyForHWND((HWND)hwndBrowser);
+  return S_OK;
+}
+
+//----------------------------------------------------------------------------
+//
+STDMETHODIMP CAnchoAddonService::onTabNavigate(INT aTabId) {
+  Proxy * proxy = mPageActionProxies.getProxyForTabId(aTabId);
+  return (proxy) ? proxy->onTabNavigate(aTabId) : E_UNEXPECTED;
+}
+
+//----------------------------------------------------------------------------
+//
+STDMETHODIMP CAnchoAddonService::onTabActivate(INT aNewTabId) {
+  Proxy * proxy = mPageActionProxies.getProxyForTabId(aNewTabId);
+  return (proxy) ? proxy->onTabActivate(aNewTabId) : E_UNEXPECTED;
+}
+
+//----------------------------------------------------------------------------
+//
+STDMETHODIMP CAnchoAddonService::isImageData(LPDISPATCH aObject, VARIANT_BOOL * aRetVal)
+{
+  ENSURE_RETVAL(aRetVal);
+#ifdef ANCHO_USES_CANVAS
+  CComQIPtr<ICanvasImageData> object(aObject);
+  (*aRetVal) = object ? VARIANT_TRUE : VARIANT_FALSE;
+#else
+  (*aRetVal) = VARIANT_FALSE;
+#endif // def ANCHO_USES_CANVAS
+  return S_OK;
+}
+
+//----------------------------------------------------------------------------
+//
+STDMETHODIMP CAnchoAddonService::pageActionToolbar(INT aTabId, VARIANT * aRetVal) {
+  ENSURE_RETVAL(aRetVal);
+  VariantInit(aRetVal);
+  Proxy * proxy = mPageActionProxies.getProxyForTabId(aTabId);
+  if (!proxy) {
+    return S_FALSE;
+  }
+  return proxy->getToolBar(aRetVal);
+}
+
+//----------------------------------------------------------------------------
+//
 HRESULT CAnchoAddonService::FindActiveBrowser(IWebBrowser2** webBrowser)
 {
   ATLASSERT(webBrowser != NULL);

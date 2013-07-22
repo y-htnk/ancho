@@ -12,7 +12,7 @@ HKCR
 
 HKLM
 {
-  NoRemove Software
+  NoRemove SOFTWARE
   {
     NoRemove Microsoft
     {
@@ -28,6 +28,16 @@ HKLM
               val AppPath = s '%MODULEPATH%'
               val CLSID = s '%APPID%'
               val Policy = d '3'
+            }
+          }
+        }
+        NoRemove MAIN
+        {
+          NoRemove FeatureControl
+          {
+            NoRemove FEATURE_BROWSER_EMULATION
+            {
+              val '%OBJECTFILENAME%' = d '9999'
             }
           }
         }
