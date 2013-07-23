@@ -140,6 +140,9 @@ var addonRootURL = require("extension.js").addonRootURL;
     //----------------------------------------------------------------------------
     // chrome.pageAction.show
     this.show = function(tabId) {
+      if (!pageActionInfoGlobal) {
+        throw new Error('This extension has no page action specified.');
+      }
       getPageAction(tabId, true).enabled = true;
       serviceAPI.pageActionToolbar(tabId).show(addonAPI.id, tabId);
     };
@@ -147,6 +150,9 @@ var addonRootURL = require("extension.js").addonRootURL;
     //----------------------------------------------------------------------------
     // chrome.pageAction.hide
     this.hide = function(tabId) {
+      if (!pageActionInfoGlobal) {
+        throw new Error('This extension has no page action specified.');
+      }
       getPageAction(tabId, true).enabled = false;
       serviceAPI.pageActionToolbar(tabId).hide(addonAPI.id, tabId);
     };
@@ -154,6 +160,9 @@ var addonRootURL = require("extension.js").addonRootURL;
     //----------------------------------------------------------------------------
     // chrome.pageAction.setTitle
     this.setTitle = function(details) {
+      if (!pageActionInfoGlobal) {
+        throw new Error('This extension has no page action specified.');
+      }
       var args = preprocessArguments('chrome.pageAction.setTitle', arguments,
           'chrome.pageAction');
       getPageAction(args.details.tabId, true).title = args.details.title;
@@ -163,17 +172,20 @@ var addonRootURL = require("extension.js").addonRootURL;
     //----------------------------------------------------------------------------
     // chrome.pageAction.getTitle
     this.getTitle = function(details, callback) {
-      var args = preprocessArguments('chrome.pageAction.getTitle', arguments,
-          'chrome.pageAction');
       if (!pageActionInfoGlobal) {
         throw new Error('This extension has no page action specified.');
       }
+      var args = preprocessArguments('chrome.pageAction.getTitle', arguments,
+          'chrome.pageAction');
       args.callback(getPageAction(tabId).title);
     };
 
     //----------------------------------------------------------------------------
     // chrome.pageAction.setIcon
     this.setIcon = function(details, callback) {
+      if (!pageActionInfoGlobal) {
+        throw new Error('This extension has no page action specified.');
+      }
       var args = preprocessArguments('chrome.pageAction.setIcon', arguments,
           'chrome.pageAction');
       var icon = null;
@@ -200,6 +212,9 @@ currently no support for imageData
     //----------------------------------------------------------------------------
     // chrome.pageAction.setPopup
     this.setPopup = function(details) {
+      if (!pageActionInfoGlobal) {
+        throw new Error('This extension has no page action specified.');
+      }
       var args = preprocessArguments('chrome.pageAction.setPopup', arguments,
           'chrome.pageAction');
       getPageAction(args.details.tabId, true).popup = args.details.popup;
@@ -208,11 +223,11 @@ currently no support for imageData
     //----------------------------------------------------------------------------
     // chrome.pageAction.getPopup
     this.getPopup = function(details, callback) {
-      var args = preprocessArguments('chrome.pageAction.getPopup', arguments,
-          'chrome.pageAction');
       if (!pageActionInfoGlobal) {
         throw new Error('This extension has no page action specified.');
       }
+      var args = preprocessArguments('chrome.pageAction.getPopup', arguments,
+          'chrome.pageAction');
       args.callback(getPageAction(tabId).popup);
     };
   }
@@ -249,6 +264,9 @@ currently no support for imageData
 
   // called on each new tab
   exports.register = function(aInstanceID) {
+    if (!pageActionInfoGlobal) {
+      return;
+    }
     serviceAPI.pageActionToolbar(aInstanceID).registerAction(
       addonAPI.id,
       aInstanceID,

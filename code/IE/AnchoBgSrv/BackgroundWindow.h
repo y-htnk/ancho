@@ -20,6 +20,7 @@ public:
   DECLARE_FRAME_WND_CLASS(NULL, IDR_MAINFRAME)
 
   virtual void OnFinalMessage(HWND);
+  void InjectJsObjects();
 
   DECLARE_PROTECT_FINAL_CONSTRUCT()
 
@@ -34,6 +35,7 @@ public:
 
   BEGIN_SINK_MAP(CBackgroundWindow)
     SINK_ENTRY_EX(1, DIID_DWebBrowserEvents2, DISPID_PROGRESSCHANGE, OnBrowserProgressChange)
+    SINK_ENTRY_EX(1, DIID_DWebBrowserEvents2, DISPID_NAVIGATECOMPLETE2, OnNavigateComplete)
   END_SINK_MAP()
 
   HRESULT FinalConstruct();
@@ -45,6 +47,8 @@ public:
   LRESULT OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled);
 
   STDMETHOD_(void, OnBrowserProgressChange)(LONG Progress, LONG ProgressMax);
+  STDMETHOD_(void, OnNavigateComplete)(IDispatch* pDispBrowser, VARIANT * vtURL);
+
 private:
   CComQIPtr<IWebBrowser2>   m_pWebBrowser;     // Embedded WebBrowserControl
   DispatchMap m_InjectedObjects;
