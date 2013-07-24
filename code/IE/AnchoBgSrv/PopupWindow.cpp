@@ -159,11 +159,35 @@ typedef CComObject<PopupOnClickEventHandler> PopupOnClickEventHandlerComObject;
 // -------------------------------------------------------------------------
 // -------------------------------------------------------------------------
 
+void CPopupWindow::InjectJsObjects()
+{
+  // We don't care here if it works, if not, fail silently.
+  // It will anyway be called again later when script and window
+  // are available.
+  if (!mWebBrowser) {
+    return;
+  }
+  CIDispatchHelper script = CIDispatchHelper::GetScriptDispatch(mWebBrowser);
+  if (!script) {
+    return;
+  }
+  CIDispatchHelper window;
+  script.Get<CIDispatchHelper, VT_DISPATCH, IDispatch*>(L"window", window);
+  for (DispatchMap::iterator it = mInjectedObjects.begin(); it != mInjectedObjects.end(); ++it) {
+    CComVariant vt(it->second);
+    // set in any case to global script dispatch..
+    script.SetProperty((LPOLESTR)(it->first.c_str()), vt);
+    if (window) {
+      //.. and just in case also window if we have already one
+      window.SetProperty((LPOLESTR)(it->first.c_str()), vt);
+    }
+  }
+}
+
 
 
 HRESULT CPopupWindow::FinalConstruct()
 {
-  mWebBrowserEventsCookie = 0;
   CComPtr<PopupResizeEventHandlerComObject> onResizeEventHandler;
   PopupResizeEventHandler::createObject(OnResizeFunctor(this), onResizeEventHandler.p);
   mResizeEventHandler = onResizeEventHandler;
@@ -194,7 +218,8 @@ LRESULT CPopupWindow::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam
   IF_FAILED_RET2(QueryHost(__uuidof(IAxWinHostWindow), (void**)&spHost), -1);
 
   CComPtr<IUnknown>  p;
-  IF_FAILED_RET2(spHost->CreateControlEx(mURL, *this, NULL, &p, /*DIID_DWebBrowserEvents2, GetEventUnk()*/ IID_NULL, NULL), -1);
+  IF_FAILED_RET2(spHost->CreateControlEx(_T("{8856F961-340A-11D0-A96B-00C04FD705A2}"), *this, NULL, &p, DIID_DWebBrowserEvents2, (IUnknown *)(PopupWebBrowserEvents *) this), -1);
+//  IF_FAILED_RET2(spHost->CreateControlEx(mURL, *this, NULL, &p, /*DIID_DWebBrowserEvents2, GetEventUnk()*/ IID_NULL, NULL), -1);
 
   mWebBrowser = p;
   if (!mWebBrowser)
@@ -202,24 +227,19 @@ LRESULT CPopupWindow::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam
     return -1;
   }
 
-  AtlAdvise(mWebBrowser, (IUnknown *)(PopupWebBrowserEvents *) this, DIID_DWebBrowserEvents2, &mWebBrowserEventsCookie);
-
-
-  CIDispatchHelper script = CIDispatchHelper::GetScriptDispatch(mWebBrowser);
-  for (DispatchMap::iterator it = mInjectedObjects.begin(); it != mInjectedObjects.end(); ++it) {
-    ATLTRACE(L"INJECTING OBJECT %s\n", it->first.c_str());
-    script.SetProperty((LPOLESTR)(it->first.c_str()), CComVariant(it->second));
-  }
-
   //Replacing XMLHttpRequest by wrapper
   CComPtr<IAnchoXmlHttpRequest> pRequest;
   IF_FAILED_RET(createAnchoXHRInstance(&pRequest));
+  mInjectedObjects[L"XMLHttpRequest"] = pRequest.p;
 
-  CIDispatchHelper window;
-  script.Get<CIDispatchHelper, VT_DISPATCH, IDispatch*>(L"window", window);
-  if (window) {
-    IF_FAILED_RET(window.SetProperty((LPOLESTR)L"XMLHttpRequest", CComVariant(pRequest.p)));
-  }
+  //Workaround to rid of the ActiveXObject
+  mInjectedObjects[L"ActiveXObject"] = NULL;
+
+  // inject all objects the first time
+  InjectJsObjects();
+
+  // and load page
+  mWebBrowser->Navigate(CComBSTR(mURL), NULL, NULL, NULL, NULL);
 
   // This AddRef call is paired with the Release call in OnFinalMessage
   // to keep the object alive as long as the window exists.
@@ -229,7 +249,6 @@ LRESULT CPopupWindow::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam
 
 LRESULT CPopupWindow::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled)
 {
-  AtlUnadvise(mWebBrowser, DIID_DWebBrowserEvents2, mWebBrowserEventsCookie);
   bHandled = FALSE;
   //Cleanup procedure
   mCloseCallback.Invoke0(DISPID(0));
@@ -251,10 +270,7 @@ STDMETHODIMP_(void) CPopupWindow::OnBrowserProgressChange(LONG Progress, LONG Pr
   //Workaround to rid of the ActiveXObject
   //?? still some scripts are started earlier ??
   //also executed multiple times
-  CIDispatchHelper script = CIDispatchHelper::GetScriptDispatch(mWebBrowser);
-  CIDispatchHelper window;
-  script.Get<CIDispatchHelper, VT_DISPATCH, IDispatch*>(L"window", window);
-  window.SetProperty((LPOLESTR)L"ActiveXObject", CComVariant());
+  InjectJsObjects();
 
   //Autoresize
   checkResize();
@@ -275,6 +291,11 @@ STDMETHODIMP_(void) CPopupWindow::OnBrowserProgressChange(LONG Progress, LONG Pr
   }
   htmlDocument2->put_onclick(mOnClickEventHandler);
 
+}
+
+STDMETHODIMP_(void) CPopupWindow::OnNavigateComplete(IDispatch* pDispBrowser, VARIANT * vtURL)
+{
+  InjectJsObjects();
 }
 
 void CPopupWindow::checkResize()

@@ -21,6 +21,7 @@ public:
   DECLARE_FRAME_WND_CLASS(NULL, IDR_MAINFRAME)
 
   virtual void OnFinalMessage(HWND);
+  void InjectJsObjects();
 
   DECLARE_PROTECT_FINAL_CONSTRUCT()
 
@@ -30,6 +31,7 @@ public:
 
   BEGIN_SINK_MAP(CPopupWindow)
     SINK_ENTRY_EX(1, DIID_DWebBrowserEvents2, DISPID_PROGRESSCHANGE, OnBrowserProgressChange)
+    SINK_ENTRY_EX(1, DIID_DWebBrowserEvents2, DISPID_NAVIGATECOMPLETE2, OnNavigateComplete)
   END_SINK_MAP()
 
   BEGIN_MSG_MAP(CPopupWindow)
@@ -48,6 +50,7 @@ public:
   LRESULT OnActivate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 
   STDMETHOD_(void, OnBrowserProgressChange)(LONG Progress, LONG ProgressMax);
+  STDMETHOD_(void, OnNavigateComplete)(IDispatch* pDispBrowser, VARIANT * vtURL);
 
   void checkResize();
 private:
@@ -56,7 +59,6 @@ private:
   CComQIPtr<IWebBrowser2>   mWebBrowser;     // Embedded WebBrowserControl
   DispatchMap mInjectedObjects;
   CStringW    mURL;
-  DWORD       mWebBrowserEventsCookie;
   CIDispatchHelper mCloseCallback;
   CAnchoAddonService *mService;
 
