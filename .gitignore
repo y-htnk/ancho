@@ -1,4 +1,5 @@
 build*/
-node_modules
+node_modules/
+minified_modules/
 *.swp
 *.tmp

@@ -91,7 +91,8 @@ var BackgroundWindow = {
 
   _runBackground: function() {
     var manifest = this._extension.manifest;
-    var spec = manifest.background.page ? this._extension.getURL(manifest.background.page) :
+    var spec = (manifest.background && manifest.background.page) ?
+      this._extension.getURL(manifest.background.page) :
       // Cannot use 'about:blank' here, because DOM for 'about:blank'
       // is inappropriate for script inserting: neither 'document.head'
       // nor 'document.body' are defined.
@@ -101,7 +102,7 @@ var BackgroundWindow = {
 
     loadHtml(this._extension, document, browser, spec, function(targetWindow) {
       // load background scripts, if any
-      if (manifest.background.scripts) {
+      if (manifest.background && manifest.background.scripts) {
         for (var i=0; i<manifest.background.scripts.length; i++) {
           var script = targetWindow.document.createElement('script');
           script.src = this._extension.getURL(manifest.background.scripts[i]);

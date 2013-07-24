@@ -7,7 +7,7 @@ module.exports = function(grunt) {
   var TEST_EXTENSION_DIR = '../tests/test-suite-extension';
   var MINIFIED_MODULES = 'minified_modules';
 
-  var outputDir = grunt.option('outputDir') || '../build';
+  var outputDir = grunt.option('outputDir') || '../../build';
   var extensionDir = grunt.option('extensionDir') || TEST_EXTENSION_DIR;
 
   function buildModuleList(pkg) {
