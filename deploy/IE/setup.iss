@@ -21,6 +21,7 @@
 
 ; crtPath
 
+; 64bit version of AnchoBgSrv.exe shouldn't be installed - IE can mix 32/64 bit versions
 [Setup]
 AppId={#AppUUID}
 AppName={#appName}
@@ -43,7 +44,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Source: "{#installBin}\x86\ancho.dll"; DestDir: "{app}\x86"; Flags: ignoreversion regserver; Check: ShouldInstallAncho
 Source: "{#installBin}\x64\ancho.dll"; DestDir: "{app}\x64"; Flags: ignoreversion regserver; Check: ShouldInstallAncho64
 Source: "{#installBin}\x86\AnchoBgSrv.exe"; DestDir: "{app}\x86"; Flags: ignoreversion; Check: ShouldInstallAncho
-Source: "{#installBin}\x64\AnchoBgSrv.exe"; DestDir: "{app}\x64";Flags: ignoreversion; Check: ShouldInstallAncho64
+;Source: "{#installBin}\x64\AnchoBgSrv.exe"; DestDir: "{app}\x64";Flags: ignoreversion; Check: ShouldInstallAncho64
 Source: "{#installBin}\x86\AnchoShared.dll"; DestDir: "{app}\x86"; Flags: ignoreversion; Check: ShouldInstallAncho
 Source: "{#installBin}\x64\AnchoShared.dll"; DestDir: "{app}\x64"; Flags: ignoreversion; Check: ShouldInstallAncho64
 Source: "{#installBin}\x86\Magpie.dll"; DestDir: "{app}\x86"; Flags: ignoreversion; Check: ShouldInstallAncho
@@ -61,14 +62,14 @@ Root: HKCU; Subkey: "Software\Salsita\AnchoAddonService"; ValueName: "Version"; 
 
 [Run]
 Filename: "{app}\x86\AnchoBgSrv.exe"; Parameters: "/RegServer /s"; Flags: waituntilterminated
-Filename: "{app}\x64\AnchoBgSrv.exe"; Parameters: "/RegServer /s"; Flags: waituntilterminated; Check: Is64BitInstallMode
+;Filename: "{app}\x64\AnchoBgSrv.exe"; Parameters: "/RegServer /s"; Flags: waituntilterminated; Check: Is64BitInstallMode
 ;Filename: "regsvr32"; Parameters: "/s ""{app}\x86\ancho.dll"""; Flags: waituntilterminated
 ;Filename: "regsvr32"; Parameters: "/s ""{app}\x64\ancho.dll"""; Flags: waituntilterminated; Check: Is64BitInstallMode
 
 [UninstallRun]
 Filename: "{app}\x86\AnchoBgSrv.exe"; Parameters: "/UnRegServer /s"
 Filename: "regsvr32"; Parameters: "/s /u ""{app}\x86\ancho.dll"""
-Filename: "{app}\x64\AnchoBgSrv.exe"; Parameters: "/UnRegServer /s"; Check: Is64BitInstallMode
+;Filename: "{app}\x64\AnchoBgSrv.exe"; Parameters: "/UnRegServer /s"; Check: Is64BitInstallMode
 Filename: "regsvr32"; Parameters: "/s /u ""{app}\x64\ancho.dll"""; Check: Is64BitInstallMode
 
 [Code]
@@ -192,13 +193,13 @@ end;
 procedure KillBackgroundServiceUninst;
 begin
   KillAllProcessesByAboslutePathUninst(ExpandConstant('{app}\x86\AnchoBgSrv.exe'));
-  KillAllProcessesByAboslutePathUninst(ExpandConstant('{app}\x64\AnchoBgSrv.exe'));
+  //KillAllProcessesByAboslutePathUninst(ExpandConstant('{app}\x64\AnchoBgSrv.exe'));
 end;
 
 procedure KillBackgroundService;
 begin
   KillAllProcessesByAboslutePath(ExpandConstant('{app}\x86\AnchoBgSrv.exe'));
-  KillAllProcessesByAboslutePath(ExpandConstant('{app}\x64\AnchoBgSrv.exe'));
+  //KillAllProcessesByAboslutePath(ExpandConstant('{app}\x64\AnchoBgSrv.exe'));
 end;
 
 function InitializeUninstall: Boolean;
