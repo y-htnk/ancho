@@ -9,6 +9,8 @@
 
 #include "ancho_i.h"
 
+#include "CookieManager.h"
+
 #if defined(_WIN32_WCE) && !defined(_CE_DCOM) && !defined(_CE_ALLOW_SINGLE_THREADED_OBJECTS_IN_MTA)
 #error "Single-threaded COM objects are not properly supported on Windows CE platform, such as the Windows Mobile platforms that do not include full DCOM support. Define _CE_ALLOW_SINGLE_THREADED_OBJECTS_IN_MTA to force ATL to support creating single-thread COM object's and allow use of it's single-threaded COM object implementations. The threading model in your rgs file was set to 'Free' as that is the only threading model supported in non DCOM Windows CE platforms."
 #endif
@@ -96,6 +98,7 @@ public:
 
   // -------------------------------------------------------------------------
   // IAnchoRuntime methods
+  STDMETHOD(get_cookieManager)(LPDISPATCH* ppRet);
   STDMETHOD(reloadTab)();
   STDMETHOD(closeTab)();
   STDMETHOD(executeScript)(BSTR aExtensionId, BSTR aCode, INT aFileSpecified);
@@ -180,6 +183,9 @@ private:
   bool                                    m_IsExtensionPage;
 
   HeartbeatSlave                          m_HeartbeatSlave;
+
+  CComPtr<Ancho::CookieManagerComObject>         mCookieManager;
 };
 
 OBJECT_ENTRY_AUTO(__uuidof(AnchoRuntime), CAnchoRuntime)
+

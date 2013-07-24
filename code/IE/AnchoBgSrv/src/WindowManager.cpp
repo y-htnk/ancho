@@ -3,9 +3,8 @@
 #include "AnchoBackgroundServer/TabManager.hpp"
 #include <Exceptions.h>
 #include <SimpleWrappers.h>
-#include "AnchoBackgroundServer/AsynchronousTaskManager.hpp"
-#include "AnchoBackgroundServer/COMConversions.hpp"
-#include "AnchoBackgroundServer/JavaScriptCallback.hpp"
+#include <AnchoCommons/COMConversions.hpp>
+#include <AnchoCommons/JavaScriptCallback.hpp>
 #include "PopupWindow.h"
 #include "AnchoAddonService.h"
 
@@ -140,11 +139,11 @@ void WindowManager::getAllWindows(
     std::wstring extensionId = aExtensionId;
     int apiId = aApiId;
 
-    CComPtr<IDispatch> windowList = TabManager::instance().createArray(aExtensionId, aApiId);
+    CComPtr<IDispatch> windowList = CAnchoAddonService::instance().createArray(aExtensionId, aApiId);
     Utils::JSArrayWrapper windowListWrapper = Ancho::Utils::JSValueWrapper(windowList).toArray();
 
     WindowManager::instance().forEachWindow([&, extensionId, apiId](const WindowRecord &rec) {
-      CComPtr<IDispatch> info = TabManager::instance().createObject(extensionId, apiId);
+      CComPtr<IDispatch> info = CAnchoAddonService::instance().createObject(extensionId, apiId);
       Utils::JSObjectWrapper infoWrapper = Ancho::Utils::JSValueWrapper(info).toObject();
       WindowManager::instance().fillWindowInfo(rec.getHWND(), infoWrapper);
       windowListWrapper.push_back(infoWrapper);
@@ -250,7 +249,7 @@ void WindowManager::getWindow(
 {
   mAsyncTaskManager.addTask([=, this](){
     HWND win = getHandleFromWindowId(aWindowId);
-    CComPtr<IDispatch> info = TabManager::instance().createObject(aExtensionId, aApiId);
+    CComPtr<IDispatch> info = CAnchoAddonService::instance().createObject(aExtensionId, aApiId);
     //TODO - populate: aGetInfo[L"populate"];
     WindowManager::instance().fillWindowInfo(win, Utils::JSValueWrapper(info).toObject());
     aCallback(info);

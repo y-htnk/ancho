@@ -14,7 +14,7 @@ namespace detail {
 
 inline CComVariant getMember(CComVariant &aObject, const std::wstring &aProperty)
 {
-  if (aObject.vt != VT_DISPATCH) {
+  if (aObject.vt != VT_DISPATCH || aObject.pdispVal == NULL) {
     ANCHO_THROW(ENotAnObject());
   }
   DISPID did = 0;
@@ -32,7 +32,7 @@ inline CComVariant getMember(CComVariant &aObject, const std::wstring &aProperty
 
 inline void setMember(CComVariant &aObject, const std::wstring &aProperty, const CComVariant &aValue)
 {
-  if (aObject.vt != VT_DISPATCH) {
+  if (aObject.vt != VT_DISPATCH || aObject.pdispVal == NULL) {
     ANCHO_THROW(ENotAnObject());
   }
 
@@ -252,28 +252,28 @@ public:
     : JSValueWrapper(aValue), mOwner(aOwner), mPropertyName(aPropertyName)
   { /*empty*/ }
 
-  JSValueAssigner & operator=(const std::wstring &aValue)
+  JSValueAssigner operator=(const std::wstring &aValue)const
   {
     Utils::detail::setMember(mOwner, mPropertyName, CComVariant(aValue.c_str()));
     return *this;
   }
-  JSValueAssigner & operator=(int aValue)
+  JSValueAssigner operator=(int aValue)const
   {
     Utils::detail::setMember(mOwner, mPropertyName, CComVariant(aValue));
     return *this;
   }
-  JSValueAssigner & operator=(double aValue)
+  JSValueAssigner operator=(double aValue)const
   {
     Utils::detail::setMember(mOwner, mPropertyName, CComVariant(aValue));
     return *this;
   }
-  JSValueAssigner & operator=(bool aValue)
+  JSValueAssigner operator=(bool aValue)const
   {
     Utils::detail::setMember(mOwner, mPropertyName, CComVariant(aValue));
     return *this;
   }
 protected:
-  CComVariant mOwner;
+  mutable CComVariant mOwner;
   std::wstring mPropertyName;
 };
 

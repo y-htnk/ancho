@@ -68,7 +68,7 @@ exports.invokeEventWithIDispatch = function(aEventName, aIDispatchData) {
 var Cookies = function(instanceID) {
   //============================================================================
   // private variables
-
+  var _instanceID = instanceID;
   //============================================================================
   // public methods
 
@@ -76,25 +76,15 @@ var Cookies = function(instanceID) {
   // chrome.cookies.get
   this.get = function(details, callback) {
     var args = preprocessArguments('chrome.cookies.get', arguments);
-    var data = serviceAPI.cookieManager.getCookie(args['details'].url, args['details'].name);
-    var cookie = null;
-    if (data) {
-      cookie = parseCookieString(data);
-      cookie.url = args['details'].url;
-    }
 
-    args['callback'](cookie);
+    serviceAPI.cookieManager.getCookie(args.details, args.callback, addonAPI.id, _instanceID);
   };
 
   //----------------------------------------------------------------------------
   // chrome.cookies.getAll
   this.getAll = function(details, callback) {
     var args = preprocessArguments('chrome.cookies.getAll', arguments);
-    var cookies = [];
-    serviceAPI.cookieManager.enumCookies(function(cookie) {
-      cookies.push(createCookieCopy(cookie));
-    });
-    callback(cookies);
+    serviceAPI.cookieManager.getAllCookies(args.details, args.callback, addonAPI.id, _instanceID);
   };
 
   //----------------------------------------------------------------------------
@@ -107,11 +97,9 @@ var Cookies = function(instanceID) {
   // chrome.cookies.remove
   this.remove = function(details, callback) {
     var args = preprocessArguments('chrome.cookies.remove', arguments);
-    serviceAPI.cookieManager.removeCookie(args['details'].url, args['details'].name);
-    if (args['callback']) {
-      //TODO storeId
-      args['callback']({ url: args['details'].url, name: args['details'].name });
-    }
+
+    var callbackFunc = args.callback || function(cookie){};
+    serviceAPI.cookieManager.removeCookie(args.details, callbackFunc, addonAPI.id, _instanceID);
   };
 
   //----------------------------------------------------------------------------
@@ -119,42 +107,8 @@ var Cookies = function(instanceID) {
   this.set = function(details, callback) {
     var args = preprocessArguments('chrome.cookies.set', arguments);
 
-    var data = "";
-    if (args['details'].value) {
-      data += args['details'].value;
-    }
-    data += '; ';
-
-    if (args['details'].domain) {
-      data += 'domain=' + args['details'].domain + '; ';
-    }
-
-    if (args['details'].expirationDate) {
-      var date = new Date(args['details'].expirationDate * 1000);
-      data += 'Expires=' + date.toUTCString() + '; ';
-    }
-    if (args['details'].path) {
-      data += 'Path=' + args['details'].path + '; ';
-    }
-    if (args['details'].secure) {
-      data += 'Secure; ';
-    }
-    if (args['details'].httpOnly) {
-      data += 'HttpOnly; ';
-    }
-
-    //if (args['details'].storeId) {
-    //TODO cookieStores
-    //}
-    serviceAPI.cookieManager.setCookie(args['details'].url, args['details'].name, data);
-
-    if (args['callback']) {
-      //TODO additional properties
-      var data = serviceAPI.cookieManager.getCookie(args['details'].url, args['details'].name);
-      var cookie = parseCookieString(data);
-      cookie.url = args['details'].url;
-      args['callback'](cookie);
-    }
+    var callbackFunc = args.callback || function(cookie){};
+    serviceAPI.cookieManager.setCookie(args.details, callbackFunc, addonAPI.id, _instanceID);
   };
 
   //============================================================================

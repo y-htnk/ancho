@@ -146,6 +146,8 @@ HRESULT CAnchoRuntime::Init()
     mWindowManager = windowManager;
   }
 
+  mCookieManager = Ancho::CookieManager::createInstance(serviceApi);
+
   // Registering tab in service - obtains tab id and assigns it to the tab as property
   IF_FAILED_RET(mTabManager->registerRuntime((OLE_HANDLE)getFrameTabWindow(), this, m_HeartbeatSlave.id(), &m_TabID));
   HWND hwnd;
@@ -169,7 +171,13 @@ HRESULT CAnchoRuntime::Init()
   ATLTRACE(L"ANCHO: runtime %d initialized\n", m_TabID);
   return S_OK;
 }
-
+//----------------------------------------------------------------------------
+//
+HRESULT CAnchoRuntime::get_cookieManager(LPDISPATCH* ppRet)
+{
+  ENSURE_RETVAL(ppRet);
+  return mCookieManager->QueryInterface(ppRet);
+}
 //----------------------------------------------------------------------------
 //
 STDMETHODIMP_(void) CAnchoRuntime::OnBrowserDownloadBegin()
@@ -200,12 +208,12 @@ STDMETHODIMP_(void) CAnchoRuntime::OnNavigateComplete(LPDISPATCH pDispatch, VARI
 {
   CComBSTR url(URL->bstrVal);
   m_IsExtensionPage = isExtensionPage(std::wstring(url));
-  /*if (m_IsExtensionPage) {
+  if (m_IsExtensionPage) {
     // Too early for api injections
     if (S_OK == InitializeExtensionScripting(url)) {
       m_ExtensionPageAPIPrepared = true;
     }
-  }*/
+  }
 }
 
 //----------------------------------------------------------------------------

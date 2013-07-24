@@ -1,11 +1,10 @@
 #include "stdafx.h"
 #include "AnchoBackgroundServer/TabManager.hpp"
 #include "AnchoBackgroundServer/WindowManager.hpp"
+#include "AnchoAddonService.h"
 #include <Exceptions.h>
 #include <SimpleWrappers.h>
-#include "AnchoBackgroundServer/AsynchronousTaskManager.hpp"
-#include "AnchoBackgroundServer/COMConversions.hpp"
-#include "AnchoBackgroundServer/JavaScriptCallback.hpp"
+#include <AnchoCommons/JavaScriptCallback.hpp>
 
 namespace Ancho {
 namespace Utils {
@@ -282,7 +281,7 @@ struct GetTabTask
 
     CComPtr<IAnchoRuntime> runtime = tabRecord->runtime();
 
-    CComPtr<IDispatch> info = TabManager::instance().createObject(mExtensionId, mApiId);
+    CComPtr<IDispatch> info = CAnchoAddonService::instance().createObject(mExtensionId, mApiId);
     //CComPtr<ComSimpleJSObject> info = SimpleJSObject::createInstance();
     IF_FAILED_THROW(runtime->fillTabInfo(&_variant_t(info).GetVARIANT()));
 
@@ -321,8 +320,7 @@ struct QueryTabsTask
     {
       CComPtr<IAnchoRuntime> runtime = aRec.runtime();
 
-      CComPtr<IDispatch> info = TabManager::instance().createObject(mExtensionId, mApiId);
-      //CComPtr<ComSimpleJSObject> info = SimpleJSObject::createInstance();
+      CComPtr<IDispatch> info = CAnchoAddonService::instance().createObject(mExtensionId, mApiId);
       _variant_t vtInfo(info);
       IF_FAILED_THROW(runtime->fillTabInfo(&vtInfo.GetVARIANT()));
 
@@ -357,7 +355,7 @@ struct QueryTabsTask
   {
     try {
       ATLTRACE(L"QUERY TABS TASK - Start\n");
-      CComPtr<IDispatch> tabsDisp = TabManager::instance().createArray(mExtensionId, mApiId);
+      CComPtr<IDispatch> tabsDisp = CAnchoAddonService::instance().createArray(mExtensionId, mApiId);
       Utils::JSArrayWrapper tabs = Utils::JSValueWrapper(tabsDisp).toArray();
       //TabInfoList tabs = ComSimpleJSArray::createInstance();
 
@@ -365,7 +363,7 @@ struct QueryTabsTask
       if (mProperties[L"tabId"].which() == Utils::jsInt) {
         TabManager::TabRecord::Ptr tabRecord = TabManager::instance().getTabRecord(boost::get<int>(mProperties[L"tabId"]));
         if (tabRecord) {
-          CComPtr<IDispatch> info = TabManager::instance().createObject(mExtensionId, mApiId);
+          CComPtr<IDispatch> info = CAnchoAddonService::instance().createObject(mExtensionId, mApiId);
           _variant_t vtInfo(info);
           IF_FAILED_THROW(tabRecord->runtime()->fillTabInfo(&vtInfo.GetVARIANT()));
           tabs.push_back(Utils::JSValueWrapper(info));
@@ -611,7 +609,7 @@ STDMETHODIMP TabManager::getTabInfo(INT aTabId, BSTR aExtensionId, INT aApiId, V
     _variant_t vtInfo;
     TabManager::TabRecord::Ptr tabRecord = TabManager::instance().getTabRecord(aTabId);
     if (tabRecord) {
-      CComPtr<IDispatch> info = TabManager::instance().createObject(std::wstring(aExtensionId), aApiId);
+      CComPtr<IDispatch> info = CAnchoAddonService::instance().createObject(std::wstring(aExtensionId), aApiId);
       vtInfo = info;
       IF_FAILED_THROW(tabRecord->runtime()->fillTabInfo(&vtInfo.GetVARIANT()));
     }
@@ -641,8 +639,9 @@ STDMETHODIMP TabManager::registerRuntime(OLE_HANDLE aFrameTab, IAnchoRuntime * a
   ATLTRACE(L"ADDON SERVICE - registering tab: %d\n", *aTabID);
 
   if (!mHeartbeatTimer.isRunning()) {
-    mHeartbeatTimer.start();
-    mHeartbeatActive = true;
+    //TODO: check if works properly
+    /*mHeartbeatTimer.start();
+    mHeartbeatActive = true;*/
   }
   return S_OK;
   END_TRY_BLOCK_CATCH_TO_HRESULT;
@@ -690,21 +689,28 @@ STDMETHODIMP TabManager::createTabNotification(INT aTabId, ULONG aRequestID)
 //
 void TabManager::checkBHOConnections()
 {
-  boost::unique_lock<Mutex> lock(mTabAccessMutex);
-
-  auto it = mTabs.begin();
-  auto endIter =  mTabs.end();
+  TabMap tmp;
+  {
+    boost::unique_lock<Mutex> lock(mTabAccessMutex);
+    tmp = mTabs;
+  }
+  std::vector<TabId> invalidIDs;
+  auto it = tmp.begin();
+  auto endIter =  tmp.end();
   while (it != endIter) {
     ATLASSERT(it->second);
     if (!it->second->isAlive()) {
-      mTabs.erase(it++);
-    } else {
-      ++it;
+      invalidIDs.push_back(it->first);
     }
   }
-  if (mTabs.empty()) {
-    //We are in undefined state - kill the service
-    TerminateProcess(GetCurrentProcess(), 0);
+
+  {
+    boost::unique_lock<Mutex> lock(mTabAccessMutex);
+    std::for_each(invalidIDs.begin(), invalidIDs.end(), [&, this](TabId id){ mTabs.erase(id); });
+    if (mTabs.empty()) {
+      //We are in undefined state - kill the service
+      TerminateProcess(GetCurrentProcess(), 0);
+    }
   }
 }
 

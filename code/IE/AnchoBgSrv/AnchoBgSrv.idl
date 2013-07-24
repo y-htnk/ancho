@@ -89,6 +89,9 @@ library AnchoBgSrvLib
   ]
   interface IAnchoRuntime : IUnknown
   {
+    [propget, id(1)]
+    HRESULT cookieManager([out, retval] LPDISPATCH* ppRet);
+
     HRESULT reloadTab();
     HRESULT closeTab();
     HRESULT executeScript([in] BSTR aExtensionId, [in] BSTR aCode, [in] INT aFileSpecified);
@@ -118,6 +121,11 @@ library AnchoBgSrvLib
     [propget, id(3)]
     HRESULT windowManager([out, retval] LPDISPATCH* ppRet);
 
+    HRESULT registerJSConstructors([in] LPDISPATCH aObjectConstructor, [in] LPDISPATCH aArrayConstructor, [in] BSTR aExtensionId, [in] INT aApiId);
+    HRESULT removeJSConstructors([in] BSTR aExtensionId, [in] INT aApiId);
+    HRESULT createJSObject([in] BSTR aExtensionId, [in] INT aApiId, [out, retval] LPDISPATCH *aObject);
+    HRESULT createJSArray([in] BSTR aExtensionId, [in] INT aApiId, [out, retval] LPDISPATCH *aArray);
+
     //HRESULT executeScript([in] BSTR aExtensionId, [in] INT aTabID, [in] BSTR aCode, [in] BOOL aFileSpecified, [in] BOOL aInAllFrames);
     HRESULT invokeExternalEventObject([in] BSTR aExtensionId, [in] BSTR aEventName, [in] LPDISPATCH aArgs, [out, retval] VARIANT* aRet);
 
@@ -126,12 +134,13 @@ library AnchoBgSrvLib
     HRESULT setBrowserActionUpdateCallback([in] INT aTabId, [in] LPDISPATCH aBrowserActionUpdateCallback);
     HRESULT browserActionNotification();
 
-    HRESULT testFunction([in] LPDISPATCH aObject, [in] LPDISPATCH aCallback);
+    HRESULT testFunction([in] BSTR aData);
   };
+
   /*==========================================================================*/
   [
 	  object,
-	  uuid(FE4E5D80-04A1-428C-8A0C-0E789E6D6B13),
+	  uuid(573B05F5-DE12-49C0-89BA-395B88D87DF8),
 	  dual,
 	  nonextensible,
 	  helpstring("ITabManager Interface"),
@@ -150,7 +159,6 @@ library AnchoBgSrvLib
     [id(5), helpstring("removeTabs - asynchronous call")]
     HRESULT removeTabs([in] LPDISPATCH aTabs, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
 
-    HRESULT registerConstructors([in] LPDISPATCH aObjectConstructor, [in] LPDISPATCH aArrayConstructor, [in] BSTR aExtensionId, [in] INT aApiId);
     HRESULT getTabInfo([in] INT aTabId, [in] BSTR aExtensionId, [in] INT aApiId, [out, retval] VARIANT* aRet);
   };
 
@@ -261,7 +269,27 @@ library AnchoBgSrvLib
     HRESULT getCookie([in] BSTR aUrl, [in] BSTR aName, [out, retval] VARIANT * aRet);
   };
 
+  [
+	  object,
+	  uuid(8FC6A0B1-2669-407C-853B-265E140382D7),
+    dual,
+    nonextensible,
+    pointer_default(unique)
+  ]
+  interface IIECookieAccessor : IDispatch
+  {
+    [id(1), helpstring("getAllCookies")]
+    HRESULT getAllCookies([in] LPDISPATCH aDetails, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
 
+    [id(2), helpstring("removeCookie")]
+    HRESULT removeCookie([in] LPDISPATCH aDetails, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+
+    [id(3), helpstring("setCookie")]
+    HRESULT setCookie([in] LPDISPATCH aDetails, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+
+    [id(4), helpstring("getCookie")]
+    HRESULT getCookie([in] LPDISPATCH aDetails, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+  };
 /*==========================================================================*/
   [
 	  object,

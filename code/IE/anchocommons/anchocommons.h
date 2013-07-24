@@ -2,6 +2,7 @@
 
 #include <string>
 #include <boost/atomic.hpp>
+#include <ctime>
 
 extern const wchar_t * s_AnchoMainAPIModuleID;
 extern const wchar_t * s_AnchoExtensionsRegistryKey;
@@ -137,3 +138,21 @@ protected:
 
 } //namespace Utils
 } //namespace Ancho
+
+
+#define EPOCH_DIFF 0x019DB1DED53E8000LL /* 116444736000000000 nsecs */
+#define RATE_DIFF 10000000 /* 100 nsecs */
+
+typedef INT64 filetime_t;
+
+/* Convert a UNIX time_t into a Windows filetime_t */
+inline filetime_t unixTimeToFileTime(time_t utime) {
+        INT64 tconv = ((INT64)utime * RATE_DIFF) + EPOCH_DIFF;
+        return tconv;
+}
+
+/* Convert a Windows filetime_t into a UNIX time_t */
+inline time_t fileTimeToUnixTime(filetime_t ftime) {
+        INT64 tconv = (ftime - EPOCH_DIFF) / RATE_DIFF;
+        return (time_t)tconv;
+}

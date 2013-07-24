@@ -1,9 +1,9 @@
 #pragma once
 #include "resource.h"
 #include "AnchoBgSrv_i.h"
-#include "AnchoBackgroundServer/AsynchronousTaskManager.hpp"
-#include "AnchoBackgroundServer/COMConversions.hpp"
-#include "AnchoBackgroundServer/JavaScriptCallback.hpp"
+#include <AnchoCommons/AsynchronousTaskManager.hpp>
+#include <AnchoCommons/COMConversions.hpp>
+#include <AnchoCommons/JavaScriptCallback.hpp>
 #include "AnchoBackgroundServer/PeriodicTimer.hpp"
 #include <IPCHeartbeat.h>
 #include <Exceptions.h>
