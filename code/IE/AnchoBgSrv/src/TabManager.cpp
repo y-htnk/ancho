@@ -41,7 +41,7 @@ BOOL CALLBACK enumBrowserWindows(HWND hwnd, LPARAM lParam)
       // IWebBrowser2 doesn't have a container if it is an IE tab, so if we have a container
       // then we must be an embedded web browser (e.g. in an HTML toolbar).
       if (container) { return TRUE; }
-
+/*
       // This check works for IE10
       // We want only real tab windows. So we expect the following structure:
       //   TabWindowClass
@@ -55,7 +55,7 @@ BOOL CALLBACK enumBrowserWindows(HWND hwnd, LPARAM lParam)
       if (wcscmp(className, L"TabWindowClass") != 0) {
         return TRUE;
       }
-
+*/
       // Now get the HWND associated with the tab so we can see if it is active.
       sp = pWebBrowser;
       if (!sp) { return TRUE; }
@@ -216,12 +216,19 @@ struct CreateTabTask
       long flags = windowId == WINDOW_ID_NON_EXISTENT ? navOpenInNewWindow : navOpenInNewTab;
       _variant_t vtFlags(flags, VT_I4);
 
+      _variant_t vtTargetFrameName;
+      _variant_t vtPostData;
+      _variant_t vtHeaders;
+
+      // actually giving NULL instead of empty variants should work, but the stub in IE9
+      // seems to be buggy and does not accept them. So for "compatibility" reasons we use
+      // empty variants instead.. *sigh*
       IF_FAILED_THROW(browser->Navigate2(
                                   &vtUrl.GetVARIANT(),
                                   &vtFlags.GetVARIANT(),
-                                  NULL,
-                                  NULL,
-                                  NULL)
+                                  &vtTargetFrameName.GetVARIANT(),
+                                  &vtPostData.GetVARIANT(),
+                                  &vtHeaders.GetVARIANT())
                                   );
     } catch (EHResult &e) {
       ATLTRACE(L"Error in create tab task: %s\n", Utils::getLastError(e.mHResult).c_str());
