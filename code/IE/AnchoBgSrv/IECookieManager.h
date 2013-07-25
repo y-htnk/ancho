@@ -1,7 +1,7 @@
 /****************************************************************************
  * IECookieManager.h : Declaration of the CIECookieManager
  * Copyright 2012 Salsita Software.
- * Author: Arne Seib <kontakt@seiberspace.de>
+ * Author: ???
  ****************************************************************************/
 
 #pragma once

@@ -19,6 +19,7 @@ HRESULT CToolbar::InternalSetSite()
     return E_FAIL;
   }
   ATLTRACE(L"ANCHO: toolbar InternalSetSite() - CoCreateInstace(CLSID_AnchoAddonService)\n");
+
   // create addon service object
   IF_FAILED_RET(mAnchoService.CoCreateInstance(CLSID_AnchoAddonService));
 
@@ -36,12 +37,19 @@ HRESULT CToolbar::InternalSetSite()
   mContentWindow->setExternalObject(dispatchObject);
   mContentWindow->setTabId(mTabId);
   ATLTRACE(L"ANCHO: toolbar InternalSetSite() - initialization finished\n");
+
   return RunToolbarPage();
 }
 
 HRESULT CToolbar::InternalReleaseSite()
 {
-  mAnchoService->unregisterBrowserActionToolbar(mTabId);
+  if (mContentWindow) {
+    mContentWindow->setExternalObject(NULL);
+  }
+  if (mAnchoService) {
+    mAnchoService->unregisterBrowserActionToolbar(mTabId);
+  }
+  mAnchoService.Release();
   return BaseClass::InternalReleaseSite();
 }
 

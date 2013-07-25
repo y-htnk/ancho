@@ -1,7 +1,7 @@
 /****************************************************************************
  * IECookieManager.cpp : Implementation of CIECookieManager
  * Copyright 2012 Salsita Software.
- * Author: Arne Seib <kontakt@seiberspace.de>
+ * Author: ???
  ****************************************************************************/
 
 #include "StdAfx.h"

@@ -28,11 +28,6 @@ typedef boost::function<void(WindowInfo)> WindowCallback;
 typedef boost::function<void(WindowInfoList)> WindowListCallback;
 typedef boost::function<void(void)> SimpleCallback;
 
-class WindowManager;
-//Pointer to windowmanager singleton instance
-extern CComObject<Ancho::Service::WindowManager> *gWindowManager;
-
-
 /**
  * Singleton class.
  * This manager stores information and references to all IE windows currently available.
@@ -115,7 +110,7 @@ public:
     }
     return std::move(missed);
   }
-
+/*
   static void initSingleton()
   {
     ATLASSERT(gWindowManager == NULL);
@@ -123,11 +118,11 @@ public:
     IF_FAILED_THROW(CComObject<Ancho::Service::WindowManager>::CreateInstance(&windowManager));
     gWindowManager = windowManager;
   }
-
-  static CComObject<Ancho::Service::WindowManager> & instance()
+*/
+  static CComObjectStackEx<Ancho::Service::WindowManager> & instance()
   {
-    ATLASSERT(gWindowManager != NULL);
-    return *gWindowManager;
+    static CComObjectStackEx<Ancho::Service::WindowManager> windowManager;
+    return windowManager;
   }
 
   STDMETHOD(getWindowIdFromHWND)(OLE_HANDLE aHWND, LONG *aWindowId);

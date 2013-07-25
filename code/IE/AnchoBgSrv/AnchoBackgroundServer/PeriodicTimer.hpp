@@ -69,7 +69,8 @@ struct PeriodicTimer: public boost::noncopyable
   void stop()
   {
     if (isRunning()) {
-      DeleteTimerQueueTimer(mTimerQueue, mTimerHandle, NULL);
+      DeleteTimerQueueTimer(mTimerQueue, mTimerHandle, INVALID_HANDLE_VALUE);
+      mTimerHandle = NULL;
     }
   }
 

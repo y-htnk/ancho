@@ -178,9 +178,9 @@ private:
 
   CComPtr<IIECookieManager>     m_Cookies;
 
-  CComPtr<ITabManager>          mITabManager;
+  //CComPtr<ITabManager>          mITabManager;
 
-  CComPtr<IWindowManager>       mIWindowManager;
+  //CComPtr<IWindowManager>       mIWindowManager;
 
   Ancho::PageAction::ProxyManager
                                 mPageActionProxies;

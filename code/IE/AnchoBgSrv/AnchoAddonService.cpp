@@ -52,6 +52,14 @@ void CAnchoAddonService::OnAddonFinalRelease(BSTR bsID)
 HRESULT CAnchoAddonService::get_cookieManager(LPDISPATCH* ppRet)
 {
   ENSURE_RETVAL(ppRet);
+  if (!m_Cookies) {
+    CComObject<CIECookieManager> * pCookiesManager = NULL;
+    IF_FAILED_RET(CComObject<CIECookieManager>::CreateInstance(&pCookiesManager));
+    pCookiesManager->setNotificationCallback(ACookieCallbackFunctor::APtr(new CookieNotificationCallback(*this)));
+    pCookiesManager->startWatching();
+
+    m_Cookies = pCookiesManager;
+  }
   return m_Cookies.QueryInterface(ppRet);
 }
 
@@ -60,7 +68,7 @@ HRESULT CAnchoAddonService::get_cookieManager(LPDISPATCH* ppRet)
 HRESULT CAnchoAddonService::get_tabManager(LPDISPATCH* ppRet)
 {
   ENSURE_RETVAL(ppRet);
-  return mITabManager.QueryInterface(ppRet);
+  return Ancho::Service::TabManager::instance().QueryInterface(IID_IDispatch, (void**)ppRet);
 }
 
 //----------------------------------------------------------------------------
@@ -68,23 +76,9 @@ HRESULT CAnchoAddonService::get_tabManager(LPDISPATCH* ppRet)
 HRESULT CAnchoAddonService::get_windowManager(LPDISPATCH* ppRet)
 {
   ENSURE_RETVAL(ppRet);
-  return mIWindowManager.QueryInterface(ppRet);
+  return Ancho::Service::WindowManager::instance().QueryInterface(IID_IDispatch, (void**)ppRet);
 }
 
-//----------------------------------------------------------------------------
-//
-/*
-HRESULT CAnchoAddonService::get_pageActionManager(LPDISPATCH* ppRet)
-{
-  ENSURE_RETVAL(ppRet);
-  if (mPageActionToolbar) {
-    return mPageActionToolbar.QueryInterface(ppRet);
-  }
-  (*ppRet) = NULL;
-  return S_OK;
-  return E_FAIL;
-}
-*/
 //----------------------------------------------------------------------------
 //
 HRESULT CAnchoAddonService::invokeExternalEventObject(BSTR aExtensionId, BSTR aEventName, LPDISPATCH aArgs, VARIANT* aRet)
@@ -132,6 +126,9 @@ HRESULT CAnchoAddonService::getActiveWebBrowser(LPUNKNOWN* pUnkWebBrowser)
 STDMETHODIMP CAnchoAddonService::getBrowserActions(VARIANT* aBrowserActionsArray)
 {
   ENSURE_RETVAL(aBrowserActionsArray);
+  if (!m_BrowserActionInfos) {
+    IF_FAILED_RET(SimpleJSArray::createInstance(m_BrowserActionInfos));
+  }
 
   CComVariant tmp(m_BrowserActionInfos.p);
   return tmp.Detach(aBrowserActionsArray);
@@ -145,6 +142,9 @@ HRESULT CAnchoAddonService::addBrowserActionInfo(LPDISPATCH aBrowserActionInfo)
     return E_POINTER;
   }
 
+  if (!m_BrowserActionInfos) {
+    IF_FAILED_RET(SimpleJSArray::createInstance(m_BrowserActionInfos));
+  }
   m_BrowserActionInfos->push_back(CComVariant(aBrowserActionInfo));
 
   Ancho::Service::TabManager::instance().forEachTab(
@@ -177,7 +177,6 @@ HRESULT CAnchoAddonService::FinalConstruct()
 {
   BEGIN_TRY_BLOCK;
     gAnchoAddonService = static_cast<CComObject<CAnchoAddonService> *>(this);
-
     // Get and store the path, this will be used in some places (e.g. to load
     // additional DLLs).
     LPTSTR psc = m_sThisPath.GetBuffer(_MAX_PATH);
@@ -186,21 +185,6 @@ HRESULT CAnchoAddonService::FinalConstruct()
     PathAddBackslash(psc);
     m_sThisPath.ReleaseBuffer();
 
-    CComObject<CIECookieManager> * pCookiesManager = NULL;
-    IF_FAILED_RET(CComObject<CIECookieManager>::CreateInstance(&pCookiesManager));
-    pCookiesManager->setNotificationCallback(ACookieCallbackFunctor::APtr(new CookieNotificationCallback(*this)));
-    pCookiesManager->startWatching();
-
-    m_Cookies = pCookiesManager;
-
-    IF_FAILED_RET(SimpleJSArray::createInstance(m_BrowserActionInfos));
-
-    Ancho::Service::TabManager::initSingleton();
-    mITabManager = &Ancho::Service::TabManager::instance();
-
-    Ancho::Service::WindowManager::initSingleton();
-    mIWindowManager = &Ancho::Service::WindowManager::instance();
-
     //Check for Ancho updates
     mAsyncTaskManager.addTask([&]{ Ancho::Service::checkForUpdate(s_AnchoExtensionsRegistryKey, L"Ancho"); });
 
@@ -208,7 +192,6 @@ HRESULT CAnchoAddonService::FinalConstruct()
     if (Ok != GdiplusStartup( &mGDIpToken, &gsi, NULL )) {
       ANCHO_THROW(EHResult(E_FAIL));
     }
-
   END_TRY_BLOCK_CATCH_TO_HRESULT;
   return S_OK;
 }

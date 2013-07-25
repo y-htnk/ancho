@@ -29,10 +29,6 @@ typedef boost::function<void(TabInfo)> TabCallback;
 typedef boost::function<void(TabInfoList)> TabListCallback;
 typedef boost::function<void(void)> SimpleCallback;
 
-class TabManager;
-//Pointer to tabmanger singleton instance
-extern CComObject<Ancho::Service::TabManager> *gTabManager;
-
 /**
  * Stores basic JS entities (Object, Array) constructors for API instances.
  * Useful for creation of return values, so JS engines can process objects from same context.
@@ -193,7 +189,7 @@ public:
     }
     return std::move(missed);
   }
-
+/*
   static void initSingleton()
   {
     ATLASSERT(gTabManager == NULL);
@@ -201,11 +197,11 @@ public:
     IF_FAILED_THROW(CComObject<Ancho::Service::TabManager>::CreateInstance(&tabManager));
     gTabManager = tabManager;
   }
-
-  static CComObject<Ancho::Service::TabManager> & instance()
+*/
+  static CComObjectStackEx<Ancho::Service::TabManager> & instance()
   {
-    ATLASSERT(gTabManager != NULL);
-    return *gTabManager;
+    static CComObjectStackEx<Ancho::Service::TabManager> tabManager;
+    return tabManager;
   }
 public:
   void createTab(const Utils::JSObject &aProperties,

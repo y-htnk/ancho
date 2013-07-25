@@ -75,18 +75,6 @@ void CAnchoRuntime::DestroyAddons()
   }
   m_Addons.clear();
 
-  if(mTabManager) {
-    mTabManager->unregisterRuntime(m_TabID);
-  }
-  mTabManager.Release();
-  if (m_pAnchoService) {
-    m_pAnchoService->releasePageActions(m_TabID);
-    m_pAnchoService.Release();
-  }
-  if (m_pWebBrowser)
-  {
-    m_pWebBrowser.Release();
-  }
   ATLTRACE(L"ANCHO: all addons destroyed for runtime %d\n", m_TabID);
 }
 
@@ -97,7 +85,20 @@ HRESULT CAnchoRuntime::Cleanup()
   AtlUnadvise(m_pWebBrowser, DIID_DWebBrowserEvents2, m_WebBrowserEventsCookie);
   AtlUnadvise(m_pBrowserEventSource, IID_DAnchoBrowserEvents, m_AnchoBrowserEventsCookie);
 
+  if(mTabManager) {
+    mTabManager->unregisterRuntime(m_TabID);
+  }
+  mTabManager.Release();
+
+  if (m_pAnchoService) {
+    m_pAnchoService->releasePageActions(m_TabID);
+  }
+  m_pAnchoService.Release();
+
   gWindowDocumentMap.eraseTab(m_TabID);
+
+  m_pWebBrowser.Release();
+
   return S_OK;
 }
 
@@ -139,6 +140,7 @@ HRESULT CAnchoRuntime::Init()
     }
     mTabManager = tabManager;
   }
+
   {//Get WindowManager
     CComQIPtr<IDispatch> dispatch;
     IF_FAILED_RET(serviceApi->get_windowManager(&dispatch));
@@ -151,10 +153,10 @@ HRESULT CAnchoRuntime::Init()
 
   // Registering tab in service - obtains tab id and assigns it to the tab as property
   IF_FAILED_RET(mTabManager->registerRuntime((OLE_HANDLE)getFrameTabWindow(), this, m_HeartbeatSlave.id(), &m_TabID));
+
   HWND hwndIeMain = NULL;
   m_pWebBrowser->get_HWND((SHANDLE_PTR*)&hwndIeMain);
   ::SetProp(hwndIeMain, s_AnchoTabIDPropertyName, (HANDLE)m_TabID);
-
   // initialize page actions for this process/window/tab
   m_pAnchoService->initPageActions((OLE_HANDLE)hwndIeMain, m_TabID);
 
