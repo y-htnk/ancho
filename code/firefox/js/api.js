@@ -10,6 +10,7 @@
   var DebuggerAPI = require('./debugger');
   var StorageAPI = require('./storage');
   var I18nAPI = require('./i18n');
+  var RuntimeAPI = require('./runtime');
 
   // Ancho APIs
   var ClipboardAPI = require('./clipboard');
@@ -45,6 +46,7 @@
     chrome.cookies = new CookiesAPI(extension);
     chrome.history = new HistoryAPI(extension);
     chrome.i18n = new I18nAPI(extension);
+    chrome.runtime = new RuntimeAPI(extension);
     chrome.debugger = new DebuggerAPI(extension);
     chrome.storage = {
       local: new StorageAPI(extension, 'local'),
