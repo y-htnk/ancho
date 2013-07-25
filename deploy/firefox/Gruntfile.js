@@ -3,8 +3,8 @@ module.exports = function(grunt) {
   var path = require('path');
   var _s = require('underscore.string');
 
-  var CODE_DIR = '../code/firefox/';
-  var TEST_EXTENSION_DIR = '../tests/test-suite-extension';
+  var CODE_DIR = '../../code/firefox/';
+  var TEST_EXTENSION_DIR = '../../tests/test-suite-extension';
   var MINIFIED_MODULES = 'minified_modules';
 
   var outputDir = grunt.option('outputDir') || '../../build';
