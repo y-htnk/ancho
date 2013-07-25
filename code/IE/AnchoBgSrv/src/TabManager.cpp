@@ -41,7 +41,7 @@ BOOL CALLBACK enumBrowserWindows(HWND hwnd, LPARAM lParam)
       // IWebBrowser2 doesn't have a container if it is an IE tab, so if we have a container
       // then we must be an embedded web browser (e.g. in an HTML toolbar).
       if (container) { return TRUE; }
-/*
+
       // This check works for IE10
       // We want only real tab windows. So we expect the following structure:
       //   TabWindowClass
@@ -55,7 +55,7 @@ BOOL CALLBACK enumBrowserWindows(HWND hwnd, LPARAM lParam)
       if (wcscmp(className, L"TabWindowClass") != 0) {
         return TRUE;
       }
-*/
+
       // Now get the HWND associated with the tab so we can see if it is active.
       sp = pWebBrowser;
       if (!sp) { return TRUE; }
