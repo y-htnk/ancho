@@ -93,7 +93,7 @@ function startup(data, reason) {
   var extensionRoot = data.installPath.clone();
   extensionRoot.append(CHROME_EXTENSION_ROOT);
   loadExtensions(extensionRoot, firstRun);
-  loadExtensions(FileUtils.getFile("ProfD", [CHROME_EXTENSION_ROOT]), firstRun);
+  loadExtensions(FileUtils.getFile('ProfD', [CHROME_EXTENSION_ROOT]), firstRun);
 }
 
 // When the extension is deactivated:

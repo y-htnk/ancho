@@ -105,10 +105,17 @@ var BackgroundWindow = {
       if (manifest.background && manifest.background.scripts) {
         for (var i=0; i<manifest.background.scripts.length; i++) {
           var script = targetWindow.document.createElement('script');
+          script.async = false;
           script.src = this._extension.getURL(manifest.background.scripts[i]);
           targetWindow.document.head.appendChild(script);
         }
       }
+
+      // Trigger runtime.onInstalled event if this is our first run.
+      if (this._extension.firstRun) {
+        this._extension.emit('runtime.installed', { reason: 'install' });
+      }
+
       AnchoExternal.__set(targetWindow.ancho.external);
     }.bind(this));
   }

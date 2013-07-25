@@ -21,3 +21,7 @@ function(ConsoleReporter) {
     }
   });
 });
+
+chrome.runtime.onInstalled.addListener(function(details) {
+  dump('INSTALLED: ' + details.reason + '\n');
+});
