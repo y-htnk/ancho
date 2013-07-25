@@ -23,7 +23,9 @@ public:
 protected:
   void call(DISPPARAMS &aParams, variant_t &aReturnValue)
   {
-    ATLASSERT(!empty());
+    if(empty()) {
+      return;
+    }
 
     CComQIPtr<IDispatch> callback = mCallbackMarshaller->get();
     if (!callback) {
@@ -58,6 +60,9 @@ public:
 
   ReturnValue operator()(Arguments aArguments)
   {
+    if (empty()) {
+      return Utils::convert<variant_t, ReturnValue>(variant_t());
+    }
     std::vector<CComVariant> parameters;
     DISPPARAMS params = {0};
     Utils::convert(aArguments, parameters);

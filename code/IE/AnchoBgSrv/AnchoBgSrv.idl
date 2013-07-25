@@ -156,7 +156,7 @@ library AnchoBgSrvLib
     [id(4), helpstring("updateTab - asynchronous call")]
     HRESULT updateTab([in] INT aTabId, [in] LPDISPATCH aUpdateProperties, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
     [id(5), helpstring("removeTabs - asynchronous call")]
-    HRESULT removeTabs([in] LPDISPATCH aTabs, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+    HRESULT removeTabs([in] LPDISPATCH aTabs, [in] VARIANT aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
 
     HRESULT registerConstructors([in] LPDISPATCH aObjectConstructor, [in] LPDISPATCH aArrayConstructor, [in] BSTR aExtensionId, [in] INT aApiId);
     HRESULT getTabInfo([in] INT aTabId, [in] BSTR aExtensionId, [in] INT aApiId, [out, retval] VARIANT* aRet);

@@ -130,7 +130,7 @@ public:
   STDMETHOD(reloadTab)(INT aTabId, LPDISPATCH aReloadProperties, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
   STDMETHOD(queryTabs)(LPDISPATCH aProperties, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
   STDMETHOD(updateTab)(INT aTabId, LPDISPATCH aUpdateProperties, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
-  STDMETHOD(removeTabs)(LPDISPATCH aTabs, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
+  STDMETHOD(removeTabs)(LPDISPATCH aTabs, VARIANT aCallback, BSTR aExtensionId, INT aApiId);
   ///@}
 
   //TODO - move to service

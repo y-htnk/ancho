@@ -35,11 +35,18 @@ BOOL CALLBACK enumBrowserWindows(HWND hwnd, LPARAM lParam)
       CComPtr<IWebBrowser2> pWebBrowser;
       IF_FAILED_THROW(sp->QueryService(IID_IWebBrowserApp, IID_IWebBrowser2, (void**) &pWebBrowser));
 
-      CComPtr<IDispatch> container;
-      IF_FAILED_THROW(pWebBrowser->get_Container(&container));
-      // IWebBrowser2 doesn't have a container if it is an IE tab, so if we have a container
-      // then we must be an embedded web browser (e.g. in an HTML toolbar).
-      if (container) { return TRUE; }
+      // We want only real tab windows. So we expect the following structure:
+      //   TabWindowClass
+      //   + Shell DocObject View
+      //     + OUR WINDOW
+      HWND hwndParent = ::GetParent(::GetParent(hwnd));
+      if (!hwndParent) {
+        return TRUE;
+      }
+      ::GetClassName(hwndParent, className, MAX_PATH);
+      if (wcscmp(className, L"TabWindowClass") != 0) {
+        return TRUE;
+      }
 
       // Now get the HWND associated with the tab so we can see if it is active.
       sp = pWebBrowser;
@@ -201,18 +208,12 @@ struct CreateTabTask
       long flags = windowId == WINDOW_ID_NON_EXISTENT ? navOpenInNewWindow : navOpenInNewTab;
       _variant_t vtFlags(flags, VT_I4);
 
-      _variant_t vtTargetFrameName;
-
-      _variant_t vtPostData;
-
-      _variant_t vtHeaders;
-
       IF_FAILED_THROW(browser->Navigate2(
                                   &vtUrl.GetVARIANT(),
                                   &vtFlags.GetVARIANT(),
-                                  &vtTargetFrameName.GetVARIANT(),
-                                  &vtPostData.GetVARIANT(),
-                                  &vtHeaders.GetVARIANT())
+                                  NULL,
+                                  NULL,
+                                  NULL)
                                   );
     } catch (EHResult &e) {
       ATLTRACE(L"Error in create tab task: %s\n", Utils::getLastError(e.mHResult).c_str());
@@ -552,7 +553,7 @@ STDMETHODIMP TabManager::updateTab(INT aTabId, LPDISPATCH aUpdateProperties, LPD
 
 //==========================================================================================
 
-STDMETHODIMP TabManager::removeTabs(LPDISPATCH aTabs, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId)
+STDMETHODIMP TabManager::removeTabs(LPDISPATCH aTabs, VARIANT aCallback, BSTR aExtensionId, INT aApiId)
 {
   BEGIN_TRY_BLOCK;
   if (aExtensionId == NULL) {
@@ -564,7 +565,8 @@ STDMETHODIMP TabManager::removeTabs(LPDISPATCH aTabs, LPDISPATCH aCallback, BSTR
   }
 
   Utils::JSArray tabs = boost::get<Utils::JSArray>(Utils::convertToJSVariant(*tmp));
-  Utils::JavaScriptCallback<void, void> callback(aCallback);
+  CComPtr<IDispatch> callbackDispatch((VT_DISPATCH == aCallback.vt) ? aCallback.pdispVal : NULL);
+  Utils::JavaScriptCallback<void, void> callback(callbackDispatch);
 
   std::vector<TabId> tabIds;
   tabIds.reserve(tabs.size());

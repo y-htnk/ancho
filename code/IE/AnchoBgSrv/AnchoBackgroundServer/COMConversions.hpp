@@ -22,7 +22,9 @@ public:
 
   ObjectMarshaller(CComPtr<TInterface> aPtr): mCookie(0)
   {
-    ATLASSERT(aPtr);
+    if(!aPtr) {
+      return;
+    }
     //IF_FAILED_THROW(CoMarshalInterThreadInterfaceInStream(__uuidof(TInterface), aPtr.p, &mStream));
 
     IF_FAILED_THROW(::CoCreateInstance(CLSID_StdGlobalInterfaceTable, NULL, CLSCTX_INPROC_SERVER, IID_IGlobalInterfaceTable, (void **)&mIGlobalInterfaceTable));
