@@ -7,6 +7,7 @@ if(${${PROJECT_NAME}_DISABLE_LOGWINDOW})
   add_definitions(-DANCHO_DISABLE_LOGWINDOW)
 endif(${${PROJECT_NAME}_DISABLE_LOGWINDOW})
 
+add_definitions(-D_SCL_SECURE_NO_WARNINGS) #Disable few paranoic warnings
 set(CMAKE_CONFIGURATION_TYPES Debug Release )
 set(CMAKE_CONFIGURATION_TYPES "${CMAKE_CONFIGURATION_TYPES}" CACHE STRING "Reset the configurations to those we need" FORCE)
 

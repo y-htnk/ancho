@@ -25,7 +25,6 @@ struct WorkerThreadFunc
   void operator()()
   {
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
-
     try {
       while (true) {
 
@@ -47,7 +46,11 @@ struct WorkerThreadFunc
         try {
           task();
           ATLTRACE(L"ASYNC TASK MANAGER - Finishing the task\n");
-        } catch (std::exception &e) {
+        } catch (boost::thread_interrupted &) {
+          throw;
+        }
+        #pragma warning(suppress : 4101) //unreferenced variable e
+        catch (std::exception &e) {
           ATLTRACE(L"ASYNC TASK MANAGER - Caught an exception: %s\n", e.what());
         }
       }

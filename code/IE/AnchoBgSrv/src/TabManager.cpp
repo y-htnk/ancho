@@ -184,57 +184,50 @@ struct CreateTabTask
 
   void operator()()
   {
-    try {
-      CComPtr<IWebBrowser2> browser = Utils::findActiveBrowser();
+    CComPtr<IWebBrowser2> browser = Utils::findActiveBrowser();
 
-      if (!browser) {
-        //Problem - no browser available
-        return;
-      }
-
-      Utils::JSVariant windowIdVt = mProperties[L"windowId"];
-      //TODO - handle windowId properly
-      int windowId = (windowIdVt.which() == Utils::jsInt) ? boost::get<int>(windowIdVt) : WINDOW_ID_CURRENT;
-
-      Utils::JSVariant url = mProperties[L"url"];
-      std::wstring tmpUrl = (url.which() == Utils::jsString) ? boost::get<std::wstring>(url) : L"about:blank";
-
-      if (!mCallback.empty()) {
-        int requestID = TabManager::instance().mRequestIdGenerator.next();
-        boost::wregex expression(L"(.*)://(.*)");
-        boost::wsmatch what;
-        if (boost::regex_match(tmpUrl, what, expression)) {
-          tmpUrl = boost::str(boost::wformat(L"%1%://$$%2%$$%3%") % what[1] % requestID % what[2]);
-
-          TabManager::CreateTabCallbackRequestInfo requestInfo = { mCallback, mExtensionId, mApiId };
-          TabManager::instance().addCreateTabCallbackInfo(requestID, requestInfo);
-        }
-      }
-      _variant_t vtUrl = tmpUrl.c_str();
-
-      long flags = windowId == WINDOW_ID_NON_EXISTENT ? navOpenInNewWindow : navOpenInNewTab;
-      _variant_t vtFlags(flags, VT_I4);
-
-      _variant_t vtTargetFrameName;
-      _variant_t vtPostData;
-      _variant_t vtHeaders;
-
-      // actually giving NULL instead of empty variants should work, but the stub in IE9
-      // seems to be buggy and does not accept them. So for "compatibility" reasons we use
-      // empty variants instead.. *sigh*
-      IF_FAILED_THROW(browser->Navigate2(
-                                  &vtUrl.GetVARIANT(),
-                                  &vtFlags.GetVARIANT(),
-                                  &vtTargetFrameName.GetVARIANT(),
-                                  &vtPostData.GetVARIANT(),
-                                  &vtHeaders.GetVARIANT())
-                                  );
-    } catch (EHResult &e) {
-      ATLTRACE(L"Error in create tab task: %s\n", Utils::getLastError(e.mHResult).c_str());
-    } catch (std::exception &e) {
-      ATLTRACE(L"Error in create tab task: %s\n", e.what());
+    if (!browser) {
+      //Problem - no browser available
+      return;
     }
 
+    Utils::JSVariant windowIdVt = mProperties[L"windowId"];
+    //TODO - handle windowId properly
+    int windowId = (windowIdVt.which() == Utils::jsInt) ? boost::get<int>(windowIdVt) : WINDOW_ID_CURRENT;
+
+    Utils::JSVariant url = mProperties[L"url"];
+    std::wstring tmpUrl = (url.which() == Utils::jsString) ? boost::get<std::wstring>(url) : L"about:blank";
+
+    if (!mCallback.empty()) {
+      int requestID = TabManager::instance().mRequestIdGenerator.next();
+      boost::wregex expression(L"(.*)://(.*)");
+      boost::wsmatch what;
+      if (boost::regex_match(tmpUrl, what, expression)) {
+        tmpUrl = boost::str(boost::wformat(L"%1%://$$%2%$$%3%") % what[1] % requestID % what[2]);
+
+        TabManager::CreateTabCallbackRequestInfo requestInfo = { mCallback, mExtensionId, mApiId };
+        TabManager::instance().addCreateTabCallbackInfo(requestID, requestInfo);
+      }
+    }
+    _variant_t vtUrl = tmpUrl.c_str();
+
+    long flags = windowId == WINDOW_ID_NON_EXISTENT ? navOpenInNewWindow : navOpenInNewTab;
+    _variant_t vtFlags(flags, VT_I4);
+
+    _variant_t vtTargetFrameName;
+    _variant_t vtPostData;
+    _variant_t vtHeaders;
+
+    // actually giving NULL instead of empty variants should work, but the stub in IE9
+    // seems to be buggy and does not accept them. So for "compatibility" reasons we use
+    // empty variants instead.. *sigh*
+    IF_FAILED_THROW(browser->Navigate2(
+                                &vtUrl.GetVARIANT(),
+                                &vtFlags.GetVARIANT(),
+                                &vtTargetFrameName.GetVARIANT(),
+                                &vtPostData.GetVARIANT(),
+                                &vtHeaders.GetVARIANT())
+                                );
   }
 
   Utils::JSObject mProperties;
@@ -369,33 +362,25 @@ struct QueryTabsTask
 
   void operator()()
   {
-    try {
-      ATLTRACE(L"QUERY TABS TASK - Start\n");
-      CComPtr<IDispatch> tabsDisp = CAnchoAddonService::instance().createArray(mExtensionId, mApiId);
-      Utils::JSArrayWrapper tabs = Utils::JSValueWrapper(tabsDisp).toArray();
-      //TabInfoList tabs = ComSimpleJSArray::createInstance();
+    CComPtr<IDispatch> tabsDisp = CAnchoAddonService::instance().createArray(mExtensionId, mApiId);
+    Utils::JSArrayWrapper tabs = Utils::JSValueWrapper(tabsDisp).toArray();
+    //TabInfoList tabs = ComSimpleJSArray::createInstance();
 
-      //We extended query parameters - we can get single tab specified by ID
-      if (mProperties[L"tabId"].which() == Utils::jsInt) {
-        TabManager::TabRecord::Ptr tabRecord = TabManager::instance().getTabRecord(boost::get<int>(mProperties[L"tabId"]));
-        if (tabRecord) {
-          CComPtr<IDispatch> info = CAnchoAddonService::instance().createObject(mExtensionId, mApiId);
-          _variant_t vtInfo(info);
-          IF_FAILED_THROW(tabRecord->runtime()->fillTabInfo(&vtInfo.GetVARIANT()));
-          tabs.push_back(Utils::JSValueWrapper(info));
-        }
-      } else {
-        TabManager::instance().forEachTab(CheckTab(tabs, mProperties, mExtensionId, mApiId));
+    //We extended query parameters - we can get single tab specified by ID
+    if (mProperties[L"tabId"].which() == Utils::jsInt) {
+      TabManager::TabRecord::Ptr tabRecord = TabManager::instance().getTabRecord(boost::get<int>(mProperties[L"tabId"]));
+      if (tabRecord) {
+        CComPtr<IDispatch> info = CAnchoAddonService::instance().createObject(mExtensionId, mApiId);
+        _variant_t vtInfo(info);
+        IF_FAILED_THROW(tabRecord->runtime()->fillTabInfo(&vtInfo.GetVARIANT()));
+        tabs.push_back(Utils::JSValueWrapper(info));
       }
+    } else {
+      TabManager::instance().forEachTab(CheckTab(tabs, mProperties, mExtensionId, mApiId));
+    }
 
-      ATLTRACE(L"QUERY TABS TASK - Before callback\n");
-      if (mCallback) {
-        mCallback(tabsDisp);
-        //mCallback();
-      }
-      ATLTRACE(L"QUERY TABS TASK - After callback\n");
-    } catch (EHResult &e) {
-      ATLTRACE(L"QUERY TABS TASK - caught exception: HRESULT = %d\n", e.mHResult);
+    if (mCallback) {
+      mCallback(tabsDisp);
     }
   }
 
@@ -444,19 +429,15 @@ struct RemoveTabsTask
 
   void operator()()
   {
-    try {
-      auto invoker = boost::make_shared<Ancho::Utils::MultiOperationCallbackInvoker<TabId> >(mCallback, mTabs);
-      auto missedTabs = TabManager::instance().forTabsInList(mTabs,
-                            [&](Ancho::Service::TabManager::TabRecord &aRec) {
-                              aRec.addOnCloseCallback(Ancho::Utils::MultiOperationCallback<TabId>(aRec.tabId(), invoker));
-                              aRec.runtime()->closeTab();
-                            });
-      //If some of the tabs were removed before our request, we need to handle their ids.
-      if (!missedTabs.empty()) {
-        std::for_each(missedTabs.begin(), missedTabs.end(), [&](TabId atabId){ invoker->progress(atabId); });
-      }
-    } catch (EHResult &e) {
-      ATLTRACE(L"HRESULT = %d\n", e.mHResult);
+    auto invoker = boost::make_shared<Ancho::Utils::MultiOperationCallbackInvoker<TabId> >(mCallback, mTabs);
+    auto missedTabs = TabManager::instance().forTabsInList(mTabs,
+                          [&](Ancho::Service::TabManager::TabRecord &aRec) {
+                            aRec.addOnCloseCallback(Ancho::Utils::MultiOperationCallback<TabId>(aRec.tabId(), invoker));
+                            aRec.runtime()->closeTab();
+                          });
+    //If some of the tabs were removed before our request, we need to handle their ids.
+    if (!missedTabs.empty()) {
+      std::for_each(missedTabs.begin(), missedTabs.end(), [&](TabId atabId){ invoker->progress(atabId); });
     }
   }
 

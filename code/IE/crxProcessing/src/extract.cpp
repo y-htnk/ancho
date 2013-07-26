@@ -192,7 +192,7 @@ static long ZCALLBACK fseek64_file_func (voidpf  opaque, voidpf stream, ZPOS64_T
         break;
     default: return -1;
     }
-    ret = reinterpret_cast<CRXFile*>(stream)->zipSeek(offset, fseek_origin);
+    ret = reinterpret_cast<CRXFile*>(stream)->zipSeek(static_cast<long>(offset), fseek_origin);
     return ret;
 }
 
