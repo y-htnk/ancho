@@ -18,12 +18,14 @@
 #include <SimpleWrappers.h>
 #include <IPCHeartbeat.h>
 
-#include "AnchoBackgroundServer/AsynchronousTaskManager.hpp"
+#include <AnchoCommons/AsynchronousTaskManager.hpp>
 #include "AnchoBackgroundServer/TabManager.hpp"
 #include "AnchoBackgroundServer/WindowManager.hpp"
-#include "AnchoBackgroundServer/COMConversions.hpp"
-#include "AnchoBackgroundServer/JavaScriptCallback.hpp"
-#include "AnchoBackGroundServer/PageActionProxy.hpp"
+#include "AnchoBackgroundServer/JSConstructorManager.hpp"
+#include "AnchoBackgroundServer/PageActionProxy.hpp"
+
+#include <AnchoCommons/COMConversions.hpp>
+#include <AnchoCommons/JavaScriptCallback.hpp>
 
 #if defined(_WIN32_WCE) && !defined(_CE_DCOM) && !defined(_CE_ALLOW_SINGLE_THREADED_OBJECTS_IN_MTA)
 #error "Single-threaded COM objects are not properly supported on Windows CE platform, such as the Windows Mobile platforms that do not include full DCOM support. Define _CE_ALLOW_SINGLE_THREADED_OBJECTS_IN_MTA to force ATL to support creating single-thread COM object's and allow use of it's single-threaded COM object implementations. The threading model in your rgs file was set to 'Free' as that is the only threading model supported in non DCOM Windows CE platforms."
@@ -47,7 +49,8 @@ class ATL_NO_VTABLE CAnchoAddonService :
   public CComObjectRootEx<CComSingleThreadModel>,
   public CComCoClass<CAnchoAddonService, &CLSID_AnchoAddonService>,
   public IAnchoAddonService,
-  public IDispatchImpl<IAnchoServiceApi, &IID_IAnchoServiceApi, &LIBID_AnchoBgSrvLib, /*wMajor =*/ 0xffff, /*wMinor =*/ 0xffff>
+  public IDispatchImpl<IAnchoServiceApi, &IID_IAnchoServiceApi, &LIBID_AnchoBgSrvLib, /*wMajor =*/ 0xffff, /*wMinor =*/ 0xffff>,
+  public Ancho::Service::JSConstructorManager
 {
 public:
   // -------------------------------------------------------------------------
@@ -98,6 +101,11 @@ public:
 
   STDMETHOD(invokeExternalEventObject)(BSTR aExtensionId, BSTR aEventName, LPDISPATCH aArgs, VARIANT* aRet);
 
+  STDMETHOD(registerJSConstructors)(LPDISPATCH aObjectConstructor, LPDISPATCH aArrayConstructor, BSTR aExtensionId, INT aApiId);
+  STDMETHOD(removeJSConstructors)(BSTR aExtensionId, INT aApiId);
+  STDMETHOD(createJSObject)(BSTR aExtensionId, INT aApiId, LPDISPATCH *aObject);
+  STDMETHOD(createJSArray)(BSTR aExtensionId, INT aApiId, LPDISPATCH *aArray);
+
   //STDMETHOD(get_browserActionInfos)(VARIANT* aBrowserActionInfos);
   STDMETHOD(getBrowserActions)(VARIANT* aBrowserActionsArray);
   STDMETHOD(addBrowserActionInfo)(LPDISPATCH aBrowserActionInfo);
@@ -106,7 +114,7 @@ public:
   STDMETHOD(isImageData)(LPDISPATCH aObject, VARIANT_BOOL * aRetVal);
   STDMETHOD(pageActionToolbar)(INT aTabId, VARIANT * aRetVal);
 
-  STDMETHOD(testFunction)(LPDISPATCH aObject, LPDISPATCH aCallback)
+  STDMETHOD(testFunction)(BSTR aData)
   {
     ATLTRACE(L"TEST FUNCTION -----------------\n");
     BEGIN_TRY_BLOCK;
@@ -184,7 +192,7 @@ private:
 
   Ancho::PageAction::ProxyManager
                                 mPageActionProxies;
-  
+
   ULONG_PTR                     mGDIpToken;
 };
 

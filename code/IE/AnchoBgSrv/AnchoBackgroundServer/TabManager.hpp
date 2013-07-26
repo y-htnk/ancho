@@ -1,9 +1,9 @@
 #pragma once
 #include "resource.h"
 #include "AnchoBgSrv_i.h"
-#include "AnchoBackgroundServer/AsynchronousTaskManager.hpp"
-#include "AnchoBackgroundServer/COMConversions.hpp"
-#include "AnchoBackgroundServer/JavaScriptCallback.hpp"
+#include <AnchoCommons/AsynchronousTaskManager.hpp>
+#include <AnchoCommons/COMConversions.hpp>
+#include <AnchoCommons/JavaScriptCallback.hpp>
 #include "AnchoBackgroundServer/PeriodicTimer.hpp"
 #include <IPCHeartbeat.h>
 #include <Exceptions.h>
@@ -33,68 +33,6 @@ class TabManager;
 //Pointer to tabmanger singleton instance
 extern CComObject<Ancho::Service::TabManager> *gTabManager;
 
-/**
- * Stores basic JS entities (Object, Array) constructors for API instances.
- * Useful for creation of return values, so JS engines can process objects from same context.
- * NOTE: calling constructor from different thread doesn't work, so instead of storing
- * constructors directly we store wrapper functions which return proper object instances.
- **/
-class JSConstructorManager
-{
-public:
-  typedef boost::tuple<std::wstring, int> ApiInstanceId;
-  typedef boost::tuple<Ancho::Utils::ObjectMarshaller<IDispatchEx>::Ptr, Ancho::Utils::ObjectMarshaller<IDispatchEx>::Ptr> Constructors;
-
-  void registerConstructors(CComPtr<IDispatchEx> aObjectConstructor, CComPtr<IDispatchEx> aArrayConstructor, const std::wstring &aExtensionId, int aApiId)
-  {
-    boost::unique_lock<boost::mutex> lock(mConstructorMapMutex);
-
-    mConstructorInstances[ApiInstanceId(aExtensionId, aApiId)] = Constructors(boost::make_shared<Ancho::Utils::ObjectMarshaller<IDispatchEx> >(aObjectConstructor),
-                                                                              boost::make_shared<Ancho::Utils::ObjectMarshaller<IDispatchEx> >(aArrayConstructor));
-  }
-
-  void removeConstructors(const std::wstring &aExtensionId, int aApiId)
-  {
-    boost::unique_lock<boost::mutex> lock(mConstructorMapMutex);
-    mConstructorInstances.erase(ApiInstanceId(aExtensionId, aApiId));
-  }
-
-  CComPtr<IDispatch> createObject(const std::wstring &aExtensionId, int aApiId)
-  {
-    return createInstanceByConstructor<0>(aExtensionId, aApiId);
-  }
-
-  CComPtr<IDispatch> createArray(const std::wstring &aExtensionId, int aApiId)
-  {
-    return createInstanceByConstructor<1>(aExtensionId, aApiId);
-  }
-
-protected:
-  template<size_t tConstructorIdx>
-  CComPtr<IDispatch> createInstanceByConstructor(const std::wstring &aExtensionId, int aApiId)
-  {
-    boost::unique_lock<boost::mutex> lock(mConstructorMapMutex);
-    auto it = mConstructorInstances.find(ApiInstanceId(aExtensionId, aApiId));
-
-    if (it == mConstructorInstances.end()) {
-      ANCHO_THROW(EInvalidArgument());
-    }
-    CComPtr<IDispatchEx> creator = it->second.get<tConstructorIdx>()->get();
-    DISPPARAMS params = {0};
-    _variant_t result;
-    //Workaround - DISPATCH_CONSTRUCT doesn't work in worker thread -
-    //so we invoke wrapper function which calls constructors and returns newly created instance.
-    IF_FAILED_THROW(creator->InvokeEx(DISPID_VALUE, LOCALE_USER_DEFAULT, DISPATCH_METHOD, &params, result.GetAddress(), NULL, NULL));
-    try {
-      return CComPtr<IDispatch>(static_cast<IDispatch*>(result));
-    } catch (_com_error &e) {
-      ANCHO_THROW(EHResult(e.Error()));
-    }
-  }
-
-  std::map<ApiInstanceId, Constructors> mConstructorInstances;
-  boost::mutex mConstructorMapMutex;
-};
 
 
 /**
@@ -105,8 +43,7 @@ protected:
 class TabManager:
   public CComObjectRootEx<CComMultiThreadModel>,
   public IAnchoTabManagerInternal,
-  public IDispatchImpl<ITabManager, &IID_ITabManager, &LIBID_AnchoBgSrvLib, /*wMajor =*/ 0xffff, /*wMinor =*/ 0xffff>,
-  public JSConstructorManager
+  public IDispatchImpl<ITabManager, &IID_ITabManager, &LIBID_AnchoBgSrvLib, /*wMajor =*/ 0xffff, /*wMinor =*/ 0xffff>
 {
 public:
   friend struct CreateTabTask;
@@ -133,15 +70,7 @@ public:
   STDMETHOD(removeTabs)(LPDISPATCH aTabs, VARIANT aCallback, BSTR aExtensionId, INT aApiId);
   ///@}
 
-  //TODO - move to service
-  STDMETHOD(registerConstructors)(LPDISPATCH aObjectConstructor, LPDISPATCH aArrayConstructor, BSTR aExtensionId, INT aApiId)
-  {
-    BEGIN_TRY_BLOCK;
-    JSConstructorManager::registerConstructors(CComQIPtr<IDispatchEx>(aObjectConstructor), CComQIPtr<IDispatchEx>(aArrayConstructor), std::wstring(aExtensionId), aApiId);
-    CComPtr<IDispatch> tmp = JSConstructorManager::createArray(std::wstring(aExtensionId), aApiId);
-    return S_OK;
-    END_TRY_BLOCK_CATCH_TO_HRESULT;
-  }
+
 
   STDMETHOD(getTabInfo)(INT aTabId, BSTR aExtensionId, INT aApiId, VARIANT* aRet);
 
@@ -156,9 +85,15 @@ public:
   template<typename TCallable>
   TCallable forEachTab(TCallable aCallable)
   {
-    boost::unique_lock<Mutex> lock(mTabAccessMutex);
-    TabMap::iterator it = mTabs.begin();
-    while (it != mTabs.end()) {
+    TabMap tmp;
+
+    {
+      boost::unique_lock<Mutex> lock(mTabAccessMutex);
+      tmp = mTabs; //we need to work on a copy to prevent deadlocks caused by COM calls
+    }
+
+    TabMap::iterator it = tmp.begin();
+    while (it != tmp.end()) {
       ATLASSERT(it->second);
       aCallable(*it->second);
       ++it;
@@ -179,11 +114,16 @@ public:
   {
     //Create list of tabs which do not exist
     TContainer missed;
-    boost::unique_lock<Mutex> lock(mTabAccessMutex);
+    TabMap tmp;
+
+    {
+      boost::unique_lock<Mutex> lock(mTabAccessMutex);
+      tmp = mTabs; //we need to work on a copy to prevent deadlocks caused by COM calls
+    }
 
     BOOST_FOREACH(auto tabId, aTabIds) {
-      TabMap::iterator it = mTabs.find(tabId);
-      if (it != mTabs.end()) {
+      TabMap::iterator it = tmp.find(tabId);
+      if (it != tmp.end()) {
         ATLASSERT(it->second);
         aCallable(*it->second);
         ++it;
@@ -192,6 +132,15 @@ public:
       }
     }
     return std::move(missed);
+  }
+
+  boost::shared_ptr<TabRecord> getSomeTabRecord()
+  {
+    boost::unique_lock<Mutex> lock(mTabAccessMutex);
+    if (mTabs.empty()) {
+      ANCHO_THROW(EFail());
+    }
+    return mTabs.begin()->second;
   }
 
   static void initSingleton()
@@ -237,7 +186,7 @@ public:
   HRESULT FinalConstruct()
   {
     BEGIN_TRY_BLOCK;
-    mHeartbeatTimer.initialize(boost::bind(&TabManager::checkBHOConnections, this), 1000);
+    mHeartbeatTimer.initialize(boost::bind(&TabManager::checkBHOConnections, this), 5000);
     mHeartbeatActive = false;
     END_TRY_BLOCK_CATCH_TO_HRESULT;
     return S_OK;
@@ -317,7 +266,7 @@ public:
   typedef boost::shared_ptr<TabRecord> Ptr;
 
   TabRecord(CComPtr<IAnchoRuntime> aRuntime = CComPtr<IAnchoRuntime>(), TabId aTabId = 0, ULONG aHeartBeat = 0)
-    : mRuntimeMarshaler(aRuntime), mTabId(aTabId), mHearbeatMaster(aHeartBeat)
+    : mRuntimeMarshaler(aRuntime), mRuntime(aRuntime), mTabId(aTabId), mHearbeatMaster(aHeartBeat)
   { /*empty*/ }
 
   CComPtr<IAnchoRuntime> runtime()
@@ -325,23 +274,31 @@ public:
 
   bool isAlive()
   {
-    boost::unique_lock<boost::mutex> lock(mMutex);
+    //boost::unique_lock<boost::mutex> lock(mMutex);
     CComPtr<IUnknown> runtimeInstance = runtime();
     return ::CoIsHandlerConnected(runtimeInstance.p) != FALSE;
   }
 
   void tabClosed()
   {
-    boost::unique_lock<boost::mutex> lock(mMutex);
-    std::for_each(mOnRemoveCallbacks.begin(), mOnRemoveCallbacks.end(), [](SimpleCallback aCallback){ aCallback(); });
-    mOnRemoveCallbacks.clear();
+    std::list<SimpleCallback> tmp;
+    {
+      boost::unique_lock<boost::mutex> lock(mMutex);
+      tmp = mOnRemoveCallbacks;
+      mOnRemoveCallbacks.clear();
+    }
+    std::for_each(tmp.begin(), tmp.end(), [](SimpleCallback aCallback){ aCallback(); });
   }
 
   void tabReloaded()
   {
-    boost::unique_lock<boost::mutex> lock(mMutex);
-    std::for_each(mOnReloadCallbacks.begin(), mOnReloadCallbacks.end(), [](SimpleCallback aCallback){ aCallback(); });
-    mOnReloadCallbacks.clear();
+    std::list<SimpleCallback> tmp;
+    {
+      boost::unique_lock<boost::mutex> lock(mMutex);
+      tmp = mOnReloadCallbacks;
+      mOnReloadCallbacks.clear();
+    }
+    std::for_each(tmp.begin(), tmp.end(), [](SimpleCallback aCallback){ aCallback(); });
   }
 
   void addOnReloadCallback(SimpleCallback aCallback)
@@ -363,6 +320,9 @@ public:
 
   //safe access in different threads
   Ancho::Utils::ObjectMarshaller<IAnchoRuntime> mRuntimeMarshaler;
+
+  //Can be accessed from main thread
+  CComPtr<IAnchoRuntime> mRuntime;
 
   TabId mTabId;
 

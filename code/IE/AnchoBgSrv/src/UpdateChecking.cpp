@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "AnchoBackgroundServer/UpdateChecking.hpp"
-#include "AnchoBackgroundServer/COMConversions.hpp"
+#include <AnchoCommons/COMConversions.hpp>
 #include "AnchoBackgroundServer/TabManager.hpp"
 #include "AnchoBackgroundServer/WindowManager.hpp"
 

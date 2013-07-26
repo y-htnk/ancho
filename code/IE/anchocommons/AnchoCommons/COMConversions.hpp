@@ -230,6 +230,13 @@ struct ConversionTraits<std::wstring, CComVariant>
 };
 
 template<>
+struct ConversionTraits<_bstr_t, CComVariant>
+{
+  static void convert(_bstr_t &aFrom, CComVariant &aTo)
+  { aTo = CComVariant(static_cast<wchar_t*>(aFrom)); }
+};
+
+template<>
 struct ConversionTraits<bool, CComVariant>
 {
   static void convert(bool &aFrom, CComVariant &aTo)

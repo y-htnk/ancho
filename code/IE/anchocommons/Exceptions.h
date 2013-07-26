@@ -2,6 +2,7 @@
 
 #include <stdexcept>
 #include <atltrace.h>
+#include <comdef.h>
 
 //TODO - create proper exception hierarchy
 struct EAnchoException : std::exception { };
@@ -50,6 +51,9 @@ inline HRESULT exceptionToHRESULT()
     return E_FAIL;
   } catch (std::exception &e) {
     ATLTRACE("ERROR: %s\n", e.what());
+    return E_FAIL;
+  } catch (_com_error &) {
+    ATLTRACE("ERROR: catched _com_error\n"); //TODO handle properly
     return E_FAIL;
   }
 }

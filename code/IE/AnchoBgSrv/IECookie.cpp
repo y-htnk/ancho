@@ -6,26 +6,8 @@
 
 #include "StdAfx.h"
 #include "IECookie.h"
-
+#include <anchocommons.h>
 #include <ctime>
-
-#define EPOCH_DIFF 0x019DB1DED53E8000LL /* 116444736000000000 nsecs */
-#define RATE_DIFF 10000000 /* 100 nsecs */
-
-typedef INT64 filetime_t;
-
-/* Convert a UNIX time_t into a Windows filetime_t */
-filetime_t unixTimeToFileTime(time_t utime) {
-        INT64 tconv = ((INT64)utime * RATE_DIFF) + EPOCH_DIFF;
-        return tconv;
-}
-
-/* Convert a Windows filetime_t into a UNIX time_t */
-time_t fileTimeToUnixTime(filetime_t ftime) {
-        INT64 tconv = (ftime - EPOCH_DIFF) / RATE_DIFF;
-        return (time_t)tconv;
-}
-
 
 CookieParsedData::CookieParsedData()
 {

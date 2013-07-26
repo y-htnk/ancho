@@ -6,8 +6,8 @@
 #include "AnchoShared/AnchoShared.h"
 
 #include "AnchoBackgroundServer/TabManager.hpp"
-#include "AnchoBackgroundServer/COMConversions.hpp"
-#include "AnchoBackgroundServer/JavaScriptCallback.hpp"
+#include <AnchoCommons/COMConversions.hpp>
+#include <AnchoCommons/JavaScriptCallback.hpp>
 
 //class CPopupResizeEventHandler;
 //typedef CComObject<CPopupResizeEventHandler> CPopupResizeEventHandlerComObject;

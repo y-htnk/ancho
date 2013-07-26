@@ -51,8 +51,17 @@ void CAnchoAddonService::OnAddonFinalRelease(BSTR bsID)
 //
 HRESULT CAnchoAddonService::get_cookieManager(LPDISPATCH* ppRet)
 {
+  BEGIN_TRY_BLOCK;
   ENSURE_RETVAL(ppRet);
-  return m_Cookies.QueryInterface(ppRet);
+
+  //auto runtime = Ancho::Service::TabManager::instance().getSomeTabRecord()->mRuntime;
+  auto runtime = Ancho::Service::TabManager::instance().getSomeTabRecord()->runtime();
+  if (!runtime ) {
+    return E_FAIL;
+  }
+
+  return runtime->get_cookieManager(ppRet);
+  END_TRY_BLOCK_CATCH_TO_HRESULT;
 }
 
 //----------------------------------------------------------------------------
@@ -98,6 +107,50 @@ HRESULT CAnchoAddonService::invokeExternalEventObject(BSTR aExtensionId, BSTR aE
     return it->second->invokeExternalEventObject(aEventName, aArgs, aRet);
   }
   return S_OK;
+}
+//----------------------------------------------------------------------------
+//
+STDMETHODIMP CAnchoAddonService::registerJSConstructors(LPDISPATCH aObjectConstructor, LPDISPATCH aArrayConstructor, BSTR aExtensionId, INT aApiId)
+{
+  BEGIN_TRY_BLOCK;
+  Ancho::Service::JSConstructorManager::registerConstructors(
+                                                CComQIPtr<IDispatchEx>(aObjectConstructor),
+                                                CComQIPtr<IDispatchEx>(aArrayConstructor),
+                                                std::wstring(aExtensionId),
+                                                aApiId);
+  return S_OK;
+  END_TRY_BLOCK_CATCH_TO_HRESULT;
+}
+//----------------------------------------------------------------------------
+//
+STDMETHODIMP CAnchoAddonService::removeJSConstructors(BSTR aExtensionId, INT aApiId)
+{
+  BEGIN_TRY_BLOCK;
+  Ancho::Service::JSConstructorManager::removeConstructors(std::wstring(aExtensionId), aApiId);
+  return S_OK;
+  END_TRY_BLOCK_CATCH_TO_HRESULT;
+}
+//----------------------------------------------------------------------------
+//
+STDMETHODIMP CAnchoAddonService::createJSObject(BSTR aExtensionId, INT aApiId, LPDISPATCH *aObject)
+{
+  BEGIN_TRY_BLOCK;
+  ENSURE_RETVAL(aObject)
+  auto obj = Ancho::Service::JSConstructorManager::createObject(std::wstring(aExtensionId), aApiId);
+  *aObject = obj.Detach();
+  return S_OK;
+  END_TRY_BLOCK_CATCH_TO_HRESULT;
+}
+//----------------------------------------------------------------------------
+//
+STDMETHODIMP CAnchoAddonService::createJSArray(BSTR aExtensionId, INT aApiId, LPDISPATCH *aArray)
+{
+  BEGIN_TRY_BLOCK;
+  ENSURE_RETVAL(aArray)
+  auto arr = Ancho::Service::JSConstructorManager::createArray(std::wstring(aExtensionId), aApiId);
+  *aArray = arr.Detach();
+  return S_OK;
+  END_TRY_BLOCK_CATCH_TO_HRESULT;
 }
 
 //----------------------------------------------------------------------------

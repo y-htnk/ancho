@@ -60,8 +60,9 @@ var CONTENT_API_NAMES = [
 
 function createChromeAPISubset(chrome, aInstanceID, aAPINames) {
   //TODO - use constructors from right context - these are from Magpie
-  serviceAPI.tabManager.registerConstructors(function(){ return new Object; }, function(){ return new Array; }, addonAPI.id, aInstanceID);
-
+  console.debug("Registering constructors for extension: '" + addonAPI.id + "' and API instance: " + aInstanceID);
+  serviceAPI.registerJSConstructors(function(){ return new Object; }, function(){ return new Array; }, addonAPI.id, aInstanceID);
+  console.debug("Registering constructors ... Done");
   for (var i = 0; i < aAPINames.length; ++i) {
     console.debug("Creating chrome." + aAPINames[i] + " API instance n. " + aInstanceID);
     chrome[aAPINames[i]] = require(aAPINames[i] + ".js").createAPI(aInstanceID);
@@ -73,6 +74,7 @@ function releaseAPISubsetByName(aInstanceID, aAPINames) {
     console.debug("Releasing chrome." + aAPINames[i] + " API instance n. " + aInstanceID);
     require(aAPINames[i] + ".js").releaseAPI(aInstanceID);
   }
+  serviceAPI.removeJSConstructors(addonAPI.id, aInstanceID);
 }
 
 function releaseAPISubset(aInstanceID, aAPIInstance) {
@@ -88,6 +90,7 @@ function releaseAPISubset(aInstanceID, aAPIInstance) {
       console.error("Releasing of chrome." + apiName + " API instance n. " + aInstanceID + " failed! " + e.description);
     }
   }
+  serviceAPI.removeJSConstructors(addonAPI.id, aInstanceID);
 }
 
 // create and initialize the background API

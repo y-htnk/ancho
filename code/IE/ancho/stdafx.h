@@ -28,7 +28,7 @@
 #include <activscp.h>
 
 #include <ShlObj.h>
-
+#include <Wininet.h>
 #include <map>
 #include <string>
 
@@ -108,6 +108,8 @@ using namespace LIB_BhoHelper;
 #include <set>
 #include <vector>
 #include <algorithm>
+#include <locale>
+#include <sstream>
 
 #include <boost/regex.hpp>
 #include <boost/bind.hpp>
@@ -125,6 +127,7 @@ using namespace LIB_BhoHelper;
 #include <boost/foreach.hpp>
 #include <boost/asio.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/date_time/time_facet.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 
