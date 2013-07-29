@@ -50,7 +50,12 @@
       url.init(Ci.nsIStandardURL.URLTYPE_STANDARD, null, aURI.spec, null, null);
       let uri = url.QueryInterface(Ci.nsIURI);
       let path = '.' + uri.path;
-      let baseURI = exports.getExtensionURI(uri.host);
+      let id = uri.userPass;
+      if (id) {
+        id += '@';
+      }
+      id += uri.host;
+      let baseURI = exports.getExtensionURI(id);
       return NetUtil.newURI(path, null, baseURI);
     },
 
