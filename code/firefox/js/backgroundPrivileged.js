@@ -28,7 +28,7 @@ var BackgroundWindow = {
   _extension: null,
   _browserEvent: null,
 
-  init: function(rootDirectory, firstRun) {
+  init: function(rootDirectory, reason) {
     var id;
 
     window.removeEventListener('load', arguments.callee, false);
@@ -57,7 +57,7 @@ var BackgroundWindow = {
     });
 
     // Instantiate and load the extension object.
-    this._extension = Global.loadExtension(extensionId, rootDirectory, firstRun);
+    this._extension = Global.loadExtension(extensionId, rootDirectory, reason);
 
     // Instantiate a BrowserEvents object whenever a new content window is created.
     this._extension.windowWatcher.register(
@@ -124,8 +124,8 @@ var BackgroundWindow = {
 window.addEventListener('load', function() {
   window.removeEventListener('load', arguments.callee, false);
   var extensionRoot = window.arguments[0].QueryInterface(Ci.nsIFile);
-  var firstRun = window.arguments[1];
-  BackgroundWindow.init(extensionRoot, firstRun);
+  var reason = window.arguments[1];
+  BackgroundWindow.init(extensionRoot, reason);
 }, false);
 
 window.addEventListener('unload', function(event) {

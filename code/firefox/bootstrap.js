@@ -10,12 +10,12 @@ const CHROME_EXTENSION_ROOT = 'chrome-extensions';
 
 var require = null;
 
-function createBackground(extensionRoot, firstRun) {
+function createBackground(extensionRoot, reason) {
   var params = Cc["@mozilla.org/array;1"].createInstance(Ci.nsIMutableArray);
   params.appendElement(extensionRoot, false);
-  var boolParam = Cc["@mozilla.org/supports-PRBool;1"].createInstance(Ci.nsISupportsPRBool);
-  boolParam.data = firstRun;
-  params.appendElement(boolParam, false);
+  var param = Cc["@mozilla.org/supports-PRUint32;1"].createInstance(Ci.nsISupportsPRUint32);
+  param.data = reason;
+  params.appendElement(param, false);
   var backgroundWindow = Services.ww.openWindow(
     null, // parent
     'chrome://ancho/content/xul/background.xul',
@@ -55,7 +55,7 @@ function unregisterComponents(callback) {
   require('./js/httpRequestObserver').unregister();
 }
 
-function loadExtensions(extensionRoot, firstRun) {
+function loadExtensions(extensionRoot, reason) {
   if (!extensionRoot.exists()) {
     extensionRoot.create(Ci.nsIFile.DIRECTORY_TYPE, FileUtils.PERMS_DIRECTORY);
   }
@@ -68,7 +68,7 @@ function loadExtensions(extensionRoot, firstRun) {
     }
     var rootURI = Services.io.newFileURI(directory);
     protocolHandler.registerExtensionURI(directory.leafName, rootURI);
-    createBackground(directory, firstRun);
+    createBackground(directory, reason);
   }
 }
 
@@ -77,10 +77,13 @@ function install(data, reason) {
 }
 
 function uninstall(data, reason) {
+  // Clean up temporary data
+  var tempDir = FileUtils.getFile('ProfD', ['ancho_data']);
+  if (tempDir.exists()) {
+    tempDir.remove(true);
+  }
 }
 
-// When the extension is activated:
-//
 function startup(data, reason) {
   setResourceSubstitution(data.resourceURI);
   Cu.import('resource://ancho/modules/Require.jsm');
@@ -88,19 +91,15 @@ function startup(data, reason) {
   require = Require.createRequireForWindow(this, baseURI);
   registerComponents();
 
-  var firstRun = reason > APP_STARTUP;
-
   var extensionRoot = data.installPath.clone();
   extensionRoot.append(CHROME_EXTENSION_ROOT);
-  loadExtensions(extensionRoot, firstRun);
-  loadExtensions(FileUtils.getFile('ProfD', [CHROME_EXTENSION_ROOT]), firstRun);
+  loadExtensions(extensionRoot, reason);
+  loadExtensions(FileUtils.getFile('ProfD', [CHROME_EXTENSION_ROOT]), reason);
 }
 
-// When the extension is deactivated:
-//
 function shutdown(data, reason) {
   var Global = require('./js/state').Global;
-  Global.shutdown();
+  Global.shutdown(reason);
   unregisterComponents(function() {
     // Unload the modules so that we will load new versions if the add-on is installed again.
     Cu.unload('resource://ancho/modules/Require.jsm');
