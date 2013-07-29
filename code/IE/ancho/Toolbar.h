@@ -3,29 +3,32 @@
 #include <Shlobj.h>
 #include "HTMLToolbarWindow.h"
 #include "ancho_i.h"
-#include <string>
+//#include <string>
 
-template<typename TImplementation, typename TContentWindow, const CLSID* tClsid>
-class ATL_NO_VTABLE CBasicToolbar :
+class ATL_NO_VTABLE CAnchoToolbar :
   public CComObjectRootEx<CComSingleThreadModel>,
-  public CComCoClass<TImplementation, tClsid>,
-  public IObjectWithSiteImpl<TImplementation>,
-  public IDeskBand,
-  public IInputObject
+  public CComCoClass<CAnchoToolbar, &CLSID_IEToolbar>,
+  public IObjectWithSiteImpl<CAnchoToolbar>,
+  public IDeskBand
 {
 public:
   DECLARE_PROTECT_FINAL_CONSTRUCT()
+  DECLARE_REGISTRY_RESOURCEID(IDR_ANCHOTOOLBAR)
+  DECLARE_NOT_AGGREGATABLE(CAnchoToolbar)
 
-  BEGIN_COM_MAP(TImplementation)
+  BEGIN_COM_MAP(CAnchoToolbar)
     COM_INTERFACE_ENTRY(IObjectWithSite)
-    COM_INTERFACE_ENTRY_IID(IID_IDeskBand, IDeskBand)
+    COM_INTERFACE_ENTRY(IDeskBand)
     COM_INTERFACE_ENTRY(IOleWindow)
-    COM_INTERFACE_ENTRY_IID(IID_IDockingWindow, IDockingWindow)
-    COM_INTERFACE_ENTRY(IInputObject)
+    COM_INTERFACE_ENTRY(IDockingWindow)
   END_COM_MAP()
+
 public:
   HRESULT FinalConstruct()
   {
+    m_dwBandID = 0;
+    m_dwViewMode = 0;
+/*
     ComContentWindow *contentWindow = NULL;
     HRESULT hr = ComContentWindow::CreateInstance(&contentWindow);
     if (FAILED(hr)) {
@@ -33,50 +36,55 @@ public:
     }
     contentWindow->AddRef();
     mContentWindow.Attach(contentWindow);
-    return hr;
+*/
+    return S_OK;
   }
 
   void FinalRelease()
   {
   }
 
+public:
+// IObjectWithSite
   STDMETHOD(SetSite)(IUnknown *pUnkSite);
+
+// IDeskBand
   STDMETHOD(GetBandInfo)(DWORD dwBandID, DWORD dwViewMode, DESKBANDINFO* pdbi);
 
-  virtual void GetBandInfoValues(const wchar_t *& title, POINTL &minSize);
-public:
-  // IOleWindow
+// IOleWindow
   STDMETHOD(GetWindow)(HWND* phwnd);
   STDMETHOD(ContextSensitiveHelp)(BOOL fEnterMode);
 
-public:
-  // IDockingWindow
+// IDockingWindow
   STDMETHOD(CloseDW)(unsigned long dwReserved);
-
   STDMETHOD(ResizeBorderDW)(const RECT* prcBorder, IUnknown* punkToolbarSite, BOOL fReserved);
-
   STDMETHOD(ShowDW)(BOOL fShow);
 
 public:
-  HWND findParentWindowByClass(std::wstring aClassName);
+  HWND findParentWindowByClass(HWND window, std::wstring aClassName);
 
 protected:
-  virtual HRESULT InternalSetSite();
-  virtual HRESULT InternalReleaseSite();
+  HRESULT InternalSetSite();
+  HRESULT InternalReleaseSite();
 
 protected:
-  typedef CComObject<CHtmlToolbarWindow> ComContentWindow;
-  CComPtr<ComContentWindow> mContentWindow;
+  //typedef CComObject<CHtmlToolbarWindow> ComContentWindow;
+  //CComPtr<ComContentWindow> mContentWindow;
 
-  CComPtr<IInputObjectSite> mInputObjectSite;
+  //CComPtr<IInputObjectSite> mInputObjectSite;
 
-  HWND mHWNDParent;
+  //HWND mHWNDParent;
+  CComObjectStackEx<HtmlToolbarWindow>  mToolbarWindow;
 
-  DWORD m_dwBandID, m_dwViewMode;
+  CComPtr<IAnchoAddonService> mAnchoService;
+  int mTabId;
+
+  DWORD m_dwBandID;
+  DWORD m_dwViewMode;
 };
 
 //*******************************************************************************
-
+/*
 class CToolbar :
   public CBasicToolbar<CToolbar, CHtmlToolbarWindow, &CLSID_IEToolbar>,
   public ToolbarCallback
@@ -88,9 +96,6 @@ public:
   CToolbar(): mTabId(0)
   {
   }
-  /**
-   * Fills in values for IDeskBand::GetBandInfo.
-   */
   virtual void GetBandInfoValues(const wchar_t *& title, POINTL &minSize);
 
 public:
@@ -134,7 +139,8 @@ private:
   int mTabId;
 
 };
+*/
 
-OBJECT_ENTRY_AUTO(CLSID_IEToolbar, CToolbar)
+OBJECT_ENTRY_AUTO(CLSID_IEToolbar, CAnchoToolbar)
 
-#include "Toolbar.ipp"
+//#include "Toolbar.ipp"

@@ -2,23 +2,37 @@
 #include "Toolbar.h"
 #include "ProtocolHandlerRegistrar.h"
 
-void CToolbar::GetBandInfoValues(const wchar_t *& title, POINTL &minSize)
+HWND CAnchoToolbar::findParentWindowByClass(HWND window, std::wstring aClassName)
 {
-  title = L"TEST_TOOLBAR";
-  minSize.x = 200;
-  minSize.y = 28;
+  wchar_t className[256];
+  while (window) {
+    if (!GetClassName(window, className, 256)) {
+      return NULL;
+    }
+    if (aClassName == className) {
+      return window;
+    }
+    window = GetParent(window);
+  }
+  return NULL;
 }
 
-HRESULT CToolbar::InternalSetSite()
+HRESULT CAnchoToolbar::InternalSetSite()
 {
-  IF_FAILED_RET(BaseClass::InternalSetSite());
+  CComQIPtr<IOleWindow> parentWindow(m_spUnkSite);
+  if (!parentWindow) {
+    return E_FAIL;
+  }
+  HWND hwndParent = NULL;
+  parentWindow->GetWindow(&hwndParent);
 
-  HWND frameTab = findParentWindowByClass(L"Frame Tab");
+  HWND frameTab = findParentWindowByClass(hwndParent, L"Frame Tab");
   if (!frameTab) {
     ATLASSERT(0 && "TOOLBAR: Failed to obtain 'Frame Tab' window handle.");
     return E_FAIL;
   }
   ATLTRACE(L"ANCHO: toolbar InternalSetSite() - CoCreateInstace(CLSID_AnchoAddonService)\n");
+
   // create addon service object
   IF_FAILED_RET(mAnchoService.CoCreateInstance(CLSID_AnchoAddonService));
 
@@ -29,121 +43,118 @@ HRESULT CToolbar::InternalSetSite()
 
   CComBSTR url;
   mAnchoService->registerBrowserActionToolbar((INT)frameTab, &url, &mTabId);
-  mUrl = std::wstring(url);
 
-  CComPtr<IDispatch> dispatchObject;
-  mAnchoService->getDispatchObject(&dispatchObject);
-  mContentWindow->setExternalObject(dispatchObject);
-  mContentWindow->setTabId(mTabId);
-  ATLTRACE(L"ANCHO: toolbar InternalSetSite() - initialization finished\n");
-  return RunToolbarPage();
-}
+  mAnchoService->getDispatchObject(&mToolbarWindow.mExternalDispatch);
+  mToolbarWindow.mTabId = mTabId;
 
-HRESULT CToolbar::InternalReleaseSite()
-{
-  mAnchoService->unregisterBrowserActionToolbar(mTabId);
-  return BaseClass::InternalReleaseSite();
-}
+  mToolbarWindow.Create(hwndParent, CWindow::rcDefault, NULL,
+      WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, 0);
 
-STDMETHODIMP CToolbar::TranslateAcceleratorIO(LPMSG lpMsg)
-{
-  CComQIPtr<IOleInPlaceActiveObject, &IID_IOleInPlaceActiveObject> pIOIPAO(mContentWindow->m_pWebBrowser);
-  if (!pIOIPAO || pIOIPAO->TranslateAccelerator(lpMsg) != S_OK) {
-    TranslateMessage(lpMsg);
-    DispatchMessage(lpMsg);
-  }
-
-  return S_OK;
-}
-
-STDMETHODIMP CToolbar::HasFocusIO(void)
-{
-  HWND hFocusWnd = ::GetFocus();
-  return ::IsChild((HWND)*mContentWindow, hFocusWnd) ? S_OK : S_FALSE;
-}
-
-STDMETHODIMP CToolbar::UIActivateIO(BOOL fActivate, LPMSG lpMsg)
-{
-  if (fActivate) {
-    mContentWindow->SetFocus();
-  }
-  return S_OK;
-}
-
-HRESULT CToolbar::RunToolbarPage()
-{
-  mContentWindow->Create(mHWNDParent, CWindow::rcDefault, L"about:blank",
-      WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN | WS_HSCROLL | WS_VSCROLL, 0);
-
-  if (!mContentWindow->m_pWebBrowser)
-  {
+  if (!mToolbarWindow.mWebBrowser) {
     return E_FAIL;
   }
-  //mHWNDParent = mContentWindow->operator HWND();
 
-  return mContentWindow->m_pWebBrowser->Navigate(CComBSTR(mUrl.c_str()), NULL, NULL, NULL, NULL);
+  return mToolbarWindow.mWebBrowser->Navigate(url, NULL, NULL, NULL, NULL);
 }
 
-void CToolbar::ToolbarWindowBeforeNavigate()
+HRESULT CAnchoToolbar::InternalReleaseSite()
 {
-  //DestroyMagpieInstance(m_Magpie);
-}
-
-void CToolbar::ToolbarWindowReady(VARIANT *pURL)
-{
-  CString url(pURL->bstrVal);
-  if (url != _T("about:blank"))
-  {
-    /*HRESULT hr = ExecuteContentScript();
-    ATLASSERT(SUCCEEDED(hr));*/
+  mToolbarWindow.DestroyWindow();
+  if (mAnchoService) {
+    mAnchoService->unregisterBrowserActionToolbar(mTabId);
   }
+  mAnchoService.Release();
+  return S_OK;
 }
 
-void CToolbar::ToolbarWindowNavigateComplete(IDispatch *pDisp, VARIANT *URL)
+STDMETHODIMP CAnchoToolbar::SetSite(IUnknown *pUnkSite)
 {
+  m_spUnkSite = pUnkSite;
 
+  if (m_spUnkSite) {
+    IF_FAILED_RET(InternalSetSite())
+  }
+  else {
+    InternalReleaseSite();
+  }
+  return S_OK;
 }
 
-void CToolbar::ToolbarWindowOnSetFocus()
+STDMETHODIMP CAnchoToolbar::GetBandInfo(DWORD dwBandID, DWORD dwViewMode, DESKBANDINFO* pdbi)
 {
-  HRESULT hr;
-  if (mInputObjectSite) {
-    CComPtr<IUnknown> pUnk;
-    if (SUCCEEDED(QueryInterface(IID_IUnknown, (LPVOID*) &pUnk.p)))
-    {
-      hr = mInputObjectSite->OnFocusChangeIS(pUnk, TRUE);
-      ATLASSERT(SUCCEEDED(hr));
+  if (pdbi) {
+    m_dwBandID = dwBandID;
+    m_dwViewMode = dwViewMode;
+
+    if (pdbi->dwMask & DBIM_MINSIZE) {
+      pdbi->ptMinSize.x = 200;
+      pdbi->ptMinSize.y = 28;
     }
+
+    if (pdbi->dwMask & DBIM_MAXSIZE) {
+      pdbi->ptMaxSize.x = -1;
+      pdbi->ptMaxSize.y = 28;
+    }
+
+    if (pdbi->dwMask & DBIM_INTEGRAL) {
+      pdbi->ptIntegral.x = 0;
+      pdbi->ptIntegral.y = 0;
+    }
+
+    if (pdbi->dwMask & DBIM_ACTUAL) {
+      pdbi->ptActual.x = 600;
+      pdbi->ptActual.y = 28;
+    }
+
+    if (pdbi->dwMask & DBIM_TITLE) {
+      pdbi->dwMask &= ~DBIM_TITLE;
+    }
+
+    if (pdbi->dwMask & DBIM_MODEFLAGS) {
+      //pdbi->dwModeFlags = DBIMF_VARIABLEHEIGHT;
+    }
+
+    if (pdbi->dwMask & DBIM_BKCOLOR) {
+      pdbi->dwMask &= ~DBIM_BKCOLOR;
+    }
+    return S_OK;
   }
+  return E_INVALIDARG;
 }
 
-void CToolbar::ToolbarWindowOnKillFocus()
+
+STDMETHODIMP CAnchoToolbar::GetWindow(HWND* phwnd)
 {
-  HRESULT hr;
-  // If an input field in the toolbar has the focus when the user clicks on the main
-  // browser window, the caret stays in the input field instead of disappearing. Sending
-  // WM_UPDATEUISTATUS manually to this window doesn't seem to help, so we simply
-  // change the active element to make sure that the caret disappears.
-  CComQIPtr<IDispatch> documentDispatch;
-  if (mContentWindow && SUCCEEDED(mContentWindow->m_pWebBrowser->get_Document(&documentDispatch))) {
-    CComQIPtr<IHTMLDocument3> document(documentDispatch);
-    if (document) {
-      CComQIPtr<IHTMLElement> element;
-      if (SUCCEEDED(document->get_documentElement(&element))) {
-        CComQIPtr<IHTMLElement3> element3(element);
-        if (element3) {
-          element3->setActive();
-        }
-      }
-    }
+  if (!phwnd) {
+    return E_POINTER;
   }
-
-  if (mInputObjectSite) {
-    CComPtr<IUnknown> pUnk;
-    if (SUCCEEDED(QueryInterface(IID_IUnknown, (LPVOID*) &pUnk.p)))
-    {
-      hr = mInputObjectSite->OnFocusChangeIS(pUnk, FALSE);
-      ATLASSERT(SUCCEEDED(hr));
-    }
-  }
+  (*phwnd) = mToolbarWindow;
+  return S_OK;
 }
+
+
+STDMETHODIMP CAnchoToolbar::ContextSensitiveHelp(BOOL fEnterMode)
+{
+  return S_OK;
+}
+
+
+STDMETHODIMP CAnchoToolbar::CloseDW(unsigned long dwReserved)
+{
+  mToolbarWindow.DestroyWindow();
+  return S_OK;
+}
+
+
+STDMETHODIMP CAnchoToolbar::ResizeBorderDW(const RECT* prcBorder, IUnknown* punkToolbarSite, BOOL fReserved)
+{
+  return E_NOTIMPL;
+}
+
+
+STDMETHODIMP CAnchoToolbar::ShowDW(BOOL fShow)
+{
+  mToolbarWindow.ShowWindow(fShow ? SW_SHOW : SW_HIDE);
+  return S_OK;
+}
+

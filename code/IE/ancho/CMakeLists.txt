@@ -24,14 +24,11 @@ set(${PROJECT_NAME}_HEADERS
   "${${PROJECT_NAME}_INC_DIR}/CookieManager.h"
   "${${PROJECT_NAME}_INC_DIR}/dllmain.h"
   "${${PROJECT_NAME}_INC_DIR}/DOMWindowWrapper.h"
-  "${${PROJECT_NAME}_INC_DIR}/HtmlPanel.h"
-  "${${PROJECT_NAME}_INC_DIR}/HtmlPanelUIHandler.h"
   "${${PROJECT_NAME}_INC_DIR}/HtmlToolbarWindow.h"
   "${${PROJECT_NAME}_INC_DIR}/resource.h"
   "${${PROJECT_NAME}_INC_DIR}/stdafx.h"
   "${${PROJECT_NAME}_INC_DIR}/targetver.h"
   "${${PROJECT_NAME}_INC_DIR}/Toolbar.h"
-  "${${PROJECT_NAME}_INC_DIR}/Toolbar.ipp"
   "${${PROJECT_NAME}_INC_DIR}/WindowDocumentMap.h"
   )
 
@@ -44,8 +41,6 @@ set(${PROJECT_NAME}_SOURCES
   "${${PROJECT_NAME}_SRC_DIR}/CookieManager.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/dllmain.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/DOMWindowWrapper.cpp"
-  "${${PROJECT_NAME}_SRC_DIR}/HtmlPanel.cpp"
-  "${${PROJECT_NAME}_SRC_DIR}/HtmlPanelUIHandler.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/HtmlToolbarWindow.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/stdafx.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/Toolbar.cpp"
