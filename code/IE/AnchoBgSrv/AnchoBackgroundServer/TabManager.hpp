@@ -29,12 +29,6 @@ typedef boost::function<void(TabInfo)> TabCallback;
 typedef boost::function<void(TabInfoList)> TabListCallback;
 typedef boost::function<void(void)> SimpleCallback;
 
-class TabManager;
-//Pointer to tabmanger singleton instance
-extern CComObject<Ancho::Service::TabManager> *gTabManager;
-
-
-
 /**
  * Singleton class.
  * This manager stores information and references to all tabs currently available in all IE windows.
@@ -143,18 +137,10 @@ public:
     return mTabs.begin()->second;
   }
 
-  static void initSingleton()
+  static CComObjectStackEx<Ancho::Service::TabManager> & instance()
   {
-    ATLASSERT(gTabManager == NULL);
-    CComObject<Ancho::Service::TabManager> *tabManager = NULL;
-    IF_FAILED_THROW(CComObject<Ancho::Service::TabManager>::CreateInstance(&tabManager));
-    gTabManager = tabManager;
-  }
-
-  static CComObject<Ancho::Service::TabManager> & instance()
-  {
-    ATLASSERT(gTabManager != NULL);
-    return *gTabManager;
+    static CComObjectStackEx<Ancho::Service::TabManager> instance;
+    return instance;
   }
 public:
   void createTab(const Utils::JSObject &aProperties,

@@ -167,8 +167,6 @@ struct MultiOperationCallback
 
 namespace Service {
 
-CComObject<Ancho::Service::TabManager> *gTabManager = NULL;
-
 //==========================================================================================
 /**
  * Task which creates new tab

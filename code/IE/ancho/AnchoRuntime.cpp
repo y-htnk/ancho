@@ -75,10 +75,6 @@ void CAnchoRuntime::DestroyAddons()
   }
   m_Addons.clear();
 
-  if(mTabManager) {
-    mTabManager->unregisterRuntime(m_TabID);
-  }
-  mTabManager.Release();
   if (m_pAnchoService) {
     m_pAnchoService->releasePageActions(m_TabID);
     m_pAnchoService.Release();
@@ -98,6 +94,10 @@ HRESULT CAnchoRuntime::Cleanup()
   AtlUnadvise(m_pBrowserEventSource, IID_DAnchoBrowserEvents, m_AnchoBrowserEventsCookie);
 
   gWindowDocumentMap.eraseTab(m_TabID);
+  if(mTabManager) {
+    mTabManager->unregisterRuntime(m_TabID);
+  }
+  mTabManager.Release();
   return S_OK;
 }
 
@@ -139,15 +139,6 @@ HRESULT CAnchoRuntime::Init()
     }
     mTabManager = tabManager;
   }
-  {//Get WindowManager
-    CComQIPtr<IDispatch> dispatch;
-    IF_FAILED_RET(serviceApi->get_windowManager(&dispatch));
-    CComQIPtr<IAnchoWindowManagerInternal> windowManager = dispatch;
-    if (!windowManager) {
-      return E_NOINTERFACE;
-    }
-    mWindowManager = windowManager;
-  }
 
   mCookieManager = Ancho::CookieManager::createInstance(serviceApi);
 
@@ -160,8 +151,17 @@ HRESULT CAnchoRuntime::Init()
   // initialize page actions for this process/window/tab
   m_pAnchoService->initPageActions((OLE_HANDLE)hwndIeMain, m_TabID);
 
+  CComQIPtr<IAnchoWindowManagerInternal> windowManager;
+  {//Get WindowManager
+    CComQIPtr<IDispatch> dispatch;
+    IF_FAILED_RET(serviceApi->get_windowManager(&dispatch));
+    windowManager = dispatch;
+    if (!windowManager) {
+      return E_NOINTERFACE;
+    }
+  }
   //Get WindowId
-  IF_FAILED_RET(mWindowManager->getWindowIdFromHWND(reinterpret_cast<OLE_HANDLE>(getMainWindow()), &mWindowID));
+  IF_FAILED_RET(windowManager->getWindowIdFromHWND(reinterpret_cast<OLE_HANDLE>(getMainWindow()), &mWindowID));
 
   CComObject<CAnchoBrowserEvents>* pBrowserEventSource;
   IF_FAILED_RET(CComObject<CAnchoBrowserEvents>::CreateInstance(&pBrowserEventSource));

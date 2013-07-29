@@ -69,7 +69,7 @@ HRESULT CAnchoAddonService::get_cookieManager(LPDISPATCH* ppRet)
 HRESULT CAnchoAddonService::get_tabManager(LPDISPATCH* ppRet)
 {
   ENSURE_RETVAL(ppRet);
-  return mITabManager.QueryInterface(ppRet);
+  return Ancho::Service::TabManager::instance().QueryInterface(IID_ITabManager, (void**)ppRet);
 }
 
 //----------------------------------------------------------------------------
@@ -77,23 +77,9 @@ HRESULT CAnchoAddonService::get_tabManager(LPDISPATCH* ppRet)
 HRESULT CAnchoAddonService::get_windowManager(LPDISPATCH* ppRet)
 {
   ENSURE_RETVAL(ppRet);
-  return mIWindowManager.QueryInterface(ppRet);
+  return Ancho::Service::WindowManager::instance().QueryInterface(IID_IWindowManager, (void**)ppRet);
 }
 
-//----------------------------------------------------------------------------
-//
-/*
-HRESULT CAnchoAddonService::get_pageActionManager(LPDISPATCH* ppRet)
-{
-  ENSURE_RETVAL(ppRet);
-  if (mPageActionToolbar) {
-    return mPageActionToolbar.QueryInterface(ppRet);
-  }
-  (*ppRet) = NULL;
-  return S_OK;
-  return E_FAIL;
-}
-*/
 //----------------------------------------------------------------------------
 //
 HRESULT CAnchoAddonService::invokeExternalEventObject(BSTR aExtensionId, BSTR aEventName, LPDISPATCH aArgs, VARIANT* aRet)
@@ -186,7 +172,7 @@ STDMETHODIMP CAnchoAddonService::getBrowserActions(VARIANT* aBrowserActionsArray
 {
   ENSURE_RETVAL(aBrowserActionsArray);
 
-  CComVariant tmp(m_BrowserActionInfos.p);
+  CComVariant tmp(&m_BrowserActionInfos);
   return tmp.Detach(aBrowserActionsArray);
 }
 
@@ -198,7 +184,7 @@ HRESULT CAnchoAddonService::addBrowserActionInfo(LPDISPATCH aBrowserActionInfo)
     return E_POINTER;
   }
 
-  m_BrowserActionInfos->push_back(CComVariant(aBrowserActionInfo));
+  m_BrowserActionInfos.push_back(CComVariant(aBrowserActionInfo));
 
   Ancho::Service::TabManager::instance().forEachTab(
               [](Ancho::Service::TabManager::TabRecord &aRec){ aRec.runtime()->showBrowserActionBar(TRUE); }
@@ -239,20 +225,8 @@ HRESULT CAnchoAddonService::FinalConstruct()
     PathAddBackslash(psc);
     m_sThisPath.ReleaseBuffer();
 
-    CComObject<CIECookieManager> * pCookiesManager = NULL;
-    IF_FAILED_RET(CComObject<CIECookieManager>::CreateInstance(&pCookiesManager));
-    pCookiesManager->setNotificationCallback(ACookieCallbackFunctor::APtr(new CookieNotificationCallback(*this)));
-    pCookiesManager->startWatching();
-
-    m_Cookies = pCookiesManager;
-
-    IF_FAILED_RET(SimpleJSArray::createInstance(m_BrowserActionInfos));
-
-    Ancho::Service::TabManager::initSingleton();
-    mITabManager = &Ancho::Service::TabManager::instance();
-
-    Ancho::Service::WindowManager::initSingleton();
-    mIWindowManager = &Ancho::Service::WindowManager::instance();
+    m_Cookies.setNotificationCallback(ACookieCallbackFunctor::APtr(new CookieNotificationCallback(*this)));
+    m_Cookies.startWatching();
 
     //Check for Ancho updates
     mAsyncTaskManager.addTask([&]{ Ancho::Service::checkForUpdate(s_AnchoExtensionsRegistryKey, L"Ancho"); });

@@ -172,7 +172,7 @@ private:
 
   BackgroundObjectsMap          m_BackgroundObjects;
 
-  CComPtr<ComSimpleJSArray>     m_BrowserActionInfos;
+  CComObjectStackEx<SimpleJSArray> m_BrowserActionInfos;
   BrowserActionCallbackMap      m_BrowserActionCallbacks;
   CommandQueue                  m_WebBrowserPostInitTasks;
 
@@ -184,11 +184,7 @@ private:
   CString                       mInstallPath32;
   CString                       mInstallPath64;
 
-  CComPtr<IIECookieManager>     m_Cookies;
-
-  CComPtr<ITabManager>          mITabManager;
-
-  CComPtr<IWindowManager>       mIWindowManager;
+  CComObjectStackEx<CIECookieManager> m_Cookies;
 
   Ancho::PageAction::ProxyManager
                                 mPageActionProxies;

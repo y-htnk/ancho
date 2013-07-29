@@ -27,8 +27,6 @@ HWND getCurrentWindowHWND()
 
 namespace Service {
 
-CComObject<Ancho::Service::WindowManager> *gWindowManager = NULL;
-
 //==========================================================================================
 struct CreateWindowTask
 {

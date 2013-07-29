@@ -223,7 +223,7 @@ struct GetAllCookiesFunctor
         try {
           readCookieFile(entry->lpszSourceUrlName, cookies);
         } catch (std::exception &) {
-          ATLTRACE("readCookieFile failed for %s\n", entry->lpszSourceUrlName);
+          ATLTRACE(L"readCookieFile failed for %s\n", entry->lpszSourceUrlName);
         }
         dwEntrySize = MAX_CACHE_ENTRY_INFO_SIZE;
       } while (FindNextUrlCacheEntry(hCacheDir, entry, &dwEntrySize));
