@@ -62,6 +62,8 @@ interface IAnchoAddonBackground : IUnknown
   HRESULT GetContentInfo([in] ULONG ulInstanceID, [in] BSTR bstrUrl, [out, retval] LPDISPATCH* ppDisp);
   HRESULT ReleaseContentInfo([in] ULONG ulInstanceID);
 //  HRESULT GetManifest([out, retval] LPDISPATCH* ppDisp);
+
+  HRESULT invokeExternalEventObject([in] BSTR aEventName, [in] LPDISPATCH aArgs, [out, retval] VARIANT* aRet);
 };
 
 /*==========================================================================*/
@@ -232,7 +234,7 @@ library AnchoBgSrvLib
     [id(1), helpstring("getWindowIdFromHWND - synchronous call")]
     HRESULT getWindowIdFromHWND([in] OLE_HANDLE aHWND, [out, retval] LONG *aWindowId);
   };
-  
+
   /*==========================================================================*/
   [
 	  object,

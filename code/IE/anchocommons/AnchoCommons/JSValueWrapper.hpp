@@ -257,6 +257,11 @@ public:
     Utils::detail::setMember(mOwner, mPropertyName, CComVariant(aValue.c_str()));
     return *this;
   }
+  JSValueAssigner operator=(const wchar_t *aValue)const
+  {
+    Utils::detail::setMember(mOwner, mPropertyName, CComVariant(aValue));
+    return *this;
+  }
   JSValueAssigner operator=(int aValue)const
   {
     Utils::detail::setMember(mOwner, mPropertyName, CComVariant(aValue));
