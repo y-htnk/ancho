@@ -80,6 +80,8 @@ public:
   void OnAddonServiceReleased();
 
   STDMETHOD(invokeExternalEventObject)(BSTR aEventName, LPDISPATCH aArgs, VARIANT* aRet);
+
+  //TODO - remove after cookie events cleanup
   STDMETHOD(invokeEventWithIDispatchArgument)(BSTR aEventName, LPDISPATCH aArg);
 public:
   // -------------------------------------------------------------------------

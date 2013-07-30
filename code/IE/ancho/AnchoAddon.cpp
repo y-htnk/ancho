@@ -12,9 +12,11 @@
 #include "AnchoShared/AnchoShared.h"
 #include <crxProcessing/extract.hpp>
 #include <fstream>
+#include <AnchoCommons/COMConversions.hpp>
 
-static boost::filesystem::wpath processCRXFile(std::wstring aExtensionName, boost::filesystem::wpath aPath)
+static boost::filesystem::wpath processCRXFile(std::wstring aExtensionName, boost::filesystem::wpath aPath, UpdateState &aUpdateState)
 {
+  aUpdateState = usNone;
   boost::filesystem::wpath extractedExtensionPath = getSystemPathWithFallback(FOLDERID_LocalAppDataLow, CSIDL_LOCAL_APPDATA);
   extractedExtensionPath /= L"Salsita";
   extractedExtensionPath /= L"AnchoExtensions";
@@ -31,7 +33,12 @@ static boost::filesystem::wpath processCRXFile(std::wstring aExtensionName, boos
       std::string oldSignature;
       signatureFile >> oldSignature;
       shouldExtract = oldSignature != signature;
+      if (shouldExtract) {
+        aUpdateState = usUpdated;
+      }
     }
+  } else {
+    aUpdateState = usInstalled;
   }
 
   if (shouldExtract) {
@@ -102,7 +109,7 @@ STDMETHODIMP CAnchoAddon::Init(LPCOLESTR lpsExtensionID, IAnchoAddonService * pS
     if (extension != L".crx") {
       return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
-    m_sExtensionPath = processCRXFile(m_sExtensionName, path);
+    m_sExtensionPath = processCRXFile(m_sExtensionName, path, mUpdateState);
   }
 
   {
@@ -313,11 +320,48 @@ STDMETHODIMP CAnchoAddon::InitializeExtensionScripting(BSTR bstrUrl)
   return S_OK;
 }
 
+void CAnchoAddon::notifyAboutUpdateStatus()
+{
+  CComQIPtr<IAnchoServiceApi> serviceApi = m_pAnchoService;
+  if (!serviceApi) {
+    return;
+  }
+  try {
+    _variant_t ret;
+    CComPtr<IDispatch> argPtr;
+    CComPtr<IDispatch> arrayPtr;
+    IF_FAILED_THROW(serviceApi->createJSObject(_bstr_t(m_sExtensionName.c_str()), 0 /*object is targeted for background*/, &argPtr));
+    Ancho::Utils::JSObjectWrapper argument =  Ancho::Utils::JSValueWrapper(argPtr).toObject();
+    IF_FAILED_THROW(serviceApi->createJSArray(_bstr_t(m_sExtensionName.c_str()), 0 /*object is targeted for background*/, &arrayPtr));
+    Ancho::Utils::JSArrayWrapper argumentList =  Ancho::Utils::JSValueWrapper(arrayPtr).toArray();
+    argumentList.push_back(argument);
+
+    switch (mUpdateState) {
+    case usInstalled:
+      argument[L"reason"] = L"install";
+      break;
+    case usUpdated:
+      argument[L"reason"] = L"update";
+      //TODO - argument[L"previousVersion"] = ...
+      break;
+    default:
+      ATLASSERT(false);
+    }
+    IF_FAILED_THROW(m_pAddonBackground->invokeExternalEventObject(CComBSTR(L"runtime.onInstalled"), arrayPtr, &ret.GetVARIANT()));
+  } catch (std::exception &) {
+    ATLTRACE(L"Firing chrome.runtime.onInstalled event failed\n");
+  }
+}
+
 HRESULT CAnchoAddon::initializeEnvironment()
 {
   //If create AddonBackground sooner - background script will be executed before initialization of tab windows
   if(!m_pAddonBackground || !m_pBackgroundConsole) {
     IF_FAILED_RET(m_pAnchoService->GetCreateAddonBackground(CComBSTR(m_sExtensionName.c_str()), &m_pAddonBackground));
+
+    if (mUpdateState != usNone) {
+      notifyAboutUpdateStatus();
+    }
 
     // get console
     m_pBackgroundConsole = m_pAddonBackground;
