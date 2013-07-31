@@ -40,18 +40,14 @@
     }
   };
 
-  function Extension(id, reason) {
+  function Extension(id) {
     EventEmitter2.call(this, { wildcard: true });
     this._id = id;
     this._rootDirectory = null;
-    this._firstRun = (reason > APP_STARTUP);
     this._manifest = null;
     this._windowEventEmitters = {};
     this._windowWatcher = null;
-
-    if (reason === ADDON_ENABLE) {
-      this._onEnabled();
-    }
+    this._firstRun = null;
   }
   inherits(Extension, EventEmitter2);
 
@@ -63,7 +59,7 @@
 
   Object.defineProperty(Extension.prototype, 'rootDirectory', {
     get: function rootDirectory() {
-      return this._rootDirectory;
+      return this._rootDirectory.clone();
     }
   });
 
@@ -97,19 +93,12 @@
     return this._id.replace(/[^A-Za-z]/g, '_') + '_' + storageSpace;
   };
 
-  Extension.prototype.load = function(rootDirectory) {
+  Extension.prototype.load = function(rootDirectory, reason) {
     this._rootDirectory = rootDirectory;
-    var initFile = this._rootDirectory.clone();
-    initFile.append('__init__');
-    if (!initFile.exists()) {
-      // Note that firstRun may already have been forced to true
-      // by the global value (if we are installing Ancho).
-      this._firstRun = true;
-      // Create the file so we know in subsequent runs that
-      // the extension was already installed.
-      initFile.create(Ci.nsIFile.NORMAL_FILE_TYPE, FileUtils.PERMS_FILE);
+    this._firstRun = (reason > APP_STARTUP);
+    if (ADDON_ENABLE === reason) {
+      this._onEnabled();
     }
-
     this._loadManifest();
   };
 
@@ -125,7 +114,7 @@
 
     this.emit('unload', reason);
 
-    if (reason === ADDON_DISABLE) {
+    if (ADDON_DISABLE === reason) {
       this._onDisabled();
     }
   };
@@ -145,7 +134,7 @@
   };
 
   Extension.prototype._loadManifest = function() {
-    var manifestFile = this._rootDirectory.clone();
+    var manifestFile = this.rootDirectory;
     manifestFile.append('manifest.json');
     var manifestURI = Services.io.newFileURI(manifestFile);
     var manifestString = Utils.readStringFromUrl(manifestURI);
@@ -181,7 +170,7 @@
 
   Extension.prototype._restoreStorage = function(storageSpace) {
     var tableName = this.getStorageTableName(storageSpace);
-    var file = FileUtils.getFile('ProfD', ['ancho_data', tableName + '.sql']);
+    var file = this._getStorageBackupFile(tableName);
     if (!file.exists()) {
       return;
     }
@@ -206,7 +195,7 @@
     for (var i=0; i<sqlLines.length; i++) {
       if (sqlLines[i]) {
         var statement = storageConnection.createStatement(sqlLines[i]);
-        statement.execute();      
+        statement.execute();
       }
     }
 
@@ -226,7 +215,7 @@
       sqlDump += '\');\n';
     }
 
-    var file = FileUtils.getFile('ProfD', ['ancho_data', tableName + '.sql']);
+    var file = this._getStorageBackupFile(tableName);
     var stream = FileUtils.openSafeFileOutputStream(file);
     var os = Cc["@mozilla.org/intl/converter-output-stream;1"].createInstance(Ci.nsIConverterOutputStream);
     os.init(stream, 'UTF-8', 0, 0x0000);
@@ -235,6 +224,16 @@
 
     statement = storageConnection.createStatement('DROP TABLE ' + tableName);
     statement.execute();
+  };
+
+  Extension.prototype._getStorageBackupFile = function(tableName) {
+    var file = this.rootDirectory;
+    file.append('ancho_data');
+    if (!file.exists()) {
+      file.create(Ci.nsIFile.DIRECTORY_TYPE, FileUtils.PERMS_DIRECTORY);
+    }
+    file.append(tableName + '.sql');
+    return file;
   };
 
   function GlobalId() {
@@ -273,8 +272,8 @@
   };
 
   Global.prototype.loadExtension = function(id, rootDirectory, reason) {
-    this._extensions[id] = new Extension(id, reason);
-    this._extensions[id].load(rootDirectory);
+    this._extensions[id] = new Extension(id);
+    this._extensions[id].load(rootDirectory, reason);
     return this._extensions[id];
   };
 
@@ -294,7 +293,7 @@
     this.unloadAllExtensions(reason);
     this.emit('unload', reason);
     this.removeAllListeners();
-    
+
     this._storageConnection.asyncClose();
   };
 
