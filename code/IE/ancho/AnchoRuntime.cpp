@@ -75,14 +75,6 @@ void CAnchoRuntime::DestroyAddons()
   }
   m_Addons.clear();
 
-  if (m_pAnchoService) {
-    m_pAnchoService->releasePageActions(m_TabID);
-    m_pAnchoService.Release();
-  }
-  if (m_pWebBrowser)
-  {
-    m_pWebBrowser.Release();
-  }
   ATLTRACE(L"ANCHO: all addons destroyed for runtime %d\n", m_TabID);
 }
 
@@ -90,14 +82,35 @@ void CAnchoRuntime::DestroyAddons()
 //  Cleanup
 HRESULT CAnchoRuntime::Cleanup()
 {
-  AtlUnadvise(m_pWebBrowser, DIID_DWebBrowserEvents2, m_WebBrowserEventsCookie);
-  AtlUnadvise(m_pBrowserEventSource, IID_DAnchoBrowserEvents, m_AnchoBrowserEventsCookie);
+  // release page actions first
+  if (m_pAnchoService) {
+    m_pAnchoService->releasePageActions(m_TabID);
+  }
 
+  // unadvise events
+  if (m_pBrowserEventSource) {
+    AtlUnadvise(m_pBrowserEventSource, IID_DAnchoBrowserEvents, m_AnchoBrowserEventsCookie);
+    m_pBrowserEventSource.Release();
+    m_AnchoBrowserEventsCookie = 0;
+  }
+  if (m_pWebBrowser) {
+    AtlUnadvise(m_pWebBrowser, DIID_DWebBrowserEvents2, m_WebBrowserEventsCookie);
+    m_pWebBrowser.Release();
+    m_WebBrowserEventsCookie = 0;
+  }
+
+  // remove instance from tab map and -manager
   gWindowDocumentMap.eraseTab(m_TabID);
   if(mTabManager) {
     mTabManager->unregisterRuntime(m_TabID);
+    mTabManager.Release();
   }
-  mTabManager.Release();
+
+  // release service. must happen as the last step!
+  if (m_pAnchoService) {
+    m_pAnchoService.Release();
+  }
+
   return S_OK;
 }
 

@@ -647,22 +647,32 @@ STDMETHODIMP TabManager::registerRuntime(OLE_HANDLE aFrameTab, IAnchoRuntime * a
 STDMETHODIMP TabManager::unregisterRuntime(INT aTabID)
 {
   BEGIN_TRY_BLOCK;
-  boost::unique_lock<Mutex> lock(mTabAccessMutex);
-  TabMap::iterator it = mTabs.find(aTabID);
-  if (it != mTabs.end()) {
-    it->second->tabClosed();
-    mTabs.erase(it);
+
+  boost::shared_ptr<TabRecord> record;
+  {
+    boost::unique_lock<Mutex> lock(mTabAccessMutex);
+    TabMap::iterator it = mTabs.find(aTabID);
+    if (it != mTabs.end()) {
+      record = it->second;
+      mTabs.erase(it);
+    }
   }
+  if (record) {
+    record->tabClosed();
+  }
+
   ATLTRACE(L"ADDON SERVICE - unregistering tab: %d\n", aTabID);
   //if we cleanly unregistered all runtimes turn off the heartbeat
-  if (mTabs.empty()) {
-    mHeartbeatActive = false;
-    mHeartbeatTimer.stop();
+  {
+    boost::unique_lock<Mutex> lock(mTabAccessMutex);
+    if (mTabs.empty()) {
+      mHeartbeatActive = false;
+      mHeartbeatTimer.stop();
+    }
   }
   return S_OK;
   END_TRY_BLOCK_CATCH_TO_HRESULT;
 }
-
 //==========================================================================================
 //
 STDMETHODIMP TabManager::createTabNotification(INT aTabId, ULONG aRequestID)
