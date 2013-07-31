@@ -7,8 +7,51 @@ Cu.import('resource://gre/modules/FileUtils.jsm');
 
 const EXTENSION_ID = 'ancho@salsitasoft.com';
 const CHROME_EXTENSION_ROOT = 'chrome-extensions';
+const CHROME_EXTENSION_ENABLED_TOPIC = 'ancho-chrome-extension-enabled';
+const CHROME_EXTENSION_DISABLED_TOPIC = 'ancho-chrome-extension-disabled';
+const CHROME_EXTENSION_INSTALLED_TOPIC = 'ancho-chrome-extension-installed';
+const CHROME_EXTENSION_UNINSTALLED_TOPIC = 'ancho-chrome-extension-uninstalled';
 
 var require = null;
+
+var loadedExtensions = [];
+
+var ExtensionLifecycleObserver = {
+  registerObservers: function() {
+    Services.obs.addObserver(this, CHROME_EXTENSION_INSTALLED_TOPIC, false);
+    Services.obs.addObserver(this, CHROME_EXTENSION_UNINSTALLED_TOPIC, false);
+    Services.obs.addObserver(this, CHROME_EXTENSION_ENABLED_TOPIC, false);
+    Services.obs.addObserver(this, CHROME_EXTENSION_DISABLED_TOPIC, false);
+  },
+
+  unregisterObservers: function() {
+    Services.obs.removeObserver(this, CHROME_EXTENSION_INSTALLED_TOPIC, false);
+    Services.obs.removeObserver(this, CHROME_EXTENSION_UNINSTALLED_TOPIC, false);
+    Services.obs.removeObserver(this, CHROME_EXTENSION_ENABLED_TOPIC, false);
+    Services.obs.removeObserver(this, CHROME_EXTENSION_DISABLED_TOPIC, false);
+  },
+
+  observe: function(subject, topic, data) {
+    var rootDirectory = FileUtils.getFile('ProfD', [CHROME_EXTENSION_ROOT]);
+    rootDirectory.append(data);
+    if (CHROME_EXTENSION_INSTALLED_TOPIC === topic) {
+      loadExtension(rootDirectory, require('./state').ADDON_INSTALL);
+    }
+    else if (CHROME_EXTENSION_UNINSTALLED_TOPIC === topic) {
+      uninstallExtension(rootDirectory);
+    }
+    else if (CHROME_EXTENSION_ENABLED_TOPIC === topic) {
+      loadExtension(rootDirectory, require('./state').ADDON_ENABLED);
+    }
+    else if (CHROME_EXTENSION_DISABLED_TOPIC === topic) {
+      unloadExtension(require('./state').ADDON_DISABLE);
+    }
+  },
+
+  _getExtension: function(id) {
+    return require('./state').Global.getExtension(id);
+  }
+};
 
 function createBackground(extensionRoot, reason) {
   var params = Cc["@mozilla.org/array;1"].createInstance(Ci.nsIMutableArray);
@@ -55,33 +98,60 @@ function unregisterComponents(callback) {
   require('./js/httpRequestObserver').unregister();
 }
 
-function loadExtensions(extensionRoot, reason) {
-  if (!extensionRoot.exists()) {
-    extensionRoot.create(Ci.nsIFile.DIRECTORY_TYPE, FileUtils.PERMS_DIRECTORY);
+function uninstallExtension(rootDirectory) {
+  var file = rootDirectory.clone();
+  file.append('ancho_data');
+  if (file.exists()) {
+    file.remove(true);
   }
-  var protocolHandler = require('./js/protocolHandler');
+}
+
+function uninstallExtensions(extensionRoot) {
   var directoryEntries = extensionRoot.directoryEntries;
   while (directoryEntries.hasMoreElements()) {
     var directory = directoryEntries.getNext().QueryInterface(Ci.nsIFile);
     if (!directory.isDirectory()) {
       continue;
     }
-    var rootURI = Services.io.newFileURI(directory);
-    protocolHandler.registerExtensionURI(directory.leafName, rootURI);
-    createBackground(directory, reason);
+    uninstallExtension(directory);
   }
 }
 
-// Required functions for bootstrapped extensions.
+function unloadExtension(extension, reason) {
+  var protocolHandler = require('./js/protocolHandler');
+  protocolHandler.unregisterExtensionURI(extension.id);
+  extension.unload(reason);
+}
+
+function loadExtension(rootDirectory, reason) {
+  if (!extensionRoot.exists()) {
+    extensionRoot.create(Ci.nsIFile.DIRECTORY_TYPE, FileUtils.PERMS_DIRECTORY);
+  }
+  var protocolHandler = require('./js/protocolHandler');
+  var rootURI = Services.io.newFileURI(directory);
+  protocolHandler.registerExtensionURI(directory.leafName, rootURI);
+  createBackground(directory, reason);
+}
+
+function loadExtensions(extensionRoot, reason) {
+  var directoryEntries = extensionRoot.directoryEntries;
+  while (directoryEntries.hasMoreElements()) {
+    var directory = directoryEntries.getNext().QueryInterface(Ci.nsIFile);
+    if (!directory.isDirectory()) {
+      continue;
+    }
+    loadExtension(directory, reason);
+  }
+}
+
 function install(data, reason) {
 }
 
 function uninstall(data, reason) {
-  // Clean up temporary data
-  var tempDir = FileUtils.getFile('ProfD', ['ancho_data']);
-  if (tempDir.exists()) {
-    tempDir.remove(true);
-  }
+  var extensionRoot = data.installPath.clone();
+  extensionRoot.append(CHROME_EXTENSION_ROOT);
+  uninstallExtensions(extensionRoot);
+  uninstallExtensions(FileUtils.getFile('ProfD', [CHROME_EXTENSION_ROOT]));
 }
 
 function startup(data, reason) {
@@ -95,6 +165,8 @@ function startup(data, reason) {
   extensionRoot.append(CHROME_EXTENSION_ROOT);
   loadExtensions(extensionRoot, reason);
   loadExtensions(FileUtils.getFile('ProfD', [CHROME_EXTENSION_ROOT]), reason);
+
+  registerObservers(ExtensionLifecycleObserver);
 }
 
 function shutdown(data, reason) {
