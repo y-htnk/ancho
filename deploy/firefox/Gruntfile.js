@@ -24,6 +24,14 @@ module.exports = function(grunt) {
   // Project configuration.
   grunt.initConfig({
     pkg: pkg,
+
+    crx: {
+      test_extension: {
+        'src': TEST_EXTENSION_DIR,
+        'dest': outputDir,
+        'filename': '<%= pkg.name %>-test-<%= pkg.version %>.crx'
+      }
+    },
     package_minifier: {
       node_modules: {
         options: { target: 'browser' },
@@ -36,9 +44,6 @@ module.exports = function(grunt) {
         router: function (filepath) {
           if (_s.startsWith(filepath, CODE_DIR)) {
             return path.relative(CODE_DIR, filepath);
-          }
-          else if (_s.startsWith(filepath, extensionDir)) {
-            return path.join('chrome-extensions/' + TEST_EXTENSION_ID, path.relative(extensionDir, filepath));
           }
           else if (_s.startsWith(filepath, MINIFIED_MODULES)) {
             return path.join('js/node_modules', path.relative(MINIFIED_MODULES, filepath));
@@ -63,6 +68,7 @@ module.exports = function(grunt) {
     }
   });
 
+  grunt.loadNpmTasks('grunt-crx');
   grunt.loadNpmTasks('grunt-package-minifier');
   grunt.loadNpmTasks('grunt-zip');
 

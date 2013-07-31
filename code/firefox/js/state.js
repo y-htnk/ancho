@@ -59,7 +59,7 @@
 
   Object.defineProperty(Extension.prototype, 'rootDirectory', {
     get: function rootDirectory() {
-      return this._rootDirectory;
+      return this._rootDirectory.clone();
     }
   });
 
@@ -94,11 +94,11 @@
   };
 
   Extension.prototype.load = function(rootDirectory, reason) {
+    this._rootDirectory = rootDirectory;
     this._firstRun = (reason > APP_STARTUP);
     if (ADDON_ENABLE === reason) {
       this._onEnabled();
     }
-    this._rootDirectory = rootDirectory;
     this._loadManifest();
   };
 
@@ -134,7 +134,7 @@
   };
 
   Extension.prototype._loadManifest = function() {
-    var manifestFile = this._rootDirectory.clone();
+    var manifestFile = this.rootDirectory;
     manifestFile.append('manifest.json');
     var manifestURI = Services.io.newFileURI(manifestFile);
     var manifestString = Utils.readStringFromUrl(manifestURI);
@@ -227,8 +227,11 @@
   };
 
   Extension.prototype._getStorageBackupFile = function(tableName) {
-    var file = this._rootDirectory.clone();
+    var file = this.rootDirectory;
     file.append('ancho_data');
+    if (!file.exists()) {
+      file.create(Ci.nsIFile.DIRECTORY_TYPE, FileUtils.PERMS_DIRECTORY);
+    }
     file.append(tableName + '.sql');
     return file;
   };

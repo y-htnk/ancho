@@ -4,6 +4,7 @@ const Cu = Components.utils;
 
 Cu.import('resource://gre/modules/Services.jsm');
 Cu.import('resource://gre/modules/FileUtils.jsm');
+Cu.import('resource://gre/modules/AddonManager.jsm');
 
 const EXTENSION_ID = 'ancho@salsitasoft.com';
 const CHROME_EXTENSION_ROOT = 'chrome-extensions';
@@ -35,21 +36,21 @@ var ExtensionLifecycleObserver = {
     var rootDirectory = FileUtils.getFile('ProfD', [CHROME_EXTENSION_ROOT]);
     rootDirectory.append(data);
     if (CHROME_EXTENSION_INSTALLED_TOPIC === topic) {
-      loadExtension(rootDirectory, require('./state').ADDON_INSTALL);
+      loadExtension(rootDirectory, require('./js/state').ADDON_INSTALL);
     }
     else if (CHROME_EXTENSION_UNINSTALLED_TOPIC === topic) {
       uninstallExtension(rootDirectory);
     }
     else if (CHROME_EXTENSION_ENABLED_TOPIC === topic) {
-      loadExtension(rootDirectory, require('./state').ADDON_ENABLED);
+      loadExtension(rootDirectory, require('./js/state').ADDON_ENABLE);
     }
     else if (CHROME_EXTENSION_DISABLED_TOPIC === topic) {
-      unloadExtension(require('./state').ADDON_DISABLE);
+      unloadExtension(this._getExtension(data), require('./js/state').ADDON_DISABLE);
     }
   },
 
   _getExtension: function(id) {
-    return require('./state').Global.getExtension(id);
+    return require('./js/state').Global.getExtension(id);
   }
 };
 
@@ -124,23 +125,31 @@ function unloadExtension(extension, reason) {
 }
 
 function loadExtension(rootDirectory, reason) {
-  if (!extensionRoot.exists()) {
-    extensionRoot.create(Ci.nsIFile.DIRECTORY_TYPE, FileUtils.PERMS_DIRECTORY);
-  }
   var protocolHandler = require('./js/protocolHandler');
-  var rootURI = Services.io.newFileURI(directory);
-  protocolHandler.registerExtensionURI(directory.leafName, rootURI);
-  createBackground(directory, reason);
+  var rootURI = Services.io.newFileURI(rootDirectory);
+  protocolHandler.registerExtensionURI(rootDirectory.leafName, rootURI);
+  createBackground(rootDirectory, reason);
 }
 
 function loadExtensions(extensionRoot, reason) {
+  function makeLoader(directory, reason) {
+    return function(addon) {
+      if (addon) {
+        loadExtension(directory, reason);
+      }
+    };
+  }
+  if (!extensionRoot.exists()) {
+    extensionRoot.create(Ci.nsIFile.DIRECTORY_TYPE, FileUtils.PERMS_DIRECTORY);
+  }
   var directoryEntries = extensionRoot.directoryEntries;
   while (directoryEntries.hasMoreElements()) {
     var directory = directoryEntries.getNext().QueryInterface(Ci.nsIFile);
     if (!directory.isDirectory()) {
       continue;
     }
-    loadExtension(directory, reason);
+    // Only load extensions that have a wrapper XPI installed.
+    AddonManager.getAddonByID(directory.leafName, makeLoader(directory, reason));
   }
 }
 
@@ -166,10 +175,12 @@ function startup(data, reason) {
   loadExtensions(extensionRoot, reason);
   loadExtensions(FileUtils.getFile('ProfD', [CHROME_EXTENSION_ROOT]), reason);
 
-  registerObservers(ExtensionLifecycleObserver);
+  ExtensionLifecycleObserver.registerObservers();
 }
 
 function shutdown(data, reason) {
+  ExtensionLifecycleObserver.unregisterObservers();
+
   var Global = require('./js/state').Global;
   Global.shutdown(reason);
   unregisterComponents(function() {
