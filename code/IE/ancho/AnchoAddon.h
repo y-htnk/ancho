@@ -14,6 +14,12 @@
 #error "Single-threaded COM objects are not properly supported on Windows CE platform, such as the Windows Mobile platforms that do not include full DCOM support. Define _CE_ALLOW_SINGLE_THREADED_OBJECTS_IN_MTA to force ATL to support creating single-thread COM object's and allow use of it's single-threaded COM object implementations. The threading model in your rgs file was set to 'Free' as that is the only threading model supported in non DCOM Windows CE platforms."
 #endif
 
+enum UpdateState {
+  usNone,
+  usInstalled,
+  usUpdated
+};
+
 /*============================================================================
  * class CAnchoAddon
  */
@@ -34,7 +40,7 @@ public:
 
   // -------------------------------------------------------------------------
   // ctor
-  CAnchoAddon() : m_InstanceID(0)
+  CAnchoAddon() : m_InstanceID(0), mUpdateState(usNone)
   {
   }
 
@@ -80,6 +86,8 @@ private:
   HRESULT initializeEnvironment();
   void cleanupScripting();
 
+  void notifyAboutUpdateStatus();
+
   // -------------------------------------------------------------------------
   // Private members.
   std::wstring                          m_sExtensionName;
@@ -99,6 +107,7 @@ private:
   CComPtr<IMagpieApplication>           m_Magpie;
   CComPtr<DOMWindowWrapper::ComObject>  m_wrappedWindow;
 
+  UpdateState                           mUpdateState; //whether extension was freshly installed, updated or none of these
 };
 
 //OBJECT_ENTRY_NON_CREATEABLE_EX_AUTO(__uuidof(AnchoAddon), CAnchoAddon)

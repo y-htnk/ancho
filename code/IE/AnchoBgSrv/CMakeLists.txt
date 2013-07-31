@@ -79,6 +79,47 @@ set(${PROJECT_NAME}_C_SOURCES
   "${${PROJECT_NAME}_SRC_DIR}/sqlite3.c"
   )
 
+set(${PROJECT_NAME}_API_JS
+  "${${PROJECT_NAME}_RC_DIR}/res/js/"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/api.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/bookmarks.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/browserAction.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/browsingData.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/contentSettings.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/contextMenus.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/cookies.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/debugger.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/events.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/extension.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/fileBrowserHandler.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/history.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/i18n.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/idle.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/management.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/omnibox.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/pageAction.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/pageCapture.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/permissions.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/privacy.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/proxy.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/runtime.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/storage.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/tabs.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/topSites.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/ttsEngine.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/tts.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/webNavigation.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/webRequest.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/webstore.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/windows.js"
+  )
+source_group("API_JS" FILES ${${PROJECT_NAME}_API_JS})
+set_source_files_properties(
+  ${${PROJECT_NAME}_API_JS}
+  PROPERTIES
+    HEADER_FILE_ONLY 1
+  )
+
 # precompiled headers
 foreach( src_file ${${PROJECT_NAME}_SOURCES} )
         set_source_files_properties(
@@ -188,6 +229,7 @@ add_executable(${PROJECT_NAME} WIN32
   ${${PROJECT_NAME}_GENERATED_FILES}
   ${${PROJECT_NAME}_RC_FILES}
   ${${PROJECT_NAME}_IDL_FILE}
+  ${${PROJECT_NAME}_API_JS}
   )
 target_link_libraries(${PROJECT_NAME} Gdiplus libbhohelper anchocommons libprothandlers Wininet AnchoShared)
 
