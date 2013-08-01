@@ -18,6 +18,8 @@ public :
   HINSTANCE m_hInstance;
   DECLARE_LIBID(LIBID_AnchoBgSrvLib)
 
+  //----------------------------------------------------------------------------
+  // UpdateRegistryAppId replacement
   static HRESULT WINAPI UpdateRegistryAppId(BOOL bRegister) throw()
   {
     wchar_t modulePath[MAX_PATH];
@@ -40,9 +42,17 @@ public :
   }
 
   //----------------------------------------------------------------------------
+  // RunMessageLoop replacement: Allows idle handling and message filtering.
+	void RunMessageLoop() throw()
+	{
+    mMsgLoop.Run();
+  }
+
+  //----------------------------------------------------------------------------
   // Parses the command line and registers/unregisters the rgs file if necessary
   bool ParseCommandLine(LPCTSTR lpCmdLine, HRESULT* pnRetCode) throw();
   HMODULE GetResourceInstance();
+  CMessageLoop* GetMessageLoop() { return &mMsgLoop; }
 
 private:
   typedef enum
@@ -53,6 +63,8 @@ private:
     ACTION_REGISTER_PER_USER,
     ACTION_UNREGISTER_PER_USER
   } SRVACTION;
+
+  CMessageLoop mMsgLoop;
 };
 
 extern CAnchoBgSrvModule _AtlModule;

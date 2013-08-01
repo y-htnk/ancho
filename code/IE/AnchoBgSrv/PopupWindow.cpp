@@ -203,6 +203,16 @@ void CPopupWindow::FinalRelease()
 {
 }
 
+BOOL CPopupWindow::PreTranslateMessage(MSG* pMsg)
+{
+	if((pMsg->message < WM_KEYFIRST || pMsg->message > WM_KEYLAST) &&
+	   (pMsg->message < WM_MOUSEFIRST || pMsg->message > WM_MOUSELAST))
+		return FALSE;
+
+	// give HTML page a chance to translate this message
+	return (BOOL)SendMessage(WM_FORWARDMSG, 0, (LPARAM)pMsg);
+}
+
 void CPopupWindow::OnFinalMessage(HWND)
 {
   // This Release call is paired with the AddRef call in OnCreate.
@@ -229,6 +239,8 @@ LRESULT CPopupWindow::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam
     return -1;
   }
 
+  _AtlModule.GetMessageLoop()->AddMessageFilter(this);
+
   //Replacing XMLHttpRequest by wrapper
   CComPtr<IAnchoXmlHttpRequest> pRequest;
   IF_FAILED_RET(createAnchoXHRInstance(&pRequest));
@@ -254,6 +266,8 @@ LRESULT CPopupWindow::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam
 
 LRESULT CPopupWindow::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled)
 {
+  _AtlModule.GetMessageLoop()->RemoveMessageFilter(this);
+
   bHandled = FALSE;
   //Cleanup procedure
   KillTimer(TIMER_ID);
@@ -308,8 +322,6 @@ STDMETHODIMP_(void) CPopupWindow::OnBrowserProgressChange(LONG Progress, LONG Pr
     mClickEventAdapter.addTo(htmlDocument2, L"click", mClickEventHandler);
     return;
   }
-//  htmlDocument2->put_onclick(mClickEventHandler);
-
 }
 
 STDMETHODIMP_(void) CPopupWindow::OnNavigateComplete(IDispatch* pDispBrowser, VARIANT * vtURL)
@@ -378,3 +390,4 @@ HRESULT CPopupWindow::CreatePopupWindow(HWND aParent, CAnchoAddonService *aServi
   pNewWindow->ShowWindow(SW_SHOW);
   return S_OK;
 }
+

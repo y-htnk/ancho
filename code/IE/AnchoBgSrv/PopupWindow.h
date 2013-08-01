@@ -1,6 +1,7 @@
 #pragma once
 
 #include <exdispid.h>
+#define NOT_IMPLEMENTED {return E_NOTIMPL;}
 
 class CAnchoAddonService;
 
@@ -12,6 +13,7 @@ class CPopupWindow :
   public CComObjectRootEx<CComSingleThreadModel>,
   public CWindowImpl<CPopupWindow, CAxWindow>,
   public IUnknown,
+  public CMessageFilter,
   public PopupWebBrowserEvents
 {
 public:
@@ -20,6 +22,7 @@ public:
   static const unsigned defaultHeight = 2;
   DECLARE_FRAME_WND_CLASS(NULL, IDR_MAINFRAME)
 
+	virtual BOOL PreTranslateMessage(MSG* pMsg);
   virtual void OnFinalMessage(HWND);
   void InjectJsObjects();
 
@@ -55,6 +58,7 @@ public:
   STDMETHOD_(void, OnNavigateComplete)(IDispatch* pDispBrowser, VARIANT * vtURL);
 
   void checkResize();
+
 private:
   enum { TIMER_ID = 22 };
   enum { TIMER_TIMEOUT = 300 }; // 3 times per second
@@ -75,3 +79,4 @@ private:
   CComPtr<IDispatch> mClickEventHandler;
 };
 
+#undef NOT_IMPLEMENTED
