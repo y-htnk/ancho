@@ -424,5 +424,19 @@ void WindowManager::updateWindowImpl(HWND aWndHandle, Utils::JSObject aInfo)
   //TODO - drawAttention
 }
 
+void WindowManager::finalize()
+{
+  mAsyncTaskManager.finalize();
+  WindowMap tmp;
+
+  {
+    boost::unique_lock<Mutex> lock(mWindowAccessMutex);
+    tmp = mWindows; //we need to a copy to destroy items without lock
+    mWindows.clear();
+  }
+
+  //Window records are released in destructor of tmp
+}
+
 } //namespace Service
 } //namespace Ancho
