@@ -42,8 +42,7 @@
       this._tabbrowser.removeEventListener('DOMWindowCreated',
         Binder.unbind(this, 'onWindowCreated'), false);
       var container = this._tabbrowser.tabContainer;
-      var tabOpen = Binder.unbind(this, 'onTabOpen');
-      container.removeEventListener('TabOpen', tabOpen, false);
+      container.removeEventListener('TabOpen', Binder.unbind(this, 'onTabOpen'), false);
       container.removeEventListener('TabClose', Binder.unbind(this, 'onTabClose'), false);
       container.removeEventListener('TabSelect', Binder.unbind(this, 'onTabSelect'), false);
     },
