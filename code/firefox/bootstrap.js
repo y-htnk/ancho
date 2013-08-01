@@ -157,9 +157,6 @@ function install(data, reason) {
 }
 
 function uninstall(data, reason) {
-  var extensionRoot = data.installPath.clone();
-  extensionRoot.append(CHROME_EXTENSION_ROOT);
-  uninstallExtensions(extensionRoot);
   uninstallExtensions(FileUtils.getFile('ProfD', [CHROME_EXTENSION_ROOT]));
 }
 
@@ -170,9 +167,6 @@ function startup(data, reason) {
   require = Require.createRequireForWindow(this, baseURI);
   registerComponents();
 
-  var extensionRoot = data.installPath.clone();
-  extensionRoot.append(CHROME_EXTENSION_ROOT);
-  loadExtensions(extensionRoot, reason);
   loadExtensions(FileUtils.getFile('ProfD', [CHROME_EXTENSION_ROOT]), reason);
 
   ExtensionLifecycleObserver.registerObservers();
