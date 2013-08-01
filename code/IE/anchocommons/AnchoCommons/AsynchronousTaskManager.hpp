@@ -24,7 +24,7 @@ public:
   boost::future<typename boost::result_of<TTask()>::type>
   addTask(TTask aTask);
 
-
+  void finalize();
 private:
   void addPackagedTask(boost::function<void()> aTask);
 

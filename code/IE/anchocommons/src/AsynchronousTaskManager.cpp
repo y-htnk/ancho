@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include <AnchoCommons/AsynchronousTaskManager.hpp>
-
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/scope_exit.hpp>
 
 namespace Ancho {
 namespace Utils {
@@ -25,6 +26,7 @@ struct WorkerThreadFunc
   void operator()()
   {
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    BOOST_SCOPE_EXIT_ALL(&) { CoUninitialize(); };
     try {
       while (true) {
 
@@ -82,10 +84,14 @@ AsynchronousTaskManager::AsynchronousTaskManager(): mPimpl(new AsynchronousTaskM
 
 AsynchronousTaskManager::~AsynchronousTaskManager()
 {
-  //ask the worker thread to stop
   mPimpl->mWorkerThread.interrupt();
+
   //wait till it finishes
-  mPimpl->mWorkerThread.join();
+  if (!mPimpl->mWorkerThread.try_join_for(boost::chrono::seconds(3))) {
+    mPimpl->mWorkerThread.interrupt();
+    mPimpl->mWorkerThread.join();
+    //mPimpl->mWorkerThread.detach();
+  }
 }
 
 void AsynchronousTaskManager::addPackagedTask(boost::function<void()> aTask)

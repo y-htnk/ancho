@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <atltrace.h>
 #include <comdef.h>
+#include <boost/thread.hpp>
 
 //TODO - create proper exception hierarchy
 struct EAnchoException : std::exception { };
@@ -33,6 +34,9 @@ struct EHResult: EAnchoException
 inline HRESULT exceptionToHRESULT()
 {
   try {
+    throw;
+  } catch (boost::thread_interrupted &) {
+    ATLTRACE("THREAD INTERRUPTION\n");
     throw;
   } catch (EInvalidPointer&) {
     ATLTRACE("ERROR: Invalid pointer\n");

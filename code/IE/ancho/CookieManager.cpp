@@ -259,7 +259,10 @@ struct GetAllCookiesFunctor
         data[dwStreamSize] = '\0';
         std::vector<std::string> strs;
         boost::split(strs, std::string(data.get()), boost::is_any_of("\n\r"));
-
+        if (strs.size() < 6) {
+          ATLTRACE(L"MALFORMED COOKIE STRING\n");
+          return;
+        }
         /*name;
         value;
         hostPath;
@@ -277,11 +280,13 @@ struct GetAllCookiesFunctor
         cookieData[L"url"] = std::wstring(strs[2].begin(), strs[2].end());;
 
         FILETIME expiration;
-        expiration.dwLowDateTime = boost::lexical_cast<long>(strs[4]);
-        expiration.dwHighDateTime = boost::lexical_cast<long>(strs[5]);
-
-        cookieData[L"expirationDate"] = static_cast<double>(fileTimeToUnixTime(*reinterpret_cast<filetime_t*>(&expiration)));
-
+        try {
+          expiration.dwLowDateTime = boost::lexical_cast<DWORD>(strs[4]);
+          expiration.dwHighDateTime = boost::lexical_cast<DWORD>(strs[5]);
+          cookieData[L"expirationDate"] = static_cast<double>(fileTimeToUnixTime(*reinterpret_cast<filetime_t*>(&expiration)));
+        } catch (boost::bad_lexical_cast &) {
+          ATLTRACE(L"FAILED to get expiration date for cookie %s\n", url.c_str());
+        }
         cookies.push_back(cookieData);
       }
     }
