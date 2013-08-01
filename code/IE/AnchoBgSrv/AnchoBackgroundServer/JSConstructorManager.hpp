@@ -48,7 +48,7 @@ protected:
   CComPtr<IDispatch> createInstanceByConstructor(const std::wstring &aExtensionId, int aApiId)
   {
     Ancho::Utils::ObjectMarshaller<IDispatchEx>::Ptr creatorMarshaller;
-    ATLTRACE(L"JSConstructorManager - creating instance from %s, %d\n", aExtensionId.c_str(), aApiId);
+    //ATLTRACE(L"JSConstructorManager - creating instance from %s, %d\n", aExtensionId.c_str(), aApiId);
     {
       //keep locked until we get the constructor marshaller
       boost::unique_lock<boost::mutex> lock(mConstructorMapMutex);
@@ -66,7 +66,7 @@ protected:
     //Workaround - DISPATCH_CONSTRUCT doesn't work in worker thread -
     //so we invoke wrapper function which calls constructors and returns newly created instance.
     IF_FAILED_THROW(creator->InvokeEx(DISPID_VALUE, LOCALE_USER_DEFAULT, DISPATCH_METHOD, &params, result.GetAddress(), NULL, NULL));
-    ATLTRACE(L"JSConstructorManager - creating instance from %s, %d finished\n", aExtensionId.c_str(), aApiId);
+    //ATLTRACE(L"JSConstructorManager - creating instance from %s, %d finished\n", aExtensionId.c_str(), aApiId);
     try {
       return CComPtr<IDispatch>(static_cast<IDispatch*>(result));
     } catch (_com_error &e) {

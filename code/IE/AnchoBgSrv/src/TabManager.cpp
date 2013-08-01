@@ -122,14 +122,20 @@ public:
    **/
   void progress(TId aOperationId)
   {
-    boost::unique_lock<boost::mutex> lock(mMutex);
-    std::set<TId>::iterator it = mIds.find(aOperationId);
-    if (it == mIds.end()) {
-      ANCHO_THROW(EInvalidId());
-    }
-    mIds.erase(it);
+    bool shouldCall = false;
 
-    if (mIds.empty()) {
+    {
+      boost::unique_lock<boost::mutex> lock(mMutex);
+      std::set<TId>::iterator it = mIds.find(aOperationId);
+      if (it == mIds.end()) {
+        ANCHO_THROW(EInvalidId());
+      }
+      mIds.erase(it);
+
+      shouldCall = mIds.empty();
+    }
+
+    if (shouldCall) {
       mCallback();
     }
   }
@@ -182,6 +188,7 @@ struct CreateTabTask
 
   void operator()()
   {
+    ATLTRACE(L"TABMANAGER - CreateTabTask start\n");
     CComPtr<IWebBrowser2> browser = Utils::findActiveBrowser();
 
     if (!browser) {
@@ -226,6 +233,7 @@ struct CreateTabTask
                                 &vtPostData.GetVARIANT(),
                                 &vtHeaders.GetVARIANT())
                                 );
+    ATLTRACE(L"TABMANAGER - CreateTabTask end\n");
   }
 
   Utils::JSObject mProperties;
@@ -249,6 +257,7 @@ struct ReloadTabTask
 
   void operator()()
   {
+    ATLTRACE(L"TABMANAGER - ReloadTabTask start\n");
     TabManager::TabRecord::Ptr tabRecord = TabManager::instance().getTabRecord(mTabId);
     if (!tabRecord) {
       ANCHO_THROW(EInvalidArgument());
@@ -261,7 +270,7 @@ struct ReloadTabTask
 
     //TODO - pass options
     IF_FAILED_THROW(runtime->reloadTab());
-
+    ATLTRACE(L"TABMANAGER - ReloadTabTask end\n");
   }
 
   int mTabId;
@@ -283,6 +292,7 @@ struct GetTabTask
 
   void operator()()
   {
+    ATLTRACE(L"TABMANAGER - GetTabTask start\n");
     TabManager::TabRecord::Ptr tabRecord = TabManager::instance().getTabRecord(mTabId);
     ATLASSERT(tabRecord);
 
@@ -293,6 +303,7 @@ struct GetTabTask
     IF_FAILED_THROW(runtime->fillTabInfo(&_variant_t(info).GetVARIANT()));
 
     mCallback(info);
+    ATLTRACE(L"TABMANAGER - GetTabTask end\n");
   }
 
   int mTabId;
@@ -360,6 +371,7 @@ struct QueryTabsTask
 
   void operator()()
   {
+    ATLTRACE(L"TABMANAGER - QueryTabsTask start\n");
     CComPtr<IDispatch> tabsDisp = CAnchoAddonService::instance().createArray(mExtensionId, mApiId);
     Utils::JSArrayWrapper tabs = Utils::JSValueWrapper(tabsDisp).toArray();
     //TabInfoList tabs = ComSimpleJSArray::createInstance();
@@ -380,6 +392,7 @@ struct QueryTabsTask
     if (mCallback) {
       mCallback(tabsDisp);
     }
+    ATLTRACE(L"TABMANAGER - QueryTabsTask end\n");
   }
 
   Utils::JSObject mProperties;
@@ -401,11 +414,13 @@ struct UpdateTabTask
 
   void operator()()
   {
+    ATLTRACE(L"TABMANAGER - UpdateTabTask start\n");
     TabManager::TabRecord::Ptr tabRecord = TabManager::instance().getTabRecord(mTabId);
     ATLASSERT(tabRecord);
 
     CComPtr<IAnchoRuntime> runtime = tabRecord->runtime();
     runtime->updateTab(mMarshaller->get().p);
+    ATLTRACE(L"TABMANAGER - UpdateTabTask end\n");
   }
 
   int mTabId;
@@ -427,6 +442,7 @@ struct RemoveTabsTask
 
   void operator()()
   {
+    ATLTRACE(L"TABMANAGER - RemoveTabsTask start\n");
     auto invoker = boost::make_shared<Ancho::Utils::MultiOperationCallbackInvoker<TabId> >(mCallback, mTabs);
     auto missedTabs = TabManager::instance().forTabsInList(mTabs,
                           [&](Ancho::Service::TabManager::TabRecord &aRec) {
@@ -437,6 +453,7 @@ struct RemoveTabsTask
     if (!missedTabs.empty()) {
       std::for_each(missedTabs.begin(), missedTabs.end(), [&](TabId atabId){ invoker->progress(atabId); });
     }
+    ATLTRACE(L"TABMANAGER - RemoveTabsTask end\n");
   }
 
   std::vector<TabId> mTabs;

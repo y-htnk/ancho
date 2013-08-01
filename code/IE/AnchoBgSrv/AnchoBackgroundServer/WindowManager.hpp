@@ -73,9 +73,14 @@ public:
   template<typename TCallable>
   TCallable forEachWindow(TCallable aCallable)
   {
-    boost::unique_lock<Mutex> lock(mWindowAccessMutex);
-    auto it = mWindows.begin();
-    while (it != mWindows.end()) {
+    WindowMap tmp;
+    {
+      boost::unique_lock<Mutex> lock(mWindowAccessMutex);
+      tmp = mWindows;
+    }
+
+    auto it = tmp.begin();
+    while (it != tmp.end()) {
       ATLASSERT(it->second);
       aCallable(*it->second);
       ++it;
@@ -94,13 +99,18 @@ public:
   template<typename TContainer, typename TCallable>
   TContainer forWindowsInList(const TContainer &aWindowIds, TCallable aCallable)
   {
-    //Create list of tabs which do not exist
+    //Create list of windows which do not exist
     TContainer missed;
-    boost::unique_lock<Mutex> lock(mWindowAccessMutex);
+    WindowMap tmp;
+
+    {
+      boost::unique_lock<Mutex> lock(mWindowAccessMutex);
+      tmp = mWindows; //we need to work on a copy to prevent deadlocks caused by COM calls
+    }
 
     BOOST_FOREACH(auto windowId, aWindowIds) {
-      auto it = mWindows.find(windowId);
-      if (it != mTabs.end()) {
+      TabMap::iterator it = tmp.find(windowId);
+      if (it != tmp.end()) {
         ATLASSERT(it->second);
         aCallable(*it->second);
         ++it;
@@ -116,7 +126,7 @@ public:
     static CComObjectStackEx<Ancho::Service::WindowManager> instance;
     return instance;
   }
- 
+
   STDMETHOD(getWindowIdFromHWND)(OLE_HANDLE aHWND, LONG *aWindowId);
   STDMETHOD(createPopupWindow)(BSTR aUrl, INT aX, INT aY, LPDISPATCH aInjectedData, LPDISPATCH aCloseCallback);
 public:

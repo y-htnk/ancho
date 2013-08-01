@@ -323,13 +323,15 @@ HWND WindowManager::getHandleFromWindowId(WindowId aWindowId)
 //==========================================================================================
 WindowId WindowManager::getWindowIdFromHWND(HWND aHWND)
 {
-  boost::unique_lock<Mutex> lock(mWindowAccessMutex);
-  auto it = mWindowIds.find(aHWND);
-  if (it == mWindowIds.end()) {
-    return createNewWindowRecord(aHWND);
+  {
+    boost::unique_lock<Mutex> lock(mWindowAccessMutex);
+    auto it = mWindowIds.find(aHWND);
+    if (it != mWindowIds.end()) {
+      return it->second;
+    }
   }
 
-  return it->second;
+  return createNewWindowRecord(aHWND);
 }
 
 //==========================================================================================
