@@ -9,7 +9,7 @@ module.exports = function(grunt) {
   var TEST_EXTENSION_ID = 'test@salsitasoft.com';
 
   var outputDir = grunt.option('outputDir') || '../../build';
-  var extensionDir = grunt.option('extensionDir') || TEST_EXTENSION_DIR;
+  var destDir = path.join(outputDir, 'ancho');
 
   function buildModuleList(pkg) {
     var moduleList = [];
@@ -21,7 +21,6 @@ module.exports = function(grunt) {
 
   var pkg = grunt.file.readJSON('package.json');
 
-  // Project configuration.
   grunt.initConfig({
     pkg: pkg,
 
@@ -39,39 +38,22 @@ module.exports = function(grunt) {
         dest: MINIFIED_MODULES
       }
     },
-    zip: {
-      xpi: {
-        router: function (filepath) {
-          if (_s.startsWith(filepath, CODE_DIR)) {
-            return path.relative(CODE_DIR, filepath);
-          }
-          else if (_s.startsWith(filepath, MINIFIED_MODULES)) {
-            return path.join('js/node_modules', path.relative(MINIFIED_MODULES, filepath));
-          }
-          else {
-            return filepath;
-          }
-        },
-        src: [
-          path.join(CODE_DIR, 'bootstrap.js'),
-          path.join(CODE_DIR, 'chrome.manifest'),
-          path.join(CODE_DIR, 'install.rdf'),
-          path.join(CODE_DIR, 'html/**/*'),
-          path.join(CODE_DIR, 'js/**/*'),
-          path.join(CODE_DIR, 'modules/**/*'),
-          path.join(CODE_DIR, 'xul/**/*'),
-          path.join(extensionDir, '/**/*'),
-          path.join(MINIFIED_MODULES, '/**/*')
-        ],
-        dest: path.join(outputDir, 'ancho-firefox-<%= pkg.version %>.xpi')
+    copy: {
+      main: {
+        files: [
+          { expand: true, cwd: CODE_DIR, src: [ 'chrome.manifest '], dest: destDir },
+          { expand: true, cwd: CODE_DIR, src: [ 'content/**/*' ], dest: destDir },
+          { expand: true, cwd: CODE_DIR, src: [ 'js/**/*' ], dest: destDir },
+          { expand: true, cwd: CODE_DIR, src: [ 'modules/**/*' ], dest: destDir },
+          { expand: true, cwd: MINIFIED_MODULES, src: [ '**/*' ], dest: path.join(destDir, 'js/node_modules') }
+        ]
       }
     }
   });
 
   grunt.loadNpmTasks('grunt-crx');
   grunt.loadNpmTasks('grunt-package-minifier');
-  grunt.loadNpmTasks('grunt-zip');
+  grunt.loadNpmTasks('grunt-contrib-copy');
 
-  // Default task(s).
-  grunt.registerTask('default', ['package_minifier', 'zip']);
+  grunt.registerTask('default', [ 'package_minifier', 'copy' ]);
 };

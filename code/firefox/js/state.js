@@ -280,17 +280,10 @@
   Global.prototype.unloadExtension = function(id, reason) {
     this._extensions[id].unload(reason);
     delete this._extensions[id];
-  };
-
-  Global.prototype.unloadAllExtensions = function(reason) {
-    let id;
-    for (id in this._extensions) {
-      this.unloadExtension(id, reason);
-    }
+    return (Object.keys(this._extensions).length > 0);
   };
 
   Global.prototype.shutdown = function(reason) {
-    this.unloadAllExtensions(reason);
     this.emit('unload', reason);
     this.removeAllListeners();
 

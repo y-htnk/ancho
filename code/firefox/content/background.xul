@@ -8,7 +8,7 @@
   xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
 
   <!-- privileged code -->
-  <script src="chrome://ancho/content/js/backgroundPrivileged.js"/>
+  <script src="chrome://ancho/content/background.js"/>
 
   <!-- container for popup panels -->
   <popupset id="popup_container">

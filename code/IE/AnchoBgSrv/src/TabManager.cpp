@@ -737,5 +737,19 @@ void TabManager::checkBHOConnections()
   }
 }
 
+void TabManager::finalize()
+{
+  mAsyncTaskManager.finalize();
+  TabMap tmp;
+
+  {
+    boost::unique_lock<Mutex> lock(mTabAccessMutex);
+    tmp = mTabs; //we need to a copy to destroy items without lock
+    mTabs.clear();
+  }
+
+  //Tab records are released in destructor of tmp
+}
+
 } //namespace Service
 } //namespace Ancho

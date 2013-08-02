@@ -54,6 +54,11 @@ public:
   {
   }
 
+  ~TabManager()
+  {
+    finalize();
+  }
+
 public:
   ///@{
   /** Asynchronous methods available to JS.**/
@@ -162,6 +167,8 @@ public:
                  const SimpleCallback& aCallback = SimpleCallback(),
                  const std::wstring &aExtensionId = std::wstring(),
                  int aApiId = -1);
+
+  void finalize();
 public:
   // -------------------------------------------------------------------------
   // COM standard stuff

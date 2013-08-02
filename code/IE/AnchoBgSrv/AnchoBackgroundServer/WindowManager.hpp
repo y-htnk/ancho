@@ -52,6 +52,10 @@ public:
   {
   }
 
+  ~WindowManager()
+  {
+    finalize();
+  }
 public:
   ///@{
   /** Asynchronous methods available to JS.**/
@@ -109,7 +113,7 @@ public:
     }
 
     BOOST_FOREACH(auto windowId, aWindowIds) {
-      TabMap::iterator it = tmp.find(windowId);
+      auto it = tmp.find(windowId);
       if (it != tmp.end()) {
         ATLASSERT(it->second);
         aCallable(*it->second);
@@ -165,6 +169,8 @@ public:
   WindowId getCurrentWindowId();
 
   HWND getCurrentWindowHWND();
+
+  void finalize();
 public:
   // -------------------------------------------------------------------------
   // COM standard stuff
