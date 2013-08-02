@@ -280,7 +280,7 @@
   Global.prototype.unloadExtension = function(id, reason) {
     this._extensions[id].unload(reason);
     delete this._extensions[id];
-    return (this._extensions.length > 0);
+    return (Object.keys(this._extensions).length > 0);
   };
 
   Global.prototype.shutdown = function(reason) {
