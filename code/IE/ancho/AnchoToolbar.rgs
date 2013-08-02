@@ -1,17 +1,17 @@
 HKCR
 {
-	ancho.Toolbar.1 = s 'Ancho Toolbar'
+	ancho.Toolbar.1 = s '%PRODUCTNAME% Toolbar'
 	{
 		CLSID = s '{F17D18AF-307A-4311-852F-FD759863A349}'
 	}
-	ancho.Toolbar = s 'Ancho Toolbar'
+	ancho.Toolbar = s '%PRODUCTNAME% Toolbar'
 	{
 		CLSID = s '{F17D18AF-307A-4311-852F-FD759863A349}'
 		CurVer = s 'AnchoBgSrv.Toolbar.1'
 	}
 	NoRemove CLSID
 	{
-		ForceRemove {F17D18AF-307A-4311-852F-FD759863A349} = s 'Ancho Toolbar'
+		ForceRemove {F17D18AF-307A-4311-852F-FD759863A349} = s '%PRODUCTNAME% Toolbar'
 		{
 			ProgID = s 'ancho.Toolbar.1'
 			VersionIndependentProgID = s 'ancho.Toolbar'
@@ -36,7 +36,7 @@ HKLM
 			{
 				NoRemove Toolbar
 				{
-					val '{F17D18AF-307A-4311-852F-FD759863A349}' = s 'Ancho Toolbar'
+					val '{F17D18AF-307A-4311-852F-FD759863A349}' = s '%PRODUCTNAME% Toolbar'
 				}
 			}
 		}

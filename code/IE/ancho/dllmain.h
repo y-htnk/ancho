@@ -2,6 +2,10 @@
 
 extern class CAnchoModule _AtlModule;
 
+// wide-stringification of preprocessor strings
+#define __L(x) L ##x
+#define _L(x) __L(x)
+
 class CAnchoModule : public CAtlDllModuleT<CAnchoModule>
 {
 public :
@@ -24,6 +28,11 @@ public :
     return ATL::_pAtlModule->UpdateRegistryFromResource(IDR_ANCHO, bRegister, aMapEntries);
   }
 
+	virtual HRESULT AddCommonRGSReplacements(_Inout_ IRegistrarBase* pRegistrar) throw()
+	{
+		pRegistrar->AddReplacement(L"PRODUCTNAME", _L(ANCHO_BHO_VERSION_PRODUCT_NAME));
+    return CAtlDllModuleT<CAnchoModule>::AddCommonRGSReplacements(pRegistrar);
+	}
 
   BOOL WINAPI DllMain(DWORD dwReason, LPVOID lpReserved) throw();
 
@@ -32,3 +41,5 @@ protected:
   CComPtr<IClassFactory> m_CFHTTPS;
 };
 
+#undef _L
+#undef __L

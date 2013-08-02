@@ -1,17 +1,17 @@
 HKCR
 {
-	ancho.AnchoRuntime.1 = s 'AnchoRuntime Class'
+	ancho.AnchoRuntime.1 = s '%PRODUCTNAME%'
 	{
 		CLSID = s '{BC66BD3D-2AB6-4672-8EF3-DB2BD089CD60}'
 	}
-	ancho.AnchoRuntime = s 'AnchoRuntime Class'
+	ancho.AnchoRuntime = s '%PRODUCTNAME%'
 	{
 		CLSID = s '{BC66BD3D-2AB6-4672-8EF3-DB2BD089CD60}'
 		CurVer = s 'ancho.AnchoRuntime.1'
 	}
 	NoRemove CLSID
 	{
-		ForceRemove {BC66BD3D-2AB6-4672-8EF3-DB2BD089CD60} = s 'AnchoRuntime Class'
+		ForceRemove {BC66BD3D-2AB6-4672-8EF3-DB2BD089CD60} = s '%PRODUCTNAME%'
 		{
 			ProgID = s 'ancho.AnchoRuntime.1'
 			VersionIndependentProgID = s 'ancho.AnchoRuntime'
@@ -38,7 +38,7 @@ HKLM
           {
             NoRemove 'Browser Helper Objects'
             {
-              ForceRemove '{BC66BD3D-2AB6-4672-8EF3-DB2BD089CD60}' = s 'Ancho Addon'
+              ForceRemove '{BC66BD3D-2AB6-4672-8EF3-DB2BD089CD60}' = s '%PRODUCTNAME%'
               {
                 val 'NoExplorer' = d '1'
               }
