@@ -107,12 +107,12 @@ PAGEACTION_SPEC.JS      HTML                    "res\\js\\specifications\\pageAc
 // TEXTINCLUDE
 //
 
-1 TEXTINCLUDE 
+1 TEXTINCLUDE
 BEGIN
     "resource.h\0"
 END
 
-2 TEXTINCLUDE 
+2 TEXTINCLUDE
 BEGIN
     "#ifndef APSTUDIO_INVOKED\r\n"
     "#include ""targetver.h""\r\n"
@@ -121,7 +121,7 @@ BEGIN
     "\0"
 END
 
-3 TEXTINCLUDE 
+3 TEXTINCLUDE
 BEGIN
     "1 TYPELIB ""AnchoBgSrv.tlb""\r\n"
     "\0"
@@ -152,14 +152,14 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "Salsita Software"
-            VALUE "FileDescription", "Background service for Ancho based browser addons"
+            VALUE "CompanyName", ANCHO_SRV_VERSION_COMPANY
+            VALUE "FileDescription", ANCHO_SRV_VERSION_FILE_DESCRIPTION
             VALUE "FileVersion", "1.0.0.1"
             VALUE "InternalName", "AnchoBgSrv.exe"
-            VALUE "LegalCopyright", "(c) Salsita Software 2013.  All rights reserved."
+            VALUE "LegalCopyright", ANCHO_SRV_VERSION_LEGAL_COPYRIGHT
             VALUE "OriginalFilename", "AnchoBgSrv.exe"
-            VALUE "ProductName", "Ancho"
-            VALUE "ProductVersion", "1.0.0.1"
+            VALUE "ProductName", ANCHO_SRV_VERSION_PRODUCT_NAME
+            VALUE "ProductVersion", ANCHO_SRV_VERSION_PRODUCT_VERSION
         END
     END
     BLOCK "VarFileInfo"
@@ -174,7 +174,7 @@ END
 // String Table
 //
 
-STRINGTABLE 
+STRINGTABLE
 BEGIN
     IDS_PROJNAME            "AnchoBgSrv"
     IDR_MAINFRAME           "Log"
