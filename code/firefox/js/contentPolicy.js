@@ -64,14 +64,13 @@
     XPCOMUtils.categoryManager.addCategoryEntry('content-policy', className, contractID, false, true);
   };
 
-  exports.unregister = function(callback) {
+  exports.unregister = function() {
     XPCOMUtils.categoryManager.deleteCategoryEntry('content-policy', className, false);
     // We can't just unregister the component since deleteCategoryEntry occurs asynchronously.
     // If the component is unregistered by the time it runs, it leaves a dangling reference to it.
     // So we have to wait until the category is really removed.
     Services.tm.mainThread.dispatch(function() {
       Cm.QueryInterface(Ci.nsIComponentRegistrar).unregisterFactory(classID, factory);
-      callback();
     }, Ci.nsIThread.DISPATCH_NORMAL);
   };
 }).call(this);
