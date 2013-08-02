@@ -1,7 +1,47 @@
 cmake_minimum_required (VERSION 2.8)
 project (AnchoFramework)
 
+#load the version string
+file(STRINGS "../../version.txt" VERSION_FILE)
+
+macro(SET_FROM_ENV varName varValue varType varDescription)
+  if (DEFINED ENV{${varName}})
+    message(STATUS "Found ${varName} in environment variables.")
+    set(${varName} $ENV{${varName}} CACHE ${varType} ${varDescription})
+  else (DEFINED ENV{${varName}})
+    set(${varName} ${varValue} CACHE ${varType} ${varDescription})
+  endif (DEFINED ENV{${varName}})
+endmacro(SET_FROM_ENV)
+
+
+SET_FROM_ENV(${PROJECT_NAME}_SRV_VERSION_COMPANY "\"Salsita Software\"" STRING "Company name, which will be put into the resources")
+SET_FROM_ENV(${PROJECT_NAME}_SRV_VERSION_PRODUCT_NAME "\"Ancho\"" STRING "Product name, which will be put into the resources")
+SET_FROM_ENV(${PROJECT_NAME}_SRV_VERSION_FILE_DESCRIPTION "\"Background Service for Ancho based addons.\"" STRING "File description, which will be put into the resources")
+SET_FROM_ENV(${PROJECT_NAME}_SRV_VERSION_LEGAL_COPYRIGHT "\"\(c\) Salsita Software 2013. All rights reserved.\"" STRING "Copyright, which will be put into the resources")
+SET_FROM_ENV(${PROJECT_NAME}_SRV_VERSION_PRODUCT_VERSION "\"${VERSION_FILE}\"" STRING "Product version, which will be put into the resources")
+
+SET_FROM_ENV(${PROJECT_NAME}_BHO_VERSION_COMPANY "\"Salsita Software\"" STRING "Company name, which will be put into the resources")
+SET_FROM_ENV(${PROJECT_NAME}_BHO_VERSION_PRODUCT_NAME "\"Ancho BHO\"" STRING "Product name, which will be put into the resources")
+SET_FROM_ENV(${PROJECT_NAME}_BHO_VERSION_FILE_DESCRIPTION "\"Browser Helper Object for Ancho based addons.\"" STRING "File description, which will be put into the resources")
+SET_FROM_ENV(${PROJECT_NAME}_BHO_VERSION_LEGAL_COPYRIGHT "\"\(c\) Salsita Software 2013. All rights reserved.\"" STRING "Copyright, which will be put into the resources")
+SET_FROM_ENV(${PROJECT_NAME}_BHO_VERSION_PRODUCT_VERSION "\"${VERSION_FILE}\"" STRING "Product version, which will be put into the resources")
+
+
+add_definitions(-DANCHO_SRV_VERSION_COMPANY=${${PROJECT_NAME}_SRV_VERSION_COMPANY})
+add_definitions(-DANCHO_SRV_VERSION_PRODUCT_NAME=${${PROJECT_NAME}_SRV_VERSION_PRODUCT_NAME})
+add_definitions(-DANCHO_SRV_VERSION_FILE_DESCRIPTION=${${PROJECT_NAME}_SRV_VERSION_FILE_DESCRIPTION})
+add_definitions(-DANCHO_SRV_VERSION_LEGAL_COPYRIGHT=${${PROJECT_NAME}_SRV_VERSION_LEGAL_COPYRIGHT})
+add_definitions(-DANCHO_SRV_VERSION_PRODUCT_VERSION=${${PROJECT_NAME}_SRV_VERSION_PRODUCT_VERSION})
+
+add_definitions(-DANCHO_BHO_VERSION_COMPANY=${${PROJECT_NAME}_BHO_VERSION_COMPANY})
+add_definitions(-DANCHO_BHO_VERSION_PRODUCT_NAME=${${PROJECT_NAME}_BHO_VERSION_PRODUCT_NAME})
+add_definitions(-DANCHO_BHO_VERSION_FILE_DESCRIPTION=${${PROJECT_NAME}_BHO_VERSION_FILE_DESCRIPTION})
+add_definitions(-DANCHO_BHO_VERSION_LEGAL_COPYRIGHT=${${PROJECT_NAME}_BHO_VERSION_LEGAL_COPYRIGHT})
+add_definitions(-DANCHO_BHO_VERSION_PRODUCT_VERSION=${${PROJECT_NAME}_BHO_VERSION_PRODUCT_VERSION})
+
+
 add_definitions(-DUNICODE -D_UNICODE)
+
 option(DISABLE_REGISTRATION "Disable registration" OFF)
 
 #-----------------------------------------
