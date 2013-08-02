@@ -435,6 +435,7 @@ library AnchoBgSrvLib
   {
     [default] interface IIECookie;
   };
+
   [
     uuid(DE9A7F77-BBCC-4B18-BF38-F9C90262BB6F)
   ]

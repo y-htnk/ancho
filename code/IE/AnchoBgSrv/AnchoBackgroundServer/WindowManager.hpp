@@ -44,7 +44,6 @@ class WindowManager:
 public:
 //  friend struct CreateTabTask;
 
-
   class WindowRecord;
   typedef boost::recursive_mutex Mutex;
 
@@ -125,11 +124,7 @@ public:
     return std::move(missed);
   }
 
-  static CComObjectStackEx<Ancho::Service::WindowManager> & instance()
-  {
-    static CComObjectStackEx<Ancho::Service::WindowManager> instance;
-    return instance;
-  }
+  static Ancho::Service::WindowManager & instance();
 
   STDMETHOD(getWindowIdFromHWND)(OLE_HANDLE aHWND, LONG *aWindowId);
   STDMETHOD(createPopupWindow)(BSTR aUrl, INT aX, INT aY, LPDISPATCH aInjectedData, LPDISPATCH aCloseCallback);
@@ -167,10 +162,9 @@ public:
                  int aApiId);
 
   WindowId getCurrentWindowId();
+  void finalize();
 
   HWND getCurrentWindowHWND();
-
-  void finalize();
 public:
   // -------------------------------------------------------------------------
   // COM standard stuff
@@ -184,7 +178,7 @@ public:
   }
   void FinalRelease()
   {
-
+    finalize();
   }
 
 public:

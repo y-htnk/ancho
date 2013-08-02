@@ -32,7 +32,7 @@
 #endif
 
 class CAnchoAddonService;
-extern CComObject<CAnchoAddonService> *gAnchoAddonService;
+extern CAnchoAddonService *gAnchoAddonService;
 /*============================================================================
  * class CAnchoAddonServiceCallback
  */
@@ -142,7 +142,10 @@ public:
   STDMETHOD(onTabNavigate)(INT aTabId);
   STDMETHOD(onTabActivate)(INT aNewTabId);
 
-  static CComObject<CAnchoAddonService> & instance()
+  Ancho::Service::TabManager & getTabManagerInstance() {return mTabManager;}
+  Ancho::Service::WindowManager & getWindowManagerInstance() {return mWindowManager;}
+
+  static CAnchoAddonService & instance()
   {
     ATLASSERT(gAnchoAddonService != NULL);
     return *gAnchoAddonService;
@@ -171,6 +174,10 @@ private:
 
 
   BackgroundObjectsMap          m_BackgroundObjects;
+  CComObjectStackEx<Ancho::Service::WindowManager>
+                                mWindowManager;
+  CComObjectStackEx<Ancho::Service::TabManager>
+                                mTabManager;
 
   CComObjectStackEx<SimpleJSArray> m_BrowserActionInfos;
   BrowserActionCallbackMap      m_BrowserActionCallbacks;

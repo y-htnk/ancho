@@ -38,7 +38,7 @@ struct CookieNotificationCallback: public ACookieCallbackFunctor
  * class CAnchoAddonService
  */
 
-CComObject<CAnchoAddonService> *gAnchoAddonService = NULL;
+CAnchoAddonService *gAnchoAddonService = NULL;
 
 //----------------------------------------------------------------------------
 //
@@ -55,7 +55,7 @@ HRESULT CAnchoAddonService::get_cookieManager(LPDISPATCH* ppRet)
   ENSURE_RETVAL(ppRet);
 
   //auto runtime = Ancho::Service::TabManager::instance().getSomeTabRecord()->mRuntime;
-  auto runtime = Ancho::Service::TabManager::instance().getSomeTabRecord()->runtime();
+  auto runtime = mTabManager.getSomeTabRecord()->runtime();
   if (!runtime ) {
     return E_FAIL;
   }
@@ -69,7 +69,7 @@ HRESULT CAnchoAddonService::get_cookieManager(LPDISPATCH* ppRet)
 HRESULT CAnchoAddonService::get_tabManager(LPDISPATCH* ppRet)
 {
   ENSURE_RETVAL(ppRet);
-  return Ancho::Service::TabManager::instance().QueryInterface(IID_ITabManager, (void**)ppRet);
+  return mTabManager.QueryInterface(IID_ITabManager, (void**)ppRet);
 }
 
 //----------------------------------------------------------------------------
@@ -77,7 +77,7 @@ HRESULT CAnchoAddonService::get_tabManager(LPDISPATCH* ppRet)
 HRESULT CAnchoAddonService::get_windowManager(LPDISPATCH* ppRet)
 {
   ENSURE_RETVAL(ppRet);
-  return Ancho::Service::WindowManager::instance().QueryInterface(IID_IWindowManager, (void**)ppRet);
+  return mWindowManager.QueryInterface(IID_IWindowManager, (void**)ppRet);
 }
 
 //----------------------------------------------------------------------------
@@ -186,7 +186,7 @@ HRESULT CAnchoAddonService::addBrowserActionInfo(LPDISPATCH aBrowserActionInfo)
 
   m_BrowserActionInfos.push_back(CComVariant(aBrowserActionInfo));
 
-  Ancho::Service::TabManager::instance().forEachTab(
+  mTabManager.forEachTab(
               [](Ancho::Service::TabManager::TabRecord &aRec){ aRec.runtime()->showBrowserActionBar(TRUE); }
             );
   return S_OK;
@@ -215,7 +215,7 @@ STDMETHODIMP CAnchoAddonService::browserActionNotification()
 HRESULT CAnchoAddonService::FinalConstruct()
 {
   BEGIN_TRY_BLOCK;
-    gAnchoAddonService = static_cast<CComObject<CAnchoAddonService> *>(this);
+    gAnchoAddonService = this;
 
     // Get and store the path, this will be used in some places (e.g. to load
     // additional DLLs).
@@ -365,7 +365,7 @@ STDMETHODIMP CAnchoAddonService::registerBrowserActionToolbar(OLE_HANDLE aFrameT
   ENSURE_RETVAL(aUrl);
   ENSURE_RETVAL(aTabId);
 
-  *aTabId = Ancho::Service::TabManager::instance().getFrameTabId((HWND)aFrameTab);
+  *aTabId = mTabManager.getFrameTabId((HWND)aFrameTab);
 
   /*WCHAR   appPath[MAX_PATH] = {0};
   GetModuleFileNameW(NULL, appPath, _countof(appPath));*/

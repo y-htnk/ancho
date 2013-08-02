@@ -27,6 +27,12 @@ HWND getCurrentWindowHWND()
 
 namespace Service {
 
+Ancho::Service::WindowManager & Ancho::Service::WindowManager::instance()
+{
+  // this is a singleton and member of CAnchoAddonService
+  return CAnchoAddonService::instance().getWindowManagerInstance();
+}
+
 //==========================================================================================
 struct CreateWindowTask
 {

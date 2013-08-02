@@ -173,6 +173,12 @@ struct MultiOperationCallback
 
 namespace Service {
 
+Ancho::Service::TabManager & Ancho::Service::TabManager::instance()
+{
+  // this is a singleton and member of CAnchoAddonService
+  return CAnchoAddonService::instance().getTabManagerInstance();
+}
+
 //==========================================================================================
 /**
  * Task which creates new tab
@@ -460,7 +466,6 @@ struct RemoveTabsTask
   SimpleCallback mCallback;
   int mApiId;
 };
-
 
 //==========================================================================================
 //              API methods

@@ -62,8 +62,8 @@ HRESULT CAnchoToolbar::InternalReleaseSite()
   mToolbarWindow.DestroyWindow();
   if (mAnchoService) {
     mAnchoService->unregisterBrowserActionToolbar(mTabId);
+    mAnchoService.Release();
   }
-  mAnchoService.Release();
   return S_OK;
 }
 

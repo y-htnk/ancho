@@ -83,64 +83,6 @@ protected:
   DWORD m_dwViewMode;
 };
 
-//*******************************************************************************
-/*
-class CToolbar :
-  public CBasicToolbar<CToolbar, CHtmlToolbarWindow, &CLSID_IEToolbar>,
-  public ToolbarCallback
-{
-public:
-  typedef CBasicToolbar<CToolbar, CHtmlToolbarWindow, &CLSID_IEToolbar> BaseClass;
-  DECLARE_REGISTRY_RESOURCEID(IDR_ANCHOTOOLBAR)
-
-  CToolbar(): mTabId(0)
-  {
-  }
-  virtual void GetBandInfoValues(const wchar_t *& title, POINTL &minSize);
-
-public:
-  HRESULT FinalConstruct()
-  {
-    HRESULT hr = BaseClass::FinalConstruct();
-    if (FAILED(hr)) {
-      return hr;
-    }
-    mContentWindow->m_toolbarCallback = dynamic_cast<ToolbarCallback *>(this);
-    return hr;
-  }
-
-  void FinalRelease()
-  {
-    if (mContentWindow) {
-      mContentWindow->m_toolbarCallback = NULL;
-    }
-    BaseClass::FinalRelease();
-  }
-
-  // IInputObject
-  STDMETHOD(HasFocusIO)(void);
-  STDMETHOD(TranslateAcceleratorIO)(LPMSG lpMsg);
-  STDMETHOD(UIActivateIO)(BOOL fActivate, LPMSG lpMsg);
-
-  virtual void ToolbarWindowBeforeNavigate();
-  virtual void ToolbarWindowReady(VARIANT *pURL);
-  virtual void ToolbarWindowNavigateComplete(IDispatch *pDisp, VARIANT *URL);
-  virtual void ToolbarWindowOnSetFocus();
-  virtual void ToolbarWindowOnKillFocus();
-protected:
-  virtual HRESULT InternalSetSite();
-  virtual HRESULT InternalReleaseSite();
-
-private:
-
-  HRESULT RunToolbarPage();
-  std::wstring mUrl;
-  CComPtr<IAnchoAddonService> mAnchoService;
-  int mTabId;
-
-};
-*/
-
 OBJECT_ENTRY_AUTO(CLSID_IEToolbar, CAnchoToolbar)
 
 //#include "Toolbar.ipp"

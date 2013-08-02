@@ -142,11 +142,8 @@ public:
     return mTabs.begin()->second;
   }
 
-  static CComObjectStackEx<Ancho::Service::TabManager> & instance()
-  {
-    static CComObjectStackEx<Ancho::Service::TabManager> instance;
-    return instance;
-  }
+  static Ancho::Service::TabManager & instance();
+
 public:
   void createTab(const Utils::JSObject &aProperties,
                  const TabCallback& aCallback = TabCallback(),
@@ -186,7 +183,7 @@ public:
   }
   void FinalRelease()
   {
-
+    finalize();
   }
 
 public:
