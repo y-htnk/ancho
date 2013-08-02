@@ -227,7 +227,7 @@
   };
 
   Extension.prototype._getStorageBackupFile = function(tableName) {
-    var file = this.rootDirectory;
+    var file = this.rootDirectory.parent;
     file.append('ancho_data');
     if (!file.exists()) {
       file.create(Ci.nsIFile.DIRECTORY_TYPE, FileUtils.PERMS_DIRECTORY);
