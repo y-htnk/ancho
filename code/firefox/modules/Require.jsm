@@ -6,36 +6,10 @@ const Cu = Components.utils;
 
 Cu.import('resource://gre/modules/Services.jsm');
 
-// XHR implementation with no XSS restrictions
-function WrappedXMLHttpRequest() {
-  this._inner = Cc['@mozilla.org/xmlextras/xmlhttprequest;1'].createInstance();
-}
-
-WrappedXMLHttpRequest.prototype = {
-  get responseXML() { return this._inner.responseXML; },
-  get responseText() { return this._inner.responseText; },
-  get status() { return this._inner.status ? this._inner.status: 200; },
-  get statusText() { return this._inner.statusText; },
-  getAllResponseHeaders: function() { return this._inner.getAllResponseHeaders(); },
-  getResponseHeader: function(header) { return this._inner.getResponseHeader(header); },
-  open: function(method, url, async) { return this._inner.open(method, url, async); },
-  send: function(body) { this._inner.send(body); },
-  setRequestHeader: function(header, value) { this._inner.setRequestHeader(header, value); },
-  get readyState() { return this._inner.readyState; },
-  set onreadystatechange(callback) { this._inner.onreadystatechange = callback; }
-};
-
-// TODO: Making this global so that everyone shares the same modules. In the specific case of
-// Ancho this is currently fine, but we need to decide whether we want to make this into a generic
-// require() implementation.
 var moduleCache = {};
 
 var Require = {
-  XMLHttpRequest: WrappedXMLHttpRequest,
-
-  createWrappedXMLHttpRequest: function() { return new WrappedXMLHttpRequest(); },
-
-  findModuleInPath: function(id, scriptUrl) {
+  _findModuleInPath: function(id, scriptUrl) {
     var url = null;
     do {
       if (url) {
@@ -58,7 +32,7 @@ var Require = {
     return null;
   },
 
-  createRequireForWindow: function(sandbox, baseUrl) {
+  createRequire: function(baseUrl) {
     var self = this;
     this._baseUrl = baseUrl;
     return function require(id, scriptUrl) {
@@ -81,7 +55,7 @@ var Require = {
       var url;
       if (id[0] != '.' && id[0] != '/') {
         // Try to find the module in the search path
-        url = self.findModuleInPath(id, scriptUrl);
+        url = self._findModuleInPath(id, scriptUrl);
       }
       else {
         url = Services.io.newURI(id + '.js', '', scriptUrl);
@@ -103,34 +77,6 @@ var Require = {
       var directoryUrl = Services.io.newURI('.', '', url);
       context.require = function(id) { return require(id, directoryUrl); };
       context.process = { title: 'Ancho' };
-
-      if ('window' in sandbox) {
-        context.window = sandbox.window;
-        context.document = sandbox.window.document;
-        var jQuery = null;
-        if ('jQuery' in sandbox) {
-          jQuery = sandbox.jQuery;
-        }
-        else if ('jQuery' in sandbox.window) {
-          // Get the jQuery object from the window (was presumably loaded via <script> tag).
-          jQuery = sandbox.window.jQuery;
-        }
-        if (jQuery) {
-          // Use the jQuery from the window.
-          context.jQuery = context.$ = jQuery;
-          context.jQuery.ajaxSettings.xhr = self.createWrappedXMLHttpRequest;
-        }
-      }
-
-      if ('chrome' in sandbox) {
-        context.chrome = sandbox.chrome;
-      }
-      if ('ancho' in sandbox) {
-        context.ancho = sandbox.ancho;
-      }
-      if ('console' in sandbox) {
-        context.console = sandbox.console;
-      }
 
       // Need to add to the cache here to avoid stack overflow in case of require() cycles
       // (e.g. A requires B which requires A).

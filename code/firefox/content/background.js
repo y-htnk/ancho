@@ -9,7 +9,7 @@ Cu.import('resource://ancho/modules/External.jsm');
 var sandbox = Cu.Sandbox(window);
 sandbox.console = {};
 var baseURI = Services.io.newURI('resource://ancho/js/', '', null);
-var require = Require.createRequireForWindow(sandbox, baseURI);
+var require = Require.createRequire(baseURI);
 
 var ConsoleAPI = require('./console');
 var console = new ConsoleAPI();
@@ -47,7 +47,7 @@ var BackgroundWindow = {
     // if all other windows are closed.
     Services.startup.QueryInterface(Ci.nsIObserver).observe(null, 'xul-window-destroyed', null);
 
-    var extensionId = rootDirectory.leafName;
+    var extensionId = rootDirectory.parent.leafName;
 
     Global.once('unload', function() {
       // Register the window again so that the window count remains accurate.
@@ -96,7 +96,7 @@ var BackgroundWindow = {
       // Cannot use 'about:blank' here, because DOM for 'about:blank'
       // is inappropriate for script inserting: neither 'document.head'
       // nor 'document.body' are defined.
-      'chrome://ancho/content/html/blank.html';
+      'chrome://ancho/content/blank.html';
 
     var browser = document.getElementById('content');
 

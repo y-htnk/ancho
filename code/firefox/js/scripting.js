@@ -10,6 +10,25 @@
   var API = require('./api');
   var readStringFromUrl = require('./utils').readStringFromUrl;
 
+  // XHR implementation with no XSS restrictions
+  function WrappedXMLHttpRequest() {
+    this._inner = Cc['@mozilla.org/xmlextras/xmlhttprequest;1'].createInstance();
+  }
+
+  WrappedXMLHttpRequest.prototype = {
+    get responseXML() { return this._inner.responseXML; },
+    get responseText() { return this._inner.responseText; },
+    get status() { return this._inner.status ? this._inner.status: 200; },
+    get statusText() { return this._inner.statusText; },
+    getAllResponseHeaders: function() { return this._inner.getAllResponseHeaders(); },
+    getResponseHeader: function(header) { return this._inner.getResponseHeader(header); },
+    open: function(method, url, async) { return this._inner.open(method, url, async); },
+    send: function(body) { this._inner.send(body); },
+    setRequestHeader: function(header, value) { this._inner.setRequestHeader(header, value); },
+    get readyState() { return this._inner.readyState; },
+    set onreadystatechange(callback) { this._inner.onreadystatechange = callback; }
+  };
+
   exports.prepareWindow = function(extension, window) {
     if (!('chrome' in window)) {
       var api = new API(extension, window);
@@ -51,7 +70,7 @@
     sandbox.chrome = api.chrome;
     sandbox.ancho = api.ancho;
     sandbox.console = api.console;
-    sandbox.XMLHttpRequest = Require.XMLHttpRequest;
+    sandbox.XMLHttpRequest = WrappedXMLHttpRequest;
     var processedJQuery = false;
     var contentScripts = extension.manifest.content_scripts;
     for (var i=0; i<contentScripts.length; i++) {
@@ -64,7 +83,7 @@
         if (spec.match(matches[j])) {
           for (var k=0; k<scriptInfo.js.length; k++) {
             if (sandbox.jQuery && !processedJQuery) {
-              sandbox.jQuery.ajaxSettings.xhr = Require.createWrappedXMLHttpRequest;
+              sandbox.jQuery.ajaxSettings.xhr = function() { return new WrappedXMLHttpRequest(); };
               var jQueryEventAdd = sandbox.jQuery.event.add;
               sandbox.jQuery.event.add = function(elem, types, handler, data, selector) {
                 jQueryEventAdd(elem, types, handler, data, selector);
