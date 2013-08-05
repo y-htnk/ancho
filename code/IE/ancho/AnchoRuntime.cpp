@@ -782,6 +782,7 @@ STDMETHODIMP CAnchoRuntime::SetSite(IUnknown *pUnkSite)
           }
         }
       }
+      showBrowserActionBar(TRUE);
     }
   }
   else
