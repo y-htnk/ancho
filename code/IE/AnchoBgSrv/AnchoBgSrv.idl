@@ -183,7 +183,7 @@ library AnchoBgSrvLib
   ]
   interface IAnchoTabManagerInternal : IUnknown
   {
-    HRESULT registerRuntime([in] OLE_HANDLE aFrameTab, [in] IAnchoRuntime * aRuntime, [in] ULONG aHeartBeat, [out, retval] INT *aTabID);
+    HRESULT registerRuntime([in] OLE_HANDLE aFrameTab, [in] IAnchoRuntime * aRuntime, [in] ULONG aHeartBeat);
     HRESULT unregisterRuntime([in] INT aTabID);
 
     HRESULT createTabNotification([in] INT aTabId, [in] ULONG aRequestID);

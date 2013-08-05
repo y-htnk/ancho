@@ -640,21 +640,20 @@ STDMETHODIMP TabManager::getTabInfo(INT aTabId, BSTR aExtensionId, INT aApiId, V
 //              API methods - IAnchoTabManagerInternal
 //==========================================================================================
 
-STDMETHODIMP TabManager::registerRuntime(OLE_HANDLE aFrameTab, IAnchoRuntime * aRuntime, ULONG aHeartBeat, INT *aTabID)
+STDMETHODIMP TabManager::registerRuntime(OLE_HANDLE aFrameTab, IAnchoRuntime * aRuntime, ULONG aHeartBeat)
 {
   BEGIN_TRY_BLOCK;
   if (aFrameTab == 0) {
     return E_FAIL;
   }
-  ENSURE_RETVAL(aTabID);
 
-  *aTabID = getFrameTabId((HWND)aFrameTab);
+  int tabId = getFrameTabId((HWND)aFrameTab);
 
   {
     boost::unique_lock<Mutex> lock(mTabAccessMutex);
-    mTabs[*aTabID] = boost::make_shared<TabRecord>(aRuntime, *aTabID, aHeartBeat);
+    mTabs[tabId] = boost::make_shared<TabRecord>(aRuntime, tabId, aHeartBeat);
   }
-  ATLTRACE(L"ADDON SERVICE - registering tab: %d\n", *aTabID);
+  ATLTRACE(L"ADDON SERVICE - registering tab: %d\n", tabId);
 
   if (!mHeartbeatTimer.isRunning()) {
     //TODO: check if works properly

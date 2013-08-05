@@ -13,6 +13,7 @@
 #include "AnchoPassthruAPP.h"
 #include "dllmain.h"
 #include <AnchoCommons/JSValueWrapper.hpp>
+#include "ProtocolHandlerRegistrar.h"
 
 #include <string>
 #include <ctime>
@@ -53,10 +54,10 @@ HRESULT CAnchoRuntime::InitAddons()
     if (SUCCEEDED(hr))
     {
       CComPtr<IAnchoAddon> addon(pNewObject);
-      hr = addon->Init(sKeyName, m_pAnchoService, m_pWebBrowser);
+      hr = addon->Init(sKeyName, mAnchoService, mWebBrowser);
       if (SUCCEEDED(hr))
       {
-        m_Addons[std::wstring(sKeyName)] = addon;
+        mMapAddons[std::wstring(sKeyName)] = addon;
       }
     }
     dwLen = 4096;
@@ -68,50 +69,87 @@ HRESULT CAnchoRuntime::InitAddons()
 //  DestroyAddons
 void CAnchoRuntime::DestroyAddons()
 {
-  AddonMap::iterator it = m_Addons.begin();
-  while(it != m_Addons.end()) {
+  AddonMap::iterator it = mMapAddons.begin();
+  while(it != mMapAddons.end()) {
     it->second->Shutdown();
     ++it;
   }
-  m_Addons.clear();
+  mMapAddons.clear();
 
-  ATLTRACE(L"ANCHO: all addons destroyed for runtime %d\n", m_TabID);
+  ATLTRACE(L"ANCHO: all addons destroyed for runtime %d\n", mTabId);
 }
 
 //----------------------------------------------------------------------------
 //  Cleanup
 HRESULT CAnchoRuntime::Cleanup()
 {
+  mToolbarWindow.DestroyWindow();
+
   // release page actions first
-  if (m_pAnchoService) {
-    m_pAnchoService->releasePageActions(m_TabID);
+  if (mAnchoService) {
+    mAnchoService->releasePageActions(mTabId);
+    mAnchoService->unregisterBrowserActionToolbar(mTabId);
   }
 
   // unadvise events
-  if (m_pBrowserEventSource) {
-    AtlUnadvise(m_pBrowserEventSource, IID_DAnchoBrowserEvents, m_AnchoBrowserEventsCookie);
-    m_pBrowserEventSource.Release();
-    m_AnchoBrowserEventsCookie = 0;
+  if (mBrowserEventSource) {
+    AtlUnadvise(mBrowserEventSource, IID_DAnchoBrowserEvents, mAnchoBrowserEventsCookie);
+    mBrowserEventSource.Release();
+    mAnchoBrowserEventsCookie = 0;
   }
-  if (m_pWebBrowser) {
-    AtlUnadvise(m_pWebBrowser, DIID_DWebBrowserEvents2, m_WebBrowserEventsCookie);
-    m_pWebBrowser.Release();
-    m_WebBrowserEventsCookie = 0;
+  if (mWebBrowser) {
+    AtlUnadvise(mWebBrowser, DIID_DWebBrowserEvents2, mWebBrowserEventsCookie);
+    mWebBrowser.Release();
+    mWebBrowserEventsCookie = 0;
   }
 
   // remove instance from tab map and -manager
-  gWindowDocumentMap.eraseTab(m_TabID);
+  gWindowDocumentMap.eraseTab(mTabId);
   if(mTabManager) {
-    mTabManager->unregisterRuntime(m_TabID);
+    mTabManager->unregisterRuntime(mTabId);
     mTabManager.Release();
   }
 
   // release service. must happen as the last step!
-  if (m_pAnchoService) {
-    m_pAnchoService.Release();
+  if (mAnchoService) {
+    mAnchoService.Release();
   }
 
   return S_OK;
+}
+
+//----------------------------------------------------------------------------
+//  initCookieManager
+HRESULT CAnchoRuntime::initCookieManager(IAnchoServiceApi * aServiceAPI)
+{
+  mCookieManager = Ancho::CookieManager::createInstance(aServiceAPI);
+  return (mCookieManager) ? S_OK : E_FAIL;
+}
+
+//----------------------------------------------------------------------------
+//  initTabManager
+HRESULT CAnchoRuntime::initTabManager(IAnchoServiceApi * aServiceAPI, HWND aHwndFrameTab)
+{
+  CComQIPtr<IDispatch> dispatch;
+  IF_FAILED_RET(aServiceAPI->get_tabManager(&dispatch));
+  CComQIPtr<IAnchoTabManagerInternal> tabManager = dispatch;
+  if (!tabManager) {
+    return E_NOINTERFACE;
+  }
+  mTabManager = tabManager;
+
+  // Registering tab in service - obtains tab id and assigns it to the tab as property
+  return mTabManager->registerRuntime((OLE_HANDLE)aHwndFrameTab, this, mHeartbeatSlave.id());
+}
+
+//----------------------------------------------------------------------------
+//  initWindowManager
+HRESULT CAnchoRuntime::initWindowManager(IAnchoServiceApi * aServiceAPI, IAnchoWindowManagerInternal ** aWindowManager)
+{
+  // get WindowManager
+  CComQIPtr<IDispatch> dispatch;
+  IF_FAILED_RET(aServiceAPI->get_windowManager(&dispatch));
+  return dispatch.QueryInterface(aWindowManager);
 }
 
 //----------------------------------------------------------------------------
@@ -119,75 +157,131 @@ HRESULT CAnchoRuntime::Cleanup()
 HRESULT CAnchoRuntime::Init()
 {
   ATLASSERT(m_spUnkSite);
+
+  // Expected window structure, currently IE10:
+  //
+  // + <page title>        IEFrame                 <-- IE main window  (hwndIEFrame)
+  //   ...
+  //   + Frame Tab                                 <-- IE current tab (hwndFrameTab)
+  //     + "ITabBarHost"   InternetToolbarHost
+  //       + "Menu Bar"    WorkerW
+  //         + ""          ReBarWindow32           <-- parent of toolbar (hwndReBarWindow32)
+  //         ...
+  //         + ""          ATL:????                <-- our toolbar window
+  //     + <page title>    TabWindowClass
+  //       + ""            Shell DocObject View    <-- actual webbrowser control
+
+  HWND hwndReBarWindow32 = NULL;
+  HWND hwndFrameTab = NULL;
+  HWND hwndIEFrame = NULL;
+
+  //---------------------------------------------------------------------------
+  // prepare our own webbrowser instance
+
   // get IServiceProvider to get IWebBrowser2 and IOleWindow
   CComQIPtr<IServiceProvider> pServiceProvider = m_spUnkSite;
-  if (!pServiceProvider)
-  {
+  if (!pServiceProvider) {
     return E_FAIL;
   }
 
   // get IWebBrowser2
-  pServiceProvider->QueryService(SID_SWebBrowserApp, IID_IWebBrowser2, (LPVOID*)&m_pWebBrowser.p);
-  if (!m_pWebBrowser) {
+  pServiceProvider->QueryService(SID_SWebBrowserApp, IID_IWebBrowser2, (LPVOID*)&mWebBrowser.p);
+  if (!mWebBrowser) {
     return E_FAIL;
   }
 
-  AtlAdvise(m_pWebBrowser, (IUnknown *)(TWebBrowserEvents *) this, DIID_DWebBrowserEvents2, &m_WebBrowserEventsCookie);
+  //---------------------------------------------------------------------------
+  // get required window
 
-  ATLTRACE(L"ANCHO: runtime initialization - CoCreateInstance(CLSID_AnchoAddonService)\n");
+  // get parent window for toolbar: ReBarWindow32
+  CComQIPtr<IOleWindow> reBarWindow32(m_spUnkSite);
+  if (!reBarWindow32) {
+    return E_FAIL;
+  }
+  reBarWindow32->GetWindow(&hwndReBarWindow32);
+
+  // get "Frame Tab" window
+  hwndFrameTab = ::GetParent(getTabWindowClassWindow());
+  if (!hwndFrameTab) {
+    ATLASSERT(0 && "TOOLBAR: Failed to obtain 'Frame Tab' window handle.");
+    return E_FAIL;
+  }
+  hwndIEFrame = ::GetParent(hwndFrameTab);
+
+  //---------------------------------------------------------------------------
   // create addon service object
-  IF_FAILED_RET(m_pAnchoService.CoCreateInstance(CLSID_AnchoAddonService));
+  ATLTRACE(L"ANCHO: runtime initialization - CoCreateInstance(CLSID_AnchoAddonService)\n");
+  IF_FAILED_RET(mAnchoService.CoCreateInstance(CLSID_AnchoAddonService));
 
-  CComQIPtr<IAnchoServiceApi> serviceApi = m_pAnchoService;
+  //---------------------------------------------------------------------------
+  // toolbar window
+
+  // register protocol handler for toolbar window
+  CComBSTR serviceHost, servicePath;
+  IF_FAILED_RET(mAnchoService->getInternalProtocolParameters(&serviceHost, &servicePath));
+  IF_FAILED_RET(CProtocolHandlerRegistrar::
+    RegisterTemporaryResourceHandler(s_AnchoInternalProtocolHandlerScheme, serviceHost, servicePath));
+
+  // Register toolbar with ancho service.
+  // NOTE: This is where we also receive our Tab-ID
+  CComBSTR toolbarURL;
+  mAnchoService->registerBrowserActionToolbar((INT)hwndFrameTab, &toolbarURL, &mTabId);
+  mToolbarWindow.mTabId = mTabId;
+  mAnchoService->getDispatchObject(&mToolbarWindow.mExternalDispatch);
+
+  // create toolbar window
+  mToolbarWindow.Create(hwndReBarWindow32, CWindow::rcDefault, NULL,
+      WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, 0);
+  if (!mToolbarWindow.mWebBrowser) {
+    return E_FAIL;
+  }
+
+  //---------------------------------------------------------------------------
+  // webbrowser events, service API
+
+  // subscribe to browser events
+  AtlAdvise(mWebBrowser, (IUnknown *)(TWebBrowserEvents *) this, DIID_DWebBrowserEvents2, &mWebBrowserEventsCookie);
+
+  // get IAnchoServiceApi interface
+  CComQIPtr<IAnchoServiceApi> serviceApi = mAnchoService;
   if (!serviceApi) {
     return E_NOINTERFACE;
   }
 
-  {//Get TabManager
-    CComQIPtr<IDispatch> dispatch;
-    IF_FAILED_RET(serviceApi->get_tabManager(&dispatch));
-    CComQIPtr<IAnchoTabManagerInternal> tabManager = dispatch;
-    if (!tabManager) {
-      return E_NOINTERFACE;
-    }
-    mTabManager = tabManager;
-  }
+  //---------------------------------------------------------------------------
+  // init some required objects: TabManager, WindowManager, CookieManager
 
-  mCookieManager = Ancho::CookieManager::createInstance(serviceApi);
+  IF_FAILED_RET(initCookieManager(serviceApi));
+  IF_FAILED_RET(initTabManager(serviceApi, hwndFrameTab));
 
-  // Registering tab in service - obtains tab id and assigns it to the tab as property
-  IF_FAILED_RET(mTabManager->registerRuntime((OLE_HANDLE)getFrameTabWindow(), this, m_HeartbeatSlave.id(), &m_TabID));
-  HWND hwndIeMain = NULL;
-  m_pWebBrowser->get_HWND((SHANDLE_PTR*)&hwndIeMain);
-  ::SetProp(hwndIeMain, s_AnchoTabIDPropertyName, (HANDLE)m_TabID);
+  CComPtr<IAnchoWindowManagerInternal> windowManager;
+  IF_FAILED_RET(initWindowManager(serviceApi, &windowManager.p));
+  // get our WindowId
+  IF_FAILED_RET(windowManager->getWindowIdFromHWND(reinterpret_cast<OLE_HANDLE>(hwndIEFrame), &mWindowId));
 
-  // initialize page actions for this process/window/tab
-  m_pAnchoService->initPageActions((OLE_HANDLE)hwndIeMain, m_TabID);
+  // set our tabID for the passthru app
+  ::SetProp(hwndIEFrame, s_AnchoTabIDPropertyName, (HANDLE)mTabId);
 
-  CComQIPtr<IAnchoWindowManagerInternal> windowManager;
-  {//Get WindowManager
-    CComQIPtr<IDispatch> dispatch;
-    IF_FAILED_RET(serviceApi->get_windowManager(&dispatch));
-    windowManager = dispatch;
-    if (!windowManager) {
-      return E_NOINTERFACE;
-    }
-  }
-  //Get WindowId
-  IF_FAILED_RET(windowManager->getWindowIdFromHWND(reinterpret_cast<OLE_HANDLE>(getMainWindow()), &mWindowID));
-
+  // subscribe to URL loading events
   CComObject<CAnchoBrowserEvents>* pBrowserEventSource;
   IF_FAILED_RET(CComObject<CAnchoBrowserEvents>::CreateInstance(&pBrowserEventSource));
 
-  m_pBrowserEventSource = pBrowserEventSource;
+  mBrowserEventSource = pBrowserEventSource;
 
-  AtlAdvise(m_pBrowserEventSource, (IUnknown*)(TAnchoBrowserEvents*) this, IID_DAnchoBrowserEvents,
-    &m_AnchoBrowserEventsCookie);
+  AtlAdvise(mBrowserEventSource, (IUnknown*)(TAnchoBrowserEvents*) this, IID_DAnchoBrowserEvents,
+    &mAnchoBrowserEventsCookie);
 
   // Set the sink as property of the browser so it can be retrieved if someone wants to send
   // us events.
-  IF_FAILED_RET(m_pWebBrowser->PutProperty(L"_anchoBrowserEvents", CComVariant(m_pBrowserEventSource)));
-  ATLTRACE(L"ANCHO: runtime %d initialized\n", m_TabID);
+  IF_FAILED_RET(mWebBrowser->PutProperty(L"_anchoBrowserEvents", CComVariant(mBrowserEventSource)));
+  ATLTRACE(L"ANCHO: runtime %d initialized\n", mTabId);
+
+  // initialize page actions for this process/window/tab
+  mAnchoService->initPageActions((OLE_HANDLE)hwndIEFrame, mTabId);
+
+  // load toolbar's html page
+  IF_FAILED_RET(mToolbarWindow.mWebBrowser->Navigate(toolbarURL, NULL, NULL, NULL, NULL));
+
   return S_OK;
 }
 //----------------------------------------------------------------------------
@@ -201,17 +295,17 @@ HRESULT CAnchoRuntime::get_cookieManager(LPDISPATCH* ppRet)
 //
 STDMETHODIMP_(void) CAnchoRuntime::OnBrowserDownloadBegin()
 {
-  m_ExtensionPageAPIPrepared = false;
+  mExtensionPageAPIPrepared = false;
 }
 
 //----------------------------------------------------------------------------
 //
 STDMETHODIMP_(void) CAnchoRuntime::OnWindowStateChanged(LONG dwFlags, LONG dwValidFlagsMask)
 {
-  if (m_pAnchoService
+  if (mAnchoService
       && (dwFlags & dwValidFlagsMask & OLECMDIDF_WINDOWSTATE_USERVISIBLE)
       && (dwFlags & dwValidFlagsMask & OLECMDIDF_WINDOWSTATE_ENABLED)) {
-    m_pAnchoService->onTabActivate(m_TabID);
+    mAnchoService->onTabActivate(mTabId);
   }
 }
 
@@ -219,14 +313,14 @@ STDMETHODIMP_(void) CAnchoRuntime::OnWindowStateChanged(LONG dwFlags, LONG dwVal
 //
 STDMETHODIMP_(void) CAnchoRuntime::OnBrowserProgressChange(LONG Progress, LONG ProgressMax)
 {
-  if (m_IsExtensionPage && !m_ExtensionPageAPIPrepared && m_pWebBrowser) {
+  if (mIsExtensionPage && !mExtensionPageAPIPrepared && mWebBrowser) {
     READYSTATE readyState;
-    m_pWebBrowser->get_ReadyState(&readyState);
+    mWebBrowser->get_ReadyState(&readyState);
     if (readyState == READYSTATE_INTERACTIVE) {
       CComBSTR url;
-      m_pWebBrowser->get_LocationURL(&url);
+      mWebBrowser->get_LocationURL(&url);
       if (S_OK == InitializeExtensionScripting(url)) {
-        m_ExtensionPageAPIPrepared = true;
+        mExtensionPageAPIPrepared = true;
       }
     }
   }
@@ -237,11 +331,11 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserProgressChange(LONG Progress, LONG P
 STDMETHODIMP_(void) CAnchoRuntime::OnNavigateComplete(LPDISPATCH pDispatch, VARIANT *URL)
 {
   CComBSTR url(URL->bstrVal);
-  m_IsExtensionPage = isExtensionPage(std::wstring(url));
-  if (m_IsExtensionPage) {
+  mIsExtensionPage = isExtensionPage(std::wstring(url));
+  if (mIsExtensionPage) {
     // Too early for api injections
     if (S_OK == InitializeExtensionScripting(url)) {
-      m_ExtensionPageAPIPrepared = true;
+      mExtensionPageAPIPrepared = true;
     }
   }
 }
@@ -282,7 +376,7 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
     *Cancel = TRUE;
     pWebBrowser->Stop();
     pWebBrowser->Navigate2(&vtUrl.GetVARIANT(), Flags, TargetFrameName, PostData, Headers);
-    mTabManager->createTabNotification(m_TabID, requestId);
+    mTabManager->createTabNotification(mTabId, requestId);
     return;
   }
 
@@ -291,12 +385,12 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
   if (SUCCEEDED(pWebBrowser->get_TopLevelContainer(&isTop))) {
     if (isTop) {
       // Loading the main frame so reset the frame list.
-      m_Frames.clear();
-      m_NextFrameId = 0;
+      mMapFrames.clear();
+      mNextFrameId = 0;
     }
   }
   std::wstring frameUrl = stripTrailingSlash(stripFragmentFromUrl(pURL->bstrVal));
-  m_Frames[frameUrl] = FrameRecord(pWebBrowser, isTop != VARIANT_FALSE, m_NextFrameId++);
+  mMapFrames[frameUrl] = FrameRecord(pWebBrowser, isTop != VARIANT_FALSE, mNextFrameId++);
 
   pWebBrowser->PutProperty(CComBSTR(L"_anchoNavigateURL"), CComVariant(*pURL));
 
@@ -315,14 +409,14 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
         docWin->GetWindow(&docWinHWND);
       }
       if (docWinHWND) {
-        gWindowDocumentMap.put(WindowDocumentRecord(docWinHWND, m_TabID, m_pWebBrowser, pWebBrowser, doc));
+        gWindowDocumentMap.put(WindowDocumentRecord(docWinHWND, mTabId, mWebBrowser, pWebBrowser, doc));
       }
     }
-    HWND tabWindow = getTabWindow();
+    HWND tabWindow = getTabWindowClassWindow();
     if (tabWindow) {
-      gWindowDocumentMap.put(WindowDocumentRecord(tabWindow, m_TabID, m_pWebBrowser, pWebBrowser, doc));
+      gWindowDocumentMap.put(WindowDocumentRecord(tabWindow, mTabId, mWebBrowser, pWebBrowser, doc));
     }
-    m_pAnchoService->onTabNavigate(m_TabID);
+    mAnchoService->onTabNavigate(mTabId);
   }
 }
 
@@ -353,11 +447,11 @@ STDMETHODIMP CAnchoRuntime::OnFrameEnd(BSTR bstrUrl, VARIANT_BOOL bIsMainFrame)
 STDMETHODIMP CAnchoRuntime::OnFrameRedirect(BSTR bstrOldUrl, BSTR bstrNewUrl)
 {
   std::wstring oldUrl = stripTrailingSlash(stripFragmentFromUrl(bstrOldUrl));
-  FrameMap::iterator it = m_Frames.find(oldUrl);
-  if (it != m_Frames.end()) {
+  FrameMap::iterator it = mMapFrames.find(oldUrl);
+  if (it != mMapFrames.end()) {
     std::wstring newUrl = stripTrailingSlash(stripFragmentFromUrl(bstrNewUrl));
-    m_Frames[newUrl] = it->second;
-    m_Frames.erase(it);
+    mMapFrames[newUrl] = it->second;
+    mMapFrames.erase(it);
   }
   return S_OK;
 }
@@ -377,9 +471,9 @@ STDMETHODIMP CAnchoRuntime::OnBeforeRequest(VARIANT aReporter)
   reporter->getUrl(&url);
   reporter->getHTTPMethod(&method);
 
-  FrameMap::const_iterator it = m_Frames.find(url.m_str);
+  FrameMap::const_iterator it = mMapFrames.find(url.m_str);
   const FrameRecord *frameRecord = NULL;
-  if (it != m_Frames.end()) {
+  if (it != mMapFrames.end()) {
     frameRecord = &(it->second);
   } else {
     ATLTRACE(L"No frame record for %s\n", url.m_str);
@@ -410,9 +504,9 @@ STDMETHODIMP CAnchoRuntime::OnBeforeSendHeaders(VARIANT aReporter)
   reporter->getUrl(&url);
   reporter->getHTTPMethod(&method);
 
-  FrameMap::const_iterator it = m_Frames.find(url.m_str);
+  FrameMap::const_iterator it = mMapFrames.find(url.m_str);
   const FrameRecord *frameRecord = NULL;
-  if (it != m_Frames.end()) {
+  if (it != mMapFrames.end()) {
     frameRecord = &(it->second);
   } else {
     ATLTRACE(L"No frame record for %s\n", url.m_str);
@@ -432,7 +526,7 @@ CAnchoRuntime::fillRequestInfo(SimpleJSObject &aInfo, const std::wstring &aUrl, 
   aInfo.setProperty(L"requestId", CComVariant(L"TODO_RequestId"));
   aInfo.setProperty(L"url", CComVariant(aUrl.c_str()));
   aInfo.setProperty(L"method", CComVariant(aMethod.c_str()));
-  aInfo.setProperty(L"tabId", CComVariant(m_TabID));
+  aInfo.setProperty(L"tabId", CComVariant(mTabId));
   //TODO - find out parent frame id
   aInfo.setProperty(L"parentFrameId", CComVariant(-1));
   if (aFrameRecord) {
@@ -445,6 +539,7 @@ CAnchoRuntime::fillRequestInfo(SimpleJSObject &aInfo, const std::wstring &aUrl, 
   time_t timeSinceEpoch = time(NULL);
   aInfo.setProperty(L"timeStamp", CComVariant(double(timeSinceEpoch)*1000));
 }
+
 //----------------------------------------------------------------------------
 //
 HRESULT CAnchoRuntime::fireOnBeforeRequest(const std::wstring &aUrl, const std::wstring &aMethod, const CAnchoRuntime::FrameRecord *aFrameRecord, /*out*/ BeforeRequestInfo &aOutInfo)
@@ -458,7 +553,7 @@ HRESULT CAnchoRuntime::fireOnBeforeRequest(const std::wstring &aUrl, const std::
   argArray->push_back(CComVariant(info.p));
 
   CComVariant result;
-  m_pAnchoService->invokeEventObjectInAllExtensions(CComBSTR(L"webRequest.onBeforeRequest"), argArray.p, &result);
+  mAnchoService->invokeEventObjectInAllExtensions(CComBSTR(L"webRequest.onBeforeRequest"), argArray.p, &result);
   if (result.vt & VT_ARRAY) {
     CComSafeArray<VARIANT> arr;
     arr.Attach(result.parray);
@@ -485,6 +580,7 @@ HRESULT CAnchoRuntime::fireOnBeforeRequest(const std::wstring &aUrl, const std::
   }
   return S_OK;
 }
+
 //----------------------------------------------------------------------------
 //
 HRESULT CAnchoRuntime::fireOnBeforeSendHeaders(const std::wstring &aUrl, const std::wstring &aMethod, const CAnchoRuntime::FrameRecord *aFrameRecord, /*out*/ BeforeSendHeadersInfo &aOutInfo)
@@ -503,7 +599,7 @@ HRESULT CAnchoRuntime::fireOnBeforeSendHeaders(const std::wstring &aUrl, const s
   argArray->push_back(CComVariant(info.p));
 
   CComVariant result;
-  m_pAnchoService->invokeEventObjectInAllExtensions(CComBSTR(L"webRequest.onBeforeSendHeaders"), argArray.p, &result);
+  mAnchoService->invokeEventObjectInAllExtensions(CComBSTR(L"webRequest.onBeforeSendHeaders"), argArray.p, &result);
   if (result.vt & VT_ARRAY) {
     CComSafeArray<VARIANT> arr;
     arr.Attach(result.parray);
@@ -536,18 +632,19 @@ HRESULT CAnchoRuntime::fireOnBeforeSendHeaders(const std::wstring &aUrl, const s
 
   return S_OK;
 }
+
 //----------------------------------------------------------------------------
 //  InitializeContentScripting
 HRESULT CAnchoRuntime::InitializeContentScripting(BSTR bstrUrl, VARIANT_BOOL isRefreshingMainFrame, documentLoadPhase aPhase)
 {
   CComPtr<IWebBrowser2> webBrowser;
   if (isRefreshingMainFrame) {
-    webBrowser = m_pWebBrowser;
+    webBrowser = mWebBrowser;
   }
   else {
     std::wstring url = stripTrailingSlash(stripFragmentFromUrl(bstrUrl));
-    FrameMap::iterator it = m_Frames.find(url);
-    if (it == m_Frames.end()) {
+    FrameMap::iterator it = mMapFrames.find(url);
+    if (it == mMapFrames.end()) {
       // Either this frame has already been removed, or the request isn't for a frame after all (e.g. an htc).
       return S_FALSE;
     }
@@ -556,27 +653,106 @@ HRESULT CAnchoRuntime::InitializeContentScripting(BSTR bstrUrl, VARIANT_BOOL isR
   // Normally the frame map is cleared in the BeforeNavigate2 handler, but it isn't triggered when the
   // page is refreshed, so we need this workaround as well.
   if (isRefreshingMainFrame && (documentLoadStart == aPhase)) {
-    m_Frames.clear();
-    m_NextFrameId = 0;
+    mMapFrames.clear();
+    mNextFrameId = 0;
   }
-  AddonMap::iterator it = m_Addons.begin();
-  while(it != m_Addons.end()) {
+  AddonMap::iterator it = mMapAddons.begin();
+  while(it != mMapAddons.end()) {
     it->second->InitializeContentScripting(webBrowser, bstrUrl, aPhase);
     ++it;
   }
 
   return S_OK;
 }
+
 //----------------------------------------------------------------------------
 //
 HRESULT CAnchoRuntime::InitializeExtensionScripting(BSTR bstrUrl)
 {
   std::wstring domain = getDomainName(bstrUrl);
-  AddonMap::iterator it = m_Addons.find(domain);
-  if (it != m_Addons.end()) {
+  AddonMap::iterator it = mMapAddons.find(domain);
+  if (it != mMapAddons.end()) {
     return it->second->InitializeExtensionScripting(bstrUrl);
   }
   return S_FALSE;
+}
+
+STDMETHODIMP CAnchoRuntime::GetBandInfo(DWORD dwBandID, DWORD dwViewMode, DESKBANDINFO* pdbi)
+{
+  if (pdbi) {
+    m_dwBandID = dwBandID;
+    m_dwViewMode = dwViewMode;
+
+    if (pdbi->dwMask & DBIM_MINSIZE) {
+      pdbi->ptMinSize.x = 200;
+      pdbi->ptMinSize.y = 28;
+    }
+
+    if (pdbi->dwMask & DBIM_MAXSIZE) {
+      pdbi->ptMaxSize.x = -1;
+      pdbi->ptMaxSize.y = 28;
+    }
+
+    if (pdbi->dwMask & DBIM_INTEGRAL) {
+      pdbi->ptIntegral.x = 0;
+      pdbi->ptIntegral.y = 0;
+    }
+
+    if (pdbi->dwMask & DBIM_ACTUAL) {
+      pdbi->ptActual.x = 600;
+      pdbi->ptActual.y = 28;
+    }
+
+    if (pdbi->dwMask & DBIM_TITLE) {
+      pdbi->dwMask &= ~DBIM_TITLE;
+    }
+
+    if (pdbi->dwMask & DBIM_MODEFLAGS) {
+      //pdbi->dwModeFlags = DBIMF_VARIABLEHEIGHT;
+    }
+
+    if (pdbi->dwMask & DBIM_BKCOLOR) {
+      pdbi->dwMask &= ~DBIM_BKCOLOR;
+    }
+    return S_OK;
+  }
+  return E_INVALIDARG;
+}
+
+
+STDMETHODIMP CAnchoRuntime::GetWindow(HWND* phwnd)
+{
+  if (!phwnd) {
+    return E_POINTER;
+  }
+  (*phwnd) = mToolbarWindow;
+  return S_OK;
+}
+
+
+STDMETHODIMP CAnchoRuntime::ContextSensitiveHelp(BOOL fEnterMode)
+{
+  return S_OK;
+}
+
+
+STDMETHODIMP CAnchoRuntime::CloseDW(unsigned long dwReserved)
+{
+  mToolbarWindow.DestroyWindow();
+  return S_OK;
+}
+
+
+STDMETHODIMP CAnchoRuntime::ResizeBorderDW(const RECT* prcBorder, IUnknown* punkToolbarSite, BOOL fReserved)
+{
+  return E_NOTIMPL;
+}
+
+
+STDMETHODIMP CAnchoRuntime::ShowDW(BOOL fShow)
+{
+  mToolbarWindow.ShowWindow(fShow ? SW_SHOW : SW_HIDE);
+  return S_OK;
 }
 
 //----------------------------------------------------------------------------
@@ -590,6 +766,20 @@ STDMETHODIMP CAnchoRuntime::SetSite(IUnknown *pUnkSite)
     hr = Init();
     if (SUCCEEDED(hr)) {
       hr = InitAddons();
+      if (SUCCEEDED(hr)) {
+        // in case IE has already a page loaded initialize scripting 
+        READYSTATE readyState;
+        mWebBrowser->get_ReadyState(&readyState);
+        if (readyState >= READYSTATE_INTERACTIVE) {
+          CComBSTR url;
+          mWebBrowser->get_LocationURL(&url);
+          if (!isExtensionPage(std::wstring(url))) {
+            // give toolbar a chance to load
+            Sleep(200);
+            InitializeContentScripting(url, TRUE, documentLoadEnd);
+          }
+        }
+      }
     }
   }
   else
@@ -605,7 +795,7 @@ STDMETHODIMP CAnchoRuntime::SetSite(IUnknown *pUnkSite)
 STDMETHODIMP CAnchoRuntime::reloadTab()
 {
   CComVariant var(REFRESH_COMPLETELY);
-  m_pWebBrowser->Refresh2(&var);
+  mWebBrowser->Refresh2(&var);
   return S_OK;
 }
 
@@ -613,7 +803,7 @@ STDMETHODIMP CAnchoRuntime::reloadTab()
 //
 STDMETHODIMP CAnchoRuntime::closeTab()
 {
-  return m_pWebBrowser->Quit();
+  return mWebBrowser->Quit();
 }
 
 //----------------------------------------------------------------------------
@@ -631,7 +821,7 @@ STDMETHODIMP CAnchoRuntime::showBrowserActionBar(INT aShow)
   IF_FAILED_RET(::StringFromGUID2( CLSID_IEToolbar, (OLECHAR*)clsid, sizeof(clsid)));
   CComVariant clsidVar(clsid);
   CComVariant show(aShow != FALSE);
-  IF_FAILED_RET(m_pWebBrowser->ShowBrowserBar(&clsidVar, &show, NULL));
+  IF_FAILED_RET(mWebBrowser->ShowBrowserBar(&clsidVar, &show, NULL));
   return S_OK;
 }
 //----------------------------------------------------------------------------
@@ -644,12 +834,12 @@ STDMETHODIMP CAnchoRuntime::updateTab(LPDISPATCH aProperties)
   if (hr == S_OK) {
     CComVariant vtUrl(url);
     CComVariant vtEmpty;
-    m_pWebBrowser->Navigate2(&vtUrl, &vtEmpty, &vtEmpty, &vtEmpty, &vtEmpty);
+    mWebBrowser->Navigate2(&vtUrl, &vtEmpty, &vtEmpty, &vtEmpty, &vtEmpty);
   }
   INT active = 0;
   hr = properties.Get<INT, VT_BOOL, INT>(L"active", active);
   if (hr == S_OK) {
-    HWND hwnd = getTabWindow();
+    HWND hwnd = getTabWindowClassWindow();
     IAccessible *acc = NULL;
     //TODO - fix tab activation
     if (S_OK == AccessibleObjectFromWindow(hwnd, OBJID_WINDOW, IID_IAccessible, (void**)&acc)) {
@@ -672,27 +862,28 @@ STDMETHODIMP CAnchoRuntime::fillTabInfo(VARIANT* aInfo)
 
   CComBSTR locationUrl;
   CComBSTR name;
-  m_pWebBrowser->get_LocationURL(&locationUrl);
+  mWebBrowser->get_LocationURL(&locationUrl);
   obj.SetProperty(L"url", CComVariant(locationUrl));
 
-  m_pWebBrowser->get_Name(&name);
+  mWebBrowser->get_Name(&name);
   IF_FAILED_RET(obj.SetProperty(L"title", CComVariant(name)));
 
-  IF_FAILED_RET(obj.SetProperty(L"id", CComVariant(m_TabID)));
+  IF_FAILED_RET(obj.SetProperty(L"id", CComVariant(mTabId)));
 
   IF_FAILED_RET(obj.SetProperty(L"active", CComVariant(isTabActive())));
 
-  IF_FAILED_RET(obj.SetProperty(L"windowId", mWindowID));
+  IF_FAILED_RET(obj.SetProperty(L"windowId", mWindowId));
   return S_OK;
 }
 
 //----------------------------------------------------------------------------
 //
-HWND CAnchoRuntime::getTabWindow()
+HWND CAnchoRuntime::getTabWindowClassWindow()
 {
+  ATLASSERT(mWebBrowser);
   HWND hwndBrowser = NULL;
   IServiceProvider* pServiceProvider = NULL;
-  if (SUCCEEDED(m_pWebBrowser->QueryInterface(IID_IServiceProvider, (void**)&pServiceProvider))){
+  if (SUCCEEDED(mWebBrowser->QueryInterface(IID_IServiceProvider, (void**)&pServiceProvider))){
     IOleWindow* pWindow = NULL;
     if (SUCCEEDED(pServiceProvider->QueryService(SID_SShellBrowser, IID_IOleWindow,(void**)&pWindow))) {
       // hwndBrowser is the handle of TabWindowClass
@@ -708,14 +899,8 @@ HWND CAnchoRuntime::getTabWindow()
 
 //----------------------------------------------------------------------------
 //
-HWND CAnchoRuntime::findParentWindowByClass(std::wstring aClassName)
-{
-  return ::findParentWindowByClass(getTabWindow(), aClassName);
-}
-//----------------------------------------------------------------------------
-//
 bool CAnchoRuntime::isTabActive()
 {
-  HWND hwndBrowser = getTabWindow();
+  HWND hwndBrowser = getTabWindowClassWindow();
   return hwndBrowser && ::IsWindowVisible(hwndBrowser);
 }

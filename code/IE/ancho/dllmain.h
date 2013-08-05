@@ -28,11 +28,11 @@ public :
     return ATL::_pAtlModule->UpdateRegistryFromResource(IDR_ANCHO, bRegister, aMapEntries);
   }
 
-	virtual HRESULT AddCommonRGSReplacements(_Inout_ IRegistrarBase* pRegistrar) throw()
-	{
-		pRegistrar->AddReplacement(L"PRODUCTNAME", _L(ANCHO_BHO_VERSION_PRODUCT_NAME));
+  virtual HRESULT AddCommonRGSReplacements(_Inout_ IRegistrarBase* pRegistrar) throw()
+  {
+    pRegistrar->AddReplacement(L"PRODUCTNAME", _L(ANCHO_BHO_VERSION_PRODUCT_NAME));
     return CAtlDllModuleT<CAnchoModule>::AddCommonRGSReplacements(pRegistrar);
-	}
+  }
 
   BOOL WINAPI DllMain(DWORD dwReason, LPVOID lpReserved) throw();
 

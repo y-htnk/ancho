@@ -30,6 +30,13 @@ HKLM
   {
     NoRemove Microsoft
     {
+			NoRemove 'Internet Explorer'
+			{
+				NoRemove Toolbar
+				{
+					val '{BC66BD3D-2AB6-4672-8EF3-DB2BD089CD60}' = s '%PRODUCTNAME%'
+				}
+			}
       NoRemove Windows
       {
         NoRemove CurrentVersion

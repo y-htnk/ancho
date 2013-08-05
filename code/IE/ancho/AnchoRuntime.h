@@ -7,6 +7,8 @@
 #pragma once
 #include "resource.h"       // main symbols
 
+#include <Shlobj.h>
+#include "HTMLToolbarWindow.h"
 #include "ancho_i.h"
 
 #include "CookieManager.h"
@@ -29,7 +31,8 @@ class ATL_NO_VTABLE CAnchoRuntime :
   public IObjectWithSiteImpl<CAnchoRuntime>,
   public TWebBrowserEvents,
   public TAnchoBrowserEvents,
-  public IAnchoRuntime
+  public IAnchoRuntime,
+  public IDeskBand
 {
   struct FrameRecord
   {
@@ -47,11 +50,11 @@ public:
   // -------------------------------------------------------------------------
   // ctor
   CAnchoRuntime() :
-      m_WebBrowserEventsCookie(0),
-      m_AnchoBrowserEventsCookie(0),
-      m_ExtensionPageAPIPrepared(false),
-      m_NextFrameId(0),
-      m_IsExtensionPage(false)
+      mWebBrowserEventsCookie(0),
+      mAnchoBrowserEventsCookie(0),
+      mExtensionPageAPIPrepared(false),
+      mNextFrameId(0),
+      mIsExtensionPage(false)
   {
   }
 
@@ -66,6 +69,9 @@ public:
   BEGIN_COM_MAP(CAnchoRuntime)
     COM_INTERFACE_ENTRY(IAnchoRuntime)
     COM_INTERFACE_ENTRY(IObjectWithSite)
+    COM_INTERFACE_ENTRY(IDeskBand)
+    COM_INTERFACE_ENTRY(IOleWindow)
+    COM_INTERFACE_ENTRY(IDockingWindow)
   END_COM_MAP()
 
   // -------------------------------------------------------------------------
@@ -88,6 +94,8 @@ public:
   // COM standard methods
   HRESULT FinalConstruct()
   {
+    m_dwBandID = 0;
+    m_dwViewMode = 0;
     return S_OK;
   }
 
@@ -98,6 +106,18 @@ public:
   }
 
 public:
+// IDeskBand
+  STDMETHOD(GetBandInfo)(DWORD dwBandID, DWORD dwViewMode, DESKBANDINFO* pdbi);
+
+// IOleWindow
+  STDMETHOD(GetWindow)(HWND* phwnd);
+  STDMETHOD(ContextSensitiveHelp)(BOOL fEnterMode);
+
+// IDockingWindow
+  STDMETHOD(CloseDW)(unsigned long dwReserved);
+  STDMETHOD(ResizeBorderDW)(const RECT* prcBorder, IUnknown* punkToolbarSite, BOOL fReserved);
+  STDMETHOD(ShowDW)(BOOL fShow);
+
   // -------------------------------------------------------------------------
   // IObjectWithSiteImpl methods
   STDMETHOD(SetSite)(IUnknown *pUnkSite);
@@ -134,6 +154,10 @@ public:
 private:
   // -------------------------------------------------------------------------
   // Methods
+  HRESULT initCookieManager(IAnchoServiceApi * aServiceAPI);
+  HRESULT initTabManager(IAnchoServiceApi * aServiceAPI, HWND aHwndFrameTab);
+  HRESULT initWindowManager(IAnchoServiceApi * aServiceAPI, IAnchoWindowManagerInternal ** aWindowManager);
+
   HRESULT InitAddons();
   void DestroyAddons();
   HRESULT Init();
@@ -159,38 +183,35 @@ private:
   };
   HRESULT fireOnBeforeSendHeaders(const std::wstring &aUrl, const std::wstring &aMethod, const CAnchoRuntime::FrameRecord *aFrameRecord, /*out*/ BeforeSendHeadersInfo &aOutInfo);
 
-
-  HWND getTabWindow();
-  HWND getFrameTabWindow()
-    {return findParentWindowByClass(L"Frame Tab");}
-  HWND getMainWindow()
-    {return findParentWindowByClass(L"IEFrame");}
-
-  HWND findParentWindowByClass(std::wstring aClassName);
+  HWND getTabWindowClassWindow();
   bool isTabActive();
 private:
   // -------------------------------------------------------------------------
   // Private members.
   typedef std::map<std::wstring, CComPtr<IAnchoAddon> > AddonMap;
-  CComQIPtr<IWebBrowser2>                 m_pWebBrowser;
-  CComPtr<IAnchoAddonService>             m_pAnchoService;
+  CComQIPtr<IWebBrowser2>                 mWebBrowser;
+  CComPtr<IAnchoAddonService>             mAnchoService;
   CComPtr<IAnchoTabManagerInternal>       mTabManager;
-  AddonMap                                m_Addons;
-  int                                     m_TabID;
-  LONG                                    mWindowID;
-  CComPtr<DAnchoBrowserEvents>            m_pBrowserEventSource;
-  DWORD                                   m_WebBrowserEventsCookie;
-  DWORD                                   m_AnchoBrowserEventsCookie;
+  AddonMap                                mMapAddons;
+  int                                     mTabId;
+  LONG                                    mWindowId;
+  CComPtr<DAnchoBrowserEvents>            mBrowserEventSource;
+  DWORD                                   mWebBrowserEventsCookie;
+  DWORD                                   mAnchoBrowserEventsCookie;
 
-  FrameMap                                m_Frames;
-  int                                     m_NextFrameId;//used for generating frameIds
+  FrameMap                                mMapFrames;
+  int                                     mNextFrameId;//used for generating frameIds
 
-  bool                                    m_ExtensionPageAPIPrepared;
-  bool                                    m_IsExtensionPage;
+  bool                                    mExtensionPageAPIPrepared;
+  bool                                    mIsExtensionPage;
 
-  HeartbeatSlave                          m_HeartbeatSlave;
+  HeartbeatSlave                          mHeartbeatSlave;
 
-  CComPtr<Ancho::CookieManagerComObject>         mCookieManager;
+  CComPtr<Ancho::CookieManagerComObject>  mCookieManager;
+
+  CComObjectStackEx<HtmlToolbarWindow>    mToolbarWindow;
+  DWORD m_dwBandID;
+  DWORD m_dwViewMode;
 };
 
 OBJECT_ENTRY_AUTO(__uuidof(AnchoRuntime), CAnchoRuntime)

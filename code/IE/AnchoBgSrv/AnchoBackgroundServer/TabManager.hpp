@@ -187,7 +187,7 @@ public:
   }
 
 public:
-  STDMETHOD(registerRuntime)(OLE_HANDLE aFrameTab, IAnchoRuntime * aRuntime, ULONG aHeartBeat, INT *aTabID);
+  STDMETHOD(registerRuntime)(OLE_HANDLE aFrameTab, IAnchoRuntime * aRuntime, ULONG aHeartBeat);
   STDMETHOD(unregisterRuntime)(INT aTabID);
   STDMETHOD(createTabNotification)(INT aTabId, ULONG aRequestID);
 public:
