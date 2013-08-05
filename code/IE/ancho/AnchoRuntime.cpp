@@ -774,9 +774,11 @@ STDMETHODIMP CAnchoRuntime::SetSite(IUnknown *pUnkSite)
           CComBSTR url;
           mWebBrowser->get_LocationURL(&url);
           if (!isExtensionPage(std::wstring(url))) {
-            // give toolbar a chance to load
-            Sleep(200);
-            InitializeContentScripting(url, TRUE, documentLoadEnd);
+            if (url != L"about:blank") {
+              // give toolbar a chance to load
+              Sleep(200);
+              InitializeContentScripting(url, TRUE, documentLoadEnd);
+            }
           }
         }
       }
