@@ -37,22 +37,6 @@ HKLM
           val '{BC66BD3D-2AB6-4672-8EF3-DB2BD089CD60}' = s '%PRODUCTNAME%'
         }
       }
-      NoRemove Windows
-      {
-        NoRemove CurrentVersion
-        {
-          NoRemove Explorer
-          {
-            NoRemove 'Browser Helper Objects'
-            {
-              ForceRemove '{BC66BD3D-2AB6-4672-8EF3-DB2BD089CD60}' = s '%PRODUCTNAME%'
-              {
-                val 'NoExplorer' = d '1'
-              }
-            }
-          }
-        }
-      }
     }
   }
 }
