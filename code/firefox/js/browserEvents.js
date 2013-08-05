@@ -9,10 +9,9 @@
   var prepareWindow = require('./scripting').prepareWindow;
   var applyContentScripts = require('./scripting').applyContentScripts;
 
-  function BrowserEvents(extension, contentWindow) {
+  function BrowserEvents(extension, window) {
     this._extension = extension;
-    this._contentWindow = contentWindow;
-    this._tabbrowser = contentWindow.document.getElementById('content');
+    this._tabbrowser = window.document.getElementById('content');
   }
 
   BrowserEvents.prototype = {

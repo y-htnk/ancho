@@ -27,7 +27,7 @@
   ],
 	"browser_action": {
     "default_icon": "images/testIcon.png",
-    "default_title": "Test Suite Browser Action",
+    "default_title": "__MSG_browserActionLabel",
     "default_popup": "html/popup.html"
   },
   "web_accessible_resources": [
