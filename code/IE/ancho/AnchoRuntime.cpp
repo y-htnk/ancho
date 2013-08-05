@@ -818,7 +818,7 @@ STDMETHODIMP CAnchoRuntime::executeScript(BSTR aExtensionId, BSTR aCode, INT aFi
 STDMETHODIMP CAnchoRuntime::showBrowserActionBar(INT aShow)
 {
   wchar_t clsid[1024] = {0};
-  IF_FAILED_RET(::StringFromGUID2( CLSID_IEToolbar, (OLECHAR*)clsid, sizeof(clsid)));
+  IF_FAILED_RET(::StringFromGUID2( CLSID_AnchoRuntime, (OLECHAR*)clsid, sizeof(clsid)));
   CComVariant clsidVar(clsid);
   CComVariant show(aShow != FALSE);
   IF_FAILED_RET(mWebBrowser->ShowBrowserBar(&clsidVar, &show, NULL));
