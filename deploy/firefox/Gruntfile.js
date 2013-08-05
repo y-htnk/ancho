@@ -28,7 +28,8 @@ module.exports = function(grunt) {
       test_extension: {
         'src': TEST_EXTENSION_DIR,
         'dest': outputDir,
-        'filename': '<%= pkg.name %>-test-<%= pkg.version %>.crx'
+        'filename': '<%= pkg.name %>-test-<%= pkg.version %>.crx',
+        'privateKey': 'key.pem'
       }
     },
     package_minifier: {

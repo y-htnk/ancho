@@ -15,6 +15,9 @@
   const ADDON_UPGRADE = 7;
   const ADDON_DOWNGRADE = 8;
 
+  const DEFAULT_LOCALE = 'en';
+  const LOCALE_MESSAGE_PREFIX = '__MSG_';
+
   let inherits = require('inherits');
   let EventEmitter2 = require('eventemitter2').EventEmitter2;
   let Utils = require('./utils');
@@ -48,6 +51,9 @@
     this._windowEventEmitters = {};
     this._windowWatcher = null;
     this._firstRun = null;
+    this._messages = null;
+    // TODO: Use the right locale
+    this._defaultLocale = DEFAULT_LOCALE;
   }
   inherits(Extension, EventEmitter2);
 
@@ -93,12 +99,31 @@
     return this._id.replace(/[^A-Za-z]/g, '_') + '_' + storageSpace;
   };
 
+  Extension.prototype.getLocaleMessage = function(locale, key) {
+    if (undefined === key) {
+      // No locale specified so use default.
+      key = locale;
+      locale = this._defaultLocale;
+    }
+    return this._messages[locale][key];
+  };
+
+  Extension.prototype.getLocalizedText = function(str) {
+    if (0 === str.indexOf(LOCALE_MESSAGE_PREFIX)) {
+      return this.getLocaleMessage(str.substr(LOCALE_MESSAGE_PREFIX.length)).message;
+    }
+    else {
+      return str;
+    }
+  }
+
   Extension.prototype.load = function(rootDirectory, reason) {
     this._rootDirectory = rootDirectory;
     this._firstRun = (reason > APP_STARTUP);
     if (ADDON_ENABLE === reason) {
       this._onEnabled();
     }
+    this._loadMessages();
     this._loadManifest();
   };
 
@@ -154,6 +179,25 @@
       for (i=0; i<this._manifest.web_accessible_resources.length; i++) {
         this._manifest.web_accessible_resources[i] =
           Utils.matchPatternToRegexp(this._manifest.web_accessible_resources[i]);
+      }
+    }
+  };
+
+  Extension.prototype._loadMessages = function() {
+    this._messages = {};
+    let localeDir = this.rootDirectory;
+    localeDir.append('_locales');
+    if (localeDir.exists()) {
+      let entries = localeDir.directoryEntries;
+      while (entries.hasMoreElements()) {
+        let entry = entries.getNext().QueryInterface(Ci.nsIFile);
+        let locale = entry.leafName;
+        entry.append('messages.json');
+        if (entry.exists()) {
+          let entryURI = Services.io.newFileURI(entry);
+          let json = Utils.readStringFromUrl(entryURI);
+          this._messages[locale] = JSON.parse(json);
+        }
       }
     }
   };

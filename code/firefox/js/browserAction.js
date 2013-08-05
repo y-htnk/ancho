@@ -102,12 +102,15 @@
         // No toolbar in this window so we're done.
         return;
       }
+      var buttonText = this._extension.getLocalizedText(this._manifest.browser_action.default_title);
+
       var toolbarButton = document.createElement('toolbarbutton');
       toolbarButton.setAttribute('id', id);
       toolbarButton.setAttribute('type', 'button');
       toolbarButton.setAttribute('removable', 'true');
       toolbarButton.setAttribute('class', 'toolbarbutton-1 chromeclass-toolbar-additional');
-      toolbarButton.setAttribute('label', this._manifest.name);
+      toolbarButton.setAttribute('label', buttonText);
+      toolbarButton.setAttribute('tooltiptext', buttonText);
 
       var iconPath = this._extension.getURL(this._manifest.browser_action.default_icon);
       toolbarButton.style.listStyleImage = 'url(' + iconPath + ')';
@@ -261,6 +264,11 @@
       button.image = canvas.toDataURL('image/png', '');  // set new toolbar image
     },
 
+    _getTabIdForWindow: function(window) {
+      var browser = window.document.getElementById('content');
+      return Utils.getWindowId(browser.contentWindow);
+    },
+
     setIcon: function(window, details) {
       var document = window.document;
       var hbox = document.getElementById(this._getElementId(HBOX_ID));
@@ -281,8 +289,7 @@
       canvas.setAttribute('height', BROWSER_ACTION_ICON_HEIGHT);
       var ctx = canvas.getContext('2d');
       var button = document.getElementById(this._getElementId(BUTTON_ID));
-      var browser = document.getElementById('content');
-      var tabId = Utils.getWindowId(browser.contentWindow);
+      var tabId = this._getTabIdForWindow(window);
 
       var self = this;
       if (details.path) {
