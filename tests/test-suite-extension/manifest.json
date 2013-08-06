@@ -1,5 +1,5 @@
 {
-  "name": "Ancho Chrome API Test Suite",
+  "name": "__MSG_extensionName__",
   "version": "1.0",
   "manifest_version": 2,
   "description": "Extension to test Ancho's Chrome API implementations.",
@@ -27,7 +27,7 @@
   ],
 	"browser_action": {
     "default_icon": "images/testIcon.png",
-    "default_title": "Test Suite Browser Action",
+    "default_title": "__MSG_browserActionLabel__",
     "default_popup": "html/popup.html"
   },
   "web_accessible_resources": [

@@ -15,6 +15,9 @@
   const ADDON_UPGRADE = 7;
   const ADDON_DOWNGRADE = 8;
 
+  const DEFAULT_LOCALE = 'en';
+  const LOCALE_MESSAGE_REGEXP = /^__MSG_(.*)__$/;
+
   let inherits = require('inherits');
   let EventEmitter2 = require('eventemitter2').EventEmitter2;
   let Utils = require('./utils');
@@ -91,6 +94,25 @@
 
   Extension.prototype.getStorageTableName = function(storageSpace) {
     return this._id.replace(/[^A-Za-z]/g, '_') + '_' + storageSpace;
+  };
+
+  Extension.prototype.getLocaleMessage = function(locale, key) {
+    if (undefined === key) {
+      // No locale specified so use default.
+      key = locale;
+      locale = this._defaultLocale;
+    }
+    return this._messages[locale][key];
+  };
+
+  Extension.prototype.getLocalizedText = function(str) {
+    var match = str.match(LOCALE_MESSAGE_REGEXP);
+    if (match) {
+      return this.getLocaleMessage(match[1]).message;
+    }
+    else {
+      return str;
+    }
   };
 
   Extension.prototype.load = function(rootDirectory, reason) {
@@ -250,7 +272,7 @@
     this._globalIds = {};
 
     var dbFile = FileUtils.getFile('ProfD', ['ancho_storage.sqlite3']);
-    this._storageConnection = Services.storage.openDatabase(dbFile);
+    this._storageConnection = Services.storage.openUnsharedDatabase(dbFile);
   }
   inherits(Global, EventEmitter2);
 
