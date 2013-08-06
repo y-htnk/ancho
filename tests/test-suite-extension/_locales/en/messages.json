@@ -1,4 +1,7 @@
 {
+  "extensionName": {
+    "message": "Ancho Test Extension"
+  },
   "browserActionLabel": {
     "message": "Ancho Text",
     "description": "Label to use for browser action icon tooltip."
