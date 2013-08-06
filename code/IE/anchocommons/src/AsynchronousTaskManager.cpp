@@ -52,15 +52,14 @@ struct WorkerThreadFunc
         } catch (boost::thread_interrupted &) {
           throw;
         }
-        #pragma warning(suppress : 4101) //unreferenced variable e
         catch (std::exception &e) {
+          (void)e;
           ATLTRACE(L"ASYNC TASK MANAGER - Caught an exception: %s\n", e.what());
         }
       }
     } catch (boost::thread_interrupted &) {
       //Thread execution was properly ended.
       ATLTRACE(L"ASYNC TASK MANAGER - Worker thread interrupted\n");
-      return;
     }
   }
 };
@@ -87,16 +86,7 @@ AsynchronousTaskManager::AsynchronousTaskManager(): mPimpl(new AsynchronousTaskM
 
 AsynchronousTaskManager::~AsynchronousTaskManager()
 {
-  if (mPimpl->mWorkerThread.joinable()) {
-    mPimpl->mWorkerThread.interrupt();
-
-    //wait till it finishes
-    if (!mPimpl->mWorkerThread.try_join_for(boost::chrono::seconds(3))) {
-      mPimpl->mWorkerThread.interrupt();
-      mPimpl->mWorkerThread.join();
-      //mPimpl->mWorkerThread.detach();
-    }
-  }
+  finalize();
 }
 
 void AsynchronousTaskManager::addPackagedTask(boost::function<void()> aTask)
@@ -115,13 +105,25 @@ void AsynchronousTaskManager::addPackagedTask(boost::function<void()> aTask)
 
 void AsynchronousTaskManager::finalize()
 {
+  if (mPimpl->mFinalized) {
+    // we are already done
+    return;
+  }
   {//synchronize only queue management
     boost::unique_lock<boost::mutex> lock(mPimpl->mMutex);
-    mPimpl->mFinalized = true;
     mPimpl->mQueue.clear();
   }
-  mPimpl->mWorkerThread.interrupt();
-  mPimpl->mWorkerThread.try_join_for(boost::chrono::seconds(1));
+
+  if (mPimpl->mWorkerThread.joinable()) {
+    mPimpl->mWorkerThread.interrupt();
+
+    //wait till it finishes
+    if (!mPimpl->mWorkerThread.try_join_for(boost::chrono::seconds(3))) {
+      mPimpl->mWorkerThread.join();
+    }
+  }
+
+  mPimpl->mFinalized = true;
 }
 
 } //namespace Utils

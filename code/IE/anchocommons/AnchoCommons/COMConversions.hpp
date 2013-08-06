@@ -56,8 +56,8 @@ public:
     if (mCookie == 0) {
       ANCHO_THROW(EFail());
     }
-    CComQIPtr<TInterface> ptr;
-    IF_FAILED_THROW(mIGlobalInterfaceTable->GetInterfaceFromGlobal(mCookie, __uuidof(TInterface), (void**)&ptr));
+    CComPtr<TInterface> ptr;
+    IF_FAILED_THROW(mIGlobalInterfaceTable->GetInterfaceFromGlobal(mCookie, __uuidof(TInterface), (void**)&ptr.p));
 
     //IF_FAILED_THROW(CoUnmarshalInterface(mStream, __uuidof(TInterface), (LPVOID *) &ptr));
     return ptr;

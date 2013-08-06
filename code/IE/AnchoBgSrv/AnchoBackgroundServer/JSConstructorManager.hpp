@@ -68,7 +68,7 @@ protected:
     IF_FAILED_THROW(creator->InvokeEx(DISPID_VALUE, LOCALE_USER_DEFAULT, DISPATCH_METHOD, &params, result.GetAddress(), NULL, NULL));
     //ATLTRACE(L"JSConstructorManager - creating instance from %s, %d finished\n", aExtensionId.c_str(), aApiId);
     try {
-      return CComPtr<IDispatch>(static_cast<IDispatch*>(result));
+      return CComPtr<IDispatch>(result.pdispVal);
     } catch (_com_error &e) {
       ANCHO_THROW(EHResult(e.Error()));
     }

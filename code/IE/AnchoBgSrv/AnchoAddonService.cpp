@@ -259,6 +259,8 @@ void CAnchoAddonService::FinalRelease()
     ++it;
   }
   m_BackgroundObjects.clear();
+  mWindowManager.finalize();
+  mTabManager.finalize();
   gAnchoAddonService = NULL;
 }
 
