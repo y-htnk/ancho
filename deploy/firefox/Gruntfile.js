@@ -42,6 +42,7 @@ module.exports = function(grunt) {
     copy: {
       main: {
         files: [
+          { expand: true, src: [ 'package.json' ], dest: destDir },
           { expand: true, cwd: CODE_DIR, src: [ 'chrome.manifest '], dest: destDir },
           { expand: true, cwd: CODE_DIR, src: [ 'content/**/*' ], dest: destDir },
           { expand: true, cwd: CODE_DIR, src: [ 'js/**/*' ], dest: destDir },
