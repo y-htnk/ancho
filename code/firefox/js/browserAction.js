@@ -48,7 +48,7 @@
           var container = tabbrowser.tabContainer;
           context.listener = function() {
             this.setIcon(win, {});
-          };
+          }.bind(this);
           container.addEventListener('TabSelect', context.listener, false);
         }.bind(this), function(win, context) {
           var tabbrowser = win.document.getElementById('content');

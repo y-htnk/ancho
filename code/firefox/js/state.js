@@ -16,7 +16,7 @@
   const ADDON_DOWNGRADE = 8;
 
   const DEFAULT_LOCALE = 'en';
-  const LOCALE_MESSAGE_PREFIX = '__MSG_';
+  const LOCALE_MESSAGE_REGEXP = /^__MSG_(.*)__$/;
 
   let inherits = require('inherits');
   let EventEmitter2 = require('eventemitter2').EventEmitter2;
@@ -109,13 +109,14 @@
   };
 
   Extension.prototype.getLocalizedText = function(str) {
-    if (0 === str.indexOf(LOCALE_MESSAGE_PREFIX)) {
-      return this.getLocaleMessage(str.substr(LOCALE_MESSAGE_PREFIX.length)).message;
+    var match = str.match(LOCALE_MESSAGE_REGEXP);
+    if (match) {
+      return this.getLocaleMessage(match[1]).message;
     }
     else {
       return str;
     }
-  }
+  };
 
   Extension.prototype.load = function(rootDirectory, reason) {
     this._rootDirectory = rootDirectory;
@@ -294,7 +295,7 @@
     this._globalIds = {};
 
     var dbFile = FileUtils.getFile('ProfD', ['ancho_storage.sqlite3']);
-    this._storageConnection = Services.storage.openDatabase(dbFile);
+    this._storageConnection = Services.storage.openUnsharedDatabase(dbFile);
   }
   inherits(Global, EventEmitter2);
 
