@@ -620,21 +620,21 @@ TabId TabManager::getFrameTabId(HWND aFrameTab)
 }
 //==========================================================================================
 STDMETHODIMP TabManager::getTabInfo(INT aTabId, BSTR aExtensionId, INT aApiId, VARIANT* aRet)
-  {
-    ENSURE_RETVAL(aRet);
+{
+  ENSURE_RETVAL(aRet);
 
-    BEGIN_TRY_BLOCK;
-    _variant_t vtInfo;
-    TabManager::TabRecord::Ptr tabRecord = TabManager::instance().getTabRecord(aTabId);
-    if (tabRecord) {
-      CComPtr<IDispatch> info = CAnchoAddonService::instance().createObject(std::wstring(aExtensionId), aApiId);
-      vtInfo = info;
-      IF_FAILED_THROW(tabRecord->runtime()->fillTabInfo(&vtInfo.GetVARIANT()));
-    }
-    *aRet = vtInfo.Detach();
-    return S_OK;
-    END_TRY_BLOCK_CATCH_TO_HRESULT;
+  BEGIN_TRY_BLOCK;
+  _variant_t vtInfo;
+  TabManager::TabRecord::Ptr tabRecord = TabManager::instance().getTabRecord(aTabId);
+  if (tabRecord) {
+    CComPtr<IDispatch> info = CAnchoAddonService::instance().createObject(std::wstring(aExtensionId), aApiId);
+    vtInfo = info;
+    IF_FAILED_THROW(tabRecord->runtime()->fillTabInfo(&vtInfo.GetVARIANT()));
   }
+  *aRet = vtInfo.Detach();
+  return S_OK;
+  END_TRY_BLOCK_CATCH_TO_HRESULT;
+}
 
 //==========================================================================================
 //              API methods - IAnchoTabManagerInternal
@@ -656,9 +656,8 @@ STDMETHODIMP TabManager::registerRuntime(OLE_HANDLE aFrameTab, IAnchoRuntime * a
   ATLTRACE(L"ADDON SERVICE - registering tab: %d\n", tabId);
 
   if (!mHeartbeatTimer.isRunning()) {
-    //TODO: check if works properly
-    /*mHeartbeatTimer.start();
-    mHeartbeatActive = true;*/
+    mHeartbeatTimer.start();
+    mHeartbeatActive = true;
   }
   return S_OK;
   END_TRY_BLOCK_CATCH_TO_HRESULT;
@@ -729,9 +728,10 @@ void TabManager::checkBHOConnections()
     if (!it->second->isAlive()) {
       invalidIDs.push_back(it->first);
     }
+    ++it;
   }
 
-  {
+  if (!invalidIDs.empty()) {
     boost::unique_lock<Mutex> lock(mTabAccessMutex);
     std::for_each(invalidIDs.begin(), invalidIDs.end(), [&, this](TabId id){ mTabs.erase(id); });
     if (mTabs.empty()) {

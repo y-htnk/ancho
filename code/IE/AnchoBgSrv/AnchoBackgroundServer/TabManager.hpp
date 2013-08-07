@@ -176,7 +176,7 @@ public:
   HRESULT FinalConstruct()
   {
     BEGIN_TRY_BLOCK;
-    mHeartbeatTimer.initialize(boost::bind(&TabManager::checkBHOConnections, this), 5000);
+    mHeartbeatTimer.initialize(boost::bind(&TabManager::checkBHOConnections, this), 3000);
     mHeartbeatActive = false;
     END_TRY_BLOCK_CATCH_TO_HRESULT;
     return S_OK;
@@ -264,9 +264,11 @@ public:
 
   bool isAlive()
   {
-    //boost::unique_lock<boost::mutex> lock(mMutex);
-    CComPtr<IUnknown> runtimeInstance = runtime();
-    return ::CoIsHandlerConnected(runtimeInstance.p) != FALSE;
+    //This needs unmarshalling and RPC -> slow
+    //CComPtr<IUnknown> runtimeInstance = runtime();
+    //return ::CoIsHandlerConnected(runtimeInstance.p) != FALSE;
+
+    return mHearbeatMaster.isAlive();
   }
 
   void tabClosed()
