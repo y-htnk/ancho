@@ -708,7 +708,7 @@ STDMETHODIMP CAnchoRuntime::GetBandInfo(DWORD dwBandID, DWORD dwViewMode, DESKBA
     }
 
     if (pdbi->dwMask & DBIM_MODEFLAGS) {
-      //pdbi->dwModeFlags = DBIMF_VARIABLEHEIGHT;
+      pdbi->dwModeFlags = DBIMF_VARIABLEHEIGHT;
     }
 
     if (pdbi->dwMask & DBIM_BKCOLOR) {
@@ -782,7 +782,7 @@ STDMETHODIMP CAnchoRuntime::SetSite(IUnknown *pUnkSite)
           }
         }
       }
-      showBrowserActionBar(TRUE);
+      //showBrowserActionBar(TRUE);
     }
   }
   else

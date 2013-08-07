@@ -75,6 +75,12 @@ public:
   END_COM_MAP()
 
   // -------------------------------------------------------------------------
+  // COM implemented categories
+  BEGIN_CATEGORY_MAP(CAnchoRuntime)
+    IMPLEMENTED_CATEGORY(CATID_CommBand)
+  END_CATEGORY_MAP()
+
+  // -------------------------------------------------------------------------
   // COM sink map
   BEGIN_SINK_MAP(CAnchoRuntime)
     SINK_ENTRY_EX(1, DIID_DWebBrowserEvents2, DISPID_BEFORENAVIGATE2, OnBrowserBeforeNavigate2)
