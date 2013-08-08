@@ -30,7 +30,7 @@ public:
 
   // -------------------------------------------------------------------------
   // Constructor
-  CAnchoProtocolSink() : m_IsFrame(false) {}
+  CAnchoProtocolSink() : m_IsFrame(false), m_bindVerb(-1) {}
 
   // -------------------------------------------------------------------------
   // COM interface map
@@ -71,11 +71,19 @@ public:
     /* [in] */ DWORD dwError,
     /* [in] */ LPCWSTR szResult);
 
+  // IInternetBindInfo
+  STDMETHODIMP GetBindInfoEx(
+    /* [out] */ DWORD *grfBINDF,
+    /* [in, out] */ BINDINFO *pbindinfo,
+    /* [out] */ DWORD *grfBINDF2,
+    /* [in] */ DWORD* pdwReserved);
+
   // -------------------------------------------------------------------------
   // Public interface
   boolean IsFrame() { return m_IsFrame; }
   // Free the memory associated with the params allocated when calling Switch().
   void FreeSwitchParams(BSTR* params);
+  DWORD GetBindVerb() { return m_bindVerb; }
 
   std::wstring getUrl() const { return m_Url; }
 private:
@@ -88,6 +96,7 @@ private:
   // Private members.
   std::wstring m_Url;
   boolean m_IsFrame;
+  DWORD m_bindVerb;
 };
 
 class CAnchoPassthruAPP;
@@ -160,11 +169,11 @@ private:
   STDMETHOD(Continue)(PROTOCOLDATA *pProtocolData);
 
   STDMETHOD(StartEx)(
-		IUri *pUri,
-		IInternetProtocolSink *pOIProtSink,
-		IInternetBindInfo *pOIBindInfo,
-		DWORD grfPI,
-		HANDLE_PTR dwReserved);
+    IUri *pUri,
+    IInternetProtocolSink *pOIProtSink,
+    IInternetBindInfo *pOIBindInfo,
+    DWORD grfPI,
+    HANDLE_PTR dwReserved);
 public:
   // -------------------------------------------------------------------------
   // Destructor
