@@ -1,6 +1,7 @@
 (function() {
 
   var Cc = Components.classes;
+  var Ci = Components.interfaces;
 
   var HistoryAPI = function(extension) {
     this._historyService = Cc['@mozilla.org/browser/nav-history-service;1']

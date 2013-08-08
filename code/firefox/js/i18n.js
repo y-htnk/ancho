@@ -8,7 +8,7 @@
     getMessage: function(messageName, substitutions) {
       try {
         // TODO: Use the right locale
-        let info = this._extension.getLocaleMessage(messageName);
+        var info = this._extension.getLocaleMessage(messageName);
         if (info && info.message) {
           // TODO: substitutions
           return info.message.replace(/\$\$/g, '$');

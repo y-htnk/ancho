@@ -40,13 +40,13 @@
 
   WebRequestEvent.prototype._checkFilter = function(filter, details, callback) {
     var urls = [];
-    for (let i=0; i<filter.urls.length; i++) {
+    for (var i=0; i<filter.urls.length; i++) {
       urls.push(Utils.matchPatternToRegexp(filter.urls[i]));
     }
 
     if (urls.length > 0) {
-      let matched = false;
-      for (let i=0; i<urls.length; i++) {
+      var matched = false;
+      for (var i=0; i<urls.length; i++) {
         if (details.url.match(urls[i])) {
           matched = true;
           break;

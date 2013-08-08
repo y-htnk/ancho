@@ -3,21 +3,10 @@ const Ci = Components.interfaces;
 const Cu = Components.utils;
 
 Cu.import('resource://gre/modules/Services.jsm');
-Cu.import('resource://ancho/modules/Require.jsm');
-Cu.import('resource://ancho/modules/External.jsm');
 
-var sandbox = Cu.Sandbox(window);
-sandbox.console = {};
+var Require = Cc['@salsitasoft.com/ancho/require;1'].getService().wrappedJSObject;
 var baseURI = Services.io.newURI('resource://ancho/js/', '', null);
 var require = Require.createRequire(baseURI);
-
-var ConsoleAPI = require('./console');
-var console = new ConsoleAPI();
-for (var prop in console) {
-  if (console.hasOwnProperty(prop)) {
-    sandbox.console[prop] = console[prop];
-  }
-}
 
 var Global = require('./state').Global;
 var loadHtml = require('./scripting').loadHtml;
@@ -28,9 +17,7 @@ var BackgroundWindow = {
   _extension: null,
   _browserEvent: null,
 
-  init: function(rootDirectory, reason) {
-    var id;
-
+  init: function(extensionID, rootDirectory, reason) {
     window.removeEventListener('load', arguments.callee, false);
 
     var xulWindow = window.QueryInterface(Ci.nsIInterfaceRequestor)
@@ -47,8 +34,6 @@ var BackgroundWindow = {
     // if all other windows are closed.
     Services.startup.QueryInterface(Ci.nsIObserver).observe(null, 'xul-window-destroyed', null);
 
-    var extensionId = rootDirectory.parent.leafName;
-
     Global.once('unload', function() {
       // Register the window again so that the window count remains accurate.
       // Otherwise the window mediator will think we have one less window than we really do.
@@ -57,7 +42,7 @@ var BackgroundWindow = {
     });
 
     // Instantiate and load the extension object.
-    this._extension = Global.loadExtension(extensionId, rootDirectory, reason);
+    this._extension = Global.loadExtension(extensionID, rootDirectory, reason);
 
     // Instantiate a BrowserEvents object whenever a new content window is created.
     this._extension.windowWatcher.register(
@@ -116,7 +101,6 @@ var BackgroundWindow = {
         this._extension.emit('runtime.installed', { reason: 'install' });
       }
 
-      AnchoExternal.__set(targetWindow.ancho.external);
     }.bind(this));
   }
 };
@@ -124,11 +108,11 @@ var BackgroundWindow = {
 window.addEventListener('load', function() {
   window.removeEventListener('load', arguments.callee, false);
   var extensionRoot = window.arguments[0].QueryInterface(Ci.nsIFile);
-  var reason = window.arguments[1];
-  BackgroundWindow.init(extensionRoot, reason);
+  var extensionID = window.arguments[1];
+  var reason = window.arguments[2];
+  BackgroundWindow.init(extensionID, extensionRoot, reason);
 }, false);
 
 window.addEventListener('unload', function(event) {
   window.removeEventListener('unload', arguments.callee, false);
-  AnchoExternal.__set(null);
 }, false);

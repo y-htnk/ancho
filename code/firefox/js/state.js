@@ -18,13 +18,13 @@
   const DEFAULT_LOCALE = 'en';
   const LOCALE_MESSAGE_REGEXP = /^__MSG_(.*)__$/;
 
-  let inherits = require('inherits');
-  let EventEmitter2 = require('eventemitter2').EventEmitter2;
-  let Utils = require('./utils');
-  let WindowWatcher = require('./windowWatcher');
-  let Binder = require('./binder');
+  var inherits = require('inherits');
+  var EventEmitter2 = require('eventemitter2').EventEmitter2;
+  var Utils = require('./utils');
+  var WindowWatcher = require('./windowWatcher');
+  var Binder = require('./binder');
 
-  let gGlobal = null;
+  var gGlobal = null;
 
   function WindowEventEmitter(win) {
     this._window = win;
@@ -90,8 +90,14 @@
     }
   });
 
+  Object.defineProperty(Extension.prototype, 'storageConnection', {
+    get: function storageConnection() {
+      return this._storageConnection;
+    }
+  });
+
   Extension.prototype.getURL = function(path) {
-    var URI = NetUtil.newURI('chrome-extension://' + this._id + '/' + path, '', null);
+    var URI = NetUtil.newURI('ancho-extension://' + this._id + '/' + path, '', null);
     return URI.spec;
   };
 
@@ -124,6 +130,11 @@
     if (ADDON_ENABLE === reason) {
       this._onEnabled();
     }
+
+    var dbFile = rootDirectory.clone();
+    dbFile.append('ancho_storage.sqlite3');
+    this._storageConnection = Services.storage.openUnsharedDatabase(dbFile);
+
     this._loadMessages();
     this._loadManifest();
   };
@@ -143,6 +154,8 @@
     if (ADDON_DISABLE === reason) {
       this._onDisabled();
     }
+
+    this._storageConnection.asyncClose();
   };
 
   Extension.prototype.forWindow = function(win) {
@@ -186,17 +199,17 @@
 
   Extension.prototype._loadMessages = function() {
     this._messages = {};
-    let localeDir = this.rootDirectory;
+    var localeDir = this.rootDirectory;
     localeDir.append('_locales');
     if (localeDir.exists()) {
-      let entries = localeDir.directoryEntries;
+      var entries = localeDir.directoryEntries;
       while (entries.hasMoreElements()) {
-        let entry = entries.getNext().QueryInterface(Ci.nsIFile);
-        let locale = entry.leafName;
+        var entry = entries.getNext().QueryInterface(Ci.nsIFile);
+        var locale = entry.leafName;
         entry.append('messages.json');
         if (entry.exists()) {
-          let entryURI = Services.io.newFileURI(entry);
-          let json = Utils.readStringFromUrl(entryURI);
+          var entryURI = Services.io.newFileURI(entry);
+          var json = Utils.readStringFromUrl(entryURI);
           this._messages[locale] = JSON.parse(json);
         }
       }
@@ -204,81 +217,9 @@
   };
 
   Extension.prototype._onEnabled = function() {
-    this._restoreStorage('local');
-    this._restoreStorage('sync');
   };
 
   Extension.prototype._onDisabled = function() {
-    this._backupStorage('local');
-    this._backupStorage('sync');
-  };
-
-  Extension.prototype._restoreStorage = function(storageSpace) {
-    var tableName = this.getStorageTableName(storageSpace);
-    var file = this._getStorageBackupFile(tableName);
-    if (!file.exists()) {
-      return;
-    }
-
-    var sql = '';
-    var stream = Cc['@mozilla.org/network/file-input-stream;1'].createInstance(Ci.nsIFileInputStream);
-    var is = Cc['@mozilla.org/intl/converter-input-stream;1'].createInstance(Ci.nsIConverterInputStream);
-    stream.init(file, -1, 0, 0);
-    is.init(stream, "UTF-8", 0, 0);
-
-    var str;
-    var read = 0;
-    do {
-      str = {};
-      read = is.readString(0xffffffff, str);
-      sql += str.value;
-    } while (read !== 0);
-    is.close();
-
-    sqlLines = sql.split('\n');
-    var storageConnection = gGlobal.storageConnection;
-    for (var i=0; i<sqlLines.length; i++) {
-      if (sqlLines[i]) {
-        var statement = storageConnection.createStatement(sqlLines[i]);
-        statement.execute();
-      }
-    }
-
-    file.remove(false);
-  };
-
-  Extension.prototype._backupStorage = function(storageSpace) {
-    var tableName = this.getStorageTableName(storageSpace);
-    var sqlDump = 'CREATE TABLE IF NOT EXISTS ' + tableName + ' (key TEXT PRIMARY KEY, value TEXT);\n';
-    var storageConnection = gGlobal.storageConnection;
-    var statement = storageConnection.createStatement('SELECT key, value FROM ' + tableName);
-    while (statement.executeStep()) {
-      sqlDump += 'INSERT INTO ' + tableName + ' (key, value) VALUES (\'';
-      sqlDump += statement.row.key;
-      sqlDump += '\', \'';
-      sqlDump += statement.row.value;
-      sqlDump += '\');\n';
-    }
-
-    var file = this._getStorageBackupFile(tableName);
-    var stream = FileUtils.openSafeFileOutputStream(file);
-    var os = Cc["@mozilla.org/intl/converter-output-stream;1"].createInstance(Ci.nsIConverterOutputStream);
-    os.init(stream, 'UTF-8', 0, 0x0000);
-    os.writeString(sqlDump);
-    FileUtils.closeSafeFileOutputStream(stream);
-
-    statement = storageConnection.createStatement('DROP TABLE ' + tableName);
-    statement.execute();
-  };
-
-  Extension.prototype._getStorageBackupFile = function(tableName) {
-    var file = this.rootDirectory.parent;
-    file.append('ancho_data');
-    if (!file.exists()) {
-      file.create(Ci.nsIFile.DIRECTORY_TYPE, FileUtils.PERMS_DIRECTORY);
-    }
-    file.append(tableName + '.sql');
-    return file;
   };
 
   function GlobalId() {
@@ -293,17 +234,8 @@
     EventEmitter2.call(this, { wildcard: true });
     this._extensions = {};
     this._globalIds = {};
-
-    var dbFile = FileUtils.getFile('ProfD', ['ancho_storage.sqlite3']);
-    this._storageConnection = Services.storage.openUnsharedDatabase(dbFile);
   }
   inherits(Global, EventEmitter2);
-
-  Object.defineProperty(Global.prototype, 'storageConnection', {
-    get: function storageConnection() {
-      return this._storageConnection;
-    }
-  });
 
   Global.prototype.getGlobalId = function(name) {
     if (!this._globalIds[name]) {
@@ -331,8 +263,6 @@
   Global.prototype.shutdown = function(reason) {
     this.emit('unload', reason);
     this.removeAllListeners();
-
-    this._storageConnection.asyncClose();
   };
 
   exports.Global = gGlobal = new Global();
