@@ -5,7 +5,6 @@
   var CC = Components.Constructor;
 
   Cu.import('resource://gre/modules/Services.jsm');
-  Cu.import('resource://ancho/modules/Require.jsm');
 
   var API = require('./api');
   var readStringFromUrl = require('./utils').readStringFromUrl;

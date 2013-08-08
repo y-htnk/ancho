@@ -42,8 +42,8 @@
     query: function(queryInfo, callback) {
       // TODO: Currently we only handle currentWindow, windowId and active properties
       // of queryInfo.
-      let windows = [];
-      let result = [];
+      var windows = [];
+      var result = [];
       if (queryInfo.currentWindow ||
         (queryInfo.windowId && queryInfo.windowId === Utils.WINDOW_ID_CURRENT)) {
         // Just the current window.
@@ -70,14 +70,14 @@
         };
       }
 
-      for (let i=0; i<windows.length; i++) {
-        let win = windows[i];
-        let tabbrowser = win.document.getElementById('content');
+      for (var i=0; i<windows.length; i++) {
+        var win = windows[i];
+        var tabbrowser = win.document.getElementById('content');
         if (queryInfo.active) {
           result.push(createTabFromBrowser(tabbrowser.selectedBrowser));
         }
         else {
-          for (let j=0; j<tabbrowser.browsers.length; j++) {
+          for (var j=0; j<tabbrowser.browsers.length; j++) {
             result.push(createTabFromBrowser(tabbrowser.browsers[j]));
           }
         }

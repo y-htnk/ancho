@@ -20,8 +20,8 @@
     },
 
     hasListener: function(listener) {
-      let listeners = this._owner.listeners(this.type);
-      for (let i=0; i<listeners.length; i++) {
+      var listeners = this._owner.listeners(this.type);
+      for (var i=0; i<listeners.length; i++) {
         if (listener === listeners[i]) {
           return true;
         }
@@ -66,15 +66,15 @@
   ProxiedEvent.prototype.addListener = function(listener) {
     // Additional arguments are also passed to `wrapListener` so we
     // can have the behavior of the wrapper depend on these arguments.
-    let wrapper = this.wrapListener.apply(this, arguments);
+    var wrapper = this.wrapListener.apply(this, arguments);
     this._wrappers.push({ listener: listener, wrapper: wrapper });
     return Event.prototype.addListener.call(this, wrapper);
   };
 
   ProxiedEvent.prototype.removeListener = function(listener) {
-    for (let i=0; i<this._wrappers.length; i++) {
+    for (var i=0; i<this._wrappers.length; i++) {
       if (this._wrappers[i].listener === listener) {
-        let wrapper = this._wrappers[i].wrapper;
+        var wrapper = this._wrappers[i].wrapper;
         this._wrappers.splice(i, 1);
         return Event.prototype.removeListener(this, wrapper);
       }

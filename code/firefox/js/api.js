@@ -36,7 +36,7 @@
 
   // export
   function API(extension, window) {
-    let chrome = {};
+    var chrome = {};
     // Keeping the window here for now to support deprecated onMessage.
     chrome.extension = new ExtensionAPI(extension, window);
     chrome.tabs = new TabsAPI(extension, window);

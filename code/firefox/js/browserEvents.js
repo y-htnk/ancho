@@ -25,9 +25,9 @@
       container.addEventListener('TabSelect', Binder.bind(this, 'onTabSelect'), false);
       // Apply content scripts on any tabs that are already open.
       for (var i=0; i<this._tabbrowser.browsers.length; i++) {
-        let browser = this._tabbrowser.browsers[i];
+        var browser = this._tabbrowser.browsers[i];
         if (this._isContentBrowser(browser.contentDocument)) {
-          let location = browser.contentDocument.location.href;
+          var location = browser.contentDocument.location.href;
           browser._anchoCurrentLocation = location;
           if ('complete' === browser.contentDocument.readyState) {
             applyContentScripts(this._extension, browser.contentWindow, location, false);
@@ -65,13 +65,13 @@
     },
 
     onTabOpen: function(event) {
-      let browser = this._tabbrowser.getBrowserForTab(event.target);
+      var browser = this._tabbrowser.getBrowserForTab(event.target);
       browser._anchoCurrentLocation = browser.contentDocument.location.href;
       this._extension.emit('tab.created', { id: Utils.getWindowId(browser.contentWindow) });
     },
 
     onTabClose: function(event) {
-      let browser = this._tabbrowser.getBrowserForTab(event.target);
+      var browser = this._tabbrowser.getBrowserForTab(event.target);
       this._extension.emit('tab.removed', Utils.getWindowId(browser.contentWindow), {});
     },
 
@@ -103,7 +103,7 @@
         }
       }
 
-      if ('chrome-extension:' === document.location.protocol) {
+      if ('ancho-extension:' === document.location.protocol) {
         prepareWindow(this._extension, win.wrappedJSObject);
       }
     },

@@ -20,7 +20,7 @@
       // TODO: Log failure.
       return false;
     }
-    for (let i=0; i<manifest.web_accessible_resources.length; i++) {
+    for (var i=0; i<manifest.web_accessible_resources.length; i++) {
       if (path.match(manifest.web_accessible_resources[i])) {
         return true;
       }
@@ -34,7 +34,7 @@
 
   AnchoContentPolicy.prototype = {
     shouldLoad: function(aContentType, aContentLocation, aRequestOrigin, aContext, aMimeTypeGuess, aExtra, aRequestPrincipal) {
-      if (aRequestPrincipal && aRequestPrincipal !== this.systemPrincipal && aContentLocation.schemeIs('chrome-extension')) {
+      if (aRequestPrincipal && aRequestPrincipal !== this.systemPrincipal && aContentLocation.schemeIs('ancho-extension')) {
         if (!isWebAccessible(aContentLocation.host, aContentLocation.path)) {
           return Ci.nsIContentPolicy.REJECT_REQUEST;
         }

@@ -11,7 +11,8 @@
 
   var StorageAPI = function(extension, storageSpace) {
     this._tableName = extension.getStorageTableName(storageSpace);
-    Global.storageConnection.executeSimpleSQL('CREATE TABLE IF NOT EXISTS ' + this._tableName +
+    this._storageConnection = extension.storageConnection;
+    this._storageConnection.executeSimpleSQL('CREATE TABLE IF NOT EXISTS ' + this._tableName +
       ' ( key TEXT PRIMARY KEY, value TEXT )');
   };
 
@@ -55,7 +56,7 @@
         };
         if (myKeys.length) {
           var statement =
-            Global.storageConnection.createStatement('SELECT key, value FROM '+this._tableName+' WHERE key IN (:key)');
+            this._storageConnection.createStatement('SELECT key, value FROM '+this._tableName+' WHERE key IN (:key)');
           var par, params = statement.newBindingParamsArray();
           for (var i=0; i<myKeys.length; i++) {
             par = params.newBindingParams();
@@ -98,7 +99,7 @@
     set: function(items, callback) {
       if (typeof items === 'object') {
         var statement =
-          Global.storageConnection.createStatement('REPLACE INTO '+this._tableName+' (key, value) VALUES (:key, :value)');
+          this._storageConnection.createStatement('REPLACE INTO '+this._tableName+' (key, value) VALUES (:key, :value)');
 
         var par, params = statement.newBindingParamsArray();
         for (var key in items) {
@@ -136,7 +137,7 @@
           throw new Error('Invocation of method remove does not match definition');
         }
         var statement =
-          Global.storageConnection.createStatement('DELETE FROM '+this._tableName+' WHERE key IN (:key)');
+          this._storageConnection.createStatement('DELETE FROM '+this._tableName+' WHERE key IN (:key)');
 
         var par, params = statement.newBindingParamsArray();
         for (var i=0; i<myKeys.length; i++) {
