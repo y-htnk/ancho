@@ -47,6 +47,7 @@
     EventEmitter2.call(this, { wildcard: true });
     this._id = id;
     this._rootDirectory = null;
+    this._firstRun = [ ADDON_ENABLE, ADDON_INSTALL, ADDON_UPGRADE, ADDON_DOWNGRADE ].indexOf(reason) != -1;
     this._manifest = null;
     this._windowEventEmitters = {};
     this._windowWatcher = null;
