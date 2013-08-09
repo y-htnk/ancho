@@ -44,7 +44,7 @@
     EventEmitter2.call(this, { wildcard: true });
     this._id = id;
     this._rootDirectory = null;
-    this._firstRun = (reason > APP_STARTUP);
+    this._firstRun = [ ADDON_ENABLE, ADDON_INSTALL, ADDON_UPGRADE, ADDON_DOWNGRADE ].indexOf(reason) != -1;
     this._manifest = null;
     this._windowEventEmitters = {};
     this._windowWatcher = null;
@@ -206,7 +206,7 @@
     for (var i=0; i<sqlLines.length; i++) {
       if (sqlLines[i]) {
         var statement = storageConnection.createStatement(sqlLines[i]);
-        statement.execute();      
+        statement.execute();
       }
     }
 
@@ -294,7 +294,7 @@
     this.unloadAllExtensions(reason);
     this.emit('unload', reason);
     this.removeAllListeners();
-    
+
     this._storageConnection.asyncClose();
   };
 
