@@ -229,7 +229,9 @@ HRESULT CAnchoAddonService::FinalConstruct()
     m_Cookies.startWatching();
 
     //Check for Ancho updates
-    mAsyncTaskManager.addTask([&]{ Ancho::Service::checkForUpdate(s_AnchoExtensionsRegistryKey, L"Ancho"); });
+    std::wstring key(s_AnchoExtensionsRegistryKey);
+    std::wstring id(L"Ancho");
+    mAsyncTaskManager.addTask([key, id]{ Ancho::Service::checkForUpdate(key, id); });
 
     GdiplusStartupInput gsi;
     if (Ok != GdiplusStartup( &mGDIpToken, &gsi, NULL )) {

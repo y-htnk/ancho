@@ -51,7 +51,9 @@ HRESULT CAnchoAddonBackground::Init(
     return HRESULT_FROM_WIN32(res);
   }
 
-  CAnchoAddonService::instance().addBackgroundTask([&]{ Ancho::Service::checkForUpdate(std::wstring(sKey), bsID); });
+  std::wstring key(sKey);
+  std::wstring id(bsID);
+  CAnchoAddonService::instance().addBackgroundTask([key, id]{ Ancho::Service::checkForUpdate(key, id); });
 
   boost::filesystem::wpath extensionPath;
   // get addon path

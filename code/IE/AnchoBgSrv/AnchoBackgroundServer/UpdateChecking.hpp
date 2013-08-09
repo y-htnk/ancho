@@ -87,6 +87,18 @@ VersionInfo getCurrentBinaryVersion();
 
 void checkForUpdate(std::wstring aRegistryKey, std::wstring aName);
 
+struct UpdateChecker
+{
+  UpdateChecker(std::wstring aRegistryKey, std::wstring aName): mRegistryKey(aRegistryKey), mName(aName)
+  {}
+  void operator()() {
+    checkForUpdate(mRegistryKey, mName);
+  }
+
+  std::wstring mRegistryKey;
+  std::wstring mName;
+};
+
 }//namespace Service
 }//namespace Ancho
 
