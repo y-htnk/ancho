@@ -47,7 +47,6 @@
     EventEmitter2.call(this, { wildcard: true });
     this._id = id;
     this._rootDirectory = null;
-    this._firstRun = [ ADDON_ENABLE, ADDON_INSTALL, ADDON_UPGRADE, ADDON_DOWNGRADE ].indexOf(reason) != -1;
     this._manifest = null;
     this._windowEventEmitters = {};
     this._windowWatcher = null;
@@ -127,7 +126,7 @@
 
   Extension.prototype.load = function(rootDirectory, reason) {
     this._rootDirectory = rootDirectory;
-    this._firstRun = (reason > APP_STARTUP);
+    this._firstRun = [ ADDON_ENABLE, ADDON_INSTALL, ADDON_UPGRADE, ADDON_DOWNGRADE ].indexOf(reason) != -1;
     if (ADDON_ENABLE === reason) {
       this._onEnabled();
     }
