@@ -14,6 +14,36 @@ require("i18n_spec.js");
 var preprocessArguments = require("typeChecking.js").preprocessArguments;
 var notImplemented = require("typeChecking.js").notImplemented;
 
+var getLocalizedMessage = function (messageName, substitutions) {
+  if (locales[currentLocale]) {
+    var info = locales[currentLocale][messageName];
+    if (info && info.message) {
+      //TODO - substitutions
+      return info.message.replace(/\$\$/g, '$');
+    }
+  }
+  return "";
+}
+
+var isLocalizedMessageIdentifier = function (name) {
+  if (typeof(name) != 'string') {
+    return false;
+  }
+  return !!name.match(/__MSG_\w+__/);
+}
+
+var getLocalizedMessageFromIdentifier = function (name) {
+  m = name.match(/__MSG_(\w+)__/);
+  if (m && m.length == 2) {
+    return getLocalizedMessage(m[1]);
+  }
+  return undefined;
+}
+
+exports.getLocalizedMessage = getLocalizedMessage;
+exports.isLocalizedMessageIdentifier = isLocalizedMessageIdentifier;
+exports.getLocalizedMessageFromIdentifier = getLocalizedMessageFromIdentifier;
+
 //******************************************************************************
 //* main closure
 (function(me) {
@@ -39,14 +69,7 @@ var notImplemented = require("typeChecking.js").notImplemented;
     } catch (e) {
       return undefined; //According to documentation call format failures are reported by returning undefined
     }
-    if (locales[currentLocale]) {
-      var info = locales[currentLocale][args.messageName];
-      if (info && info.message) {
-        //TODO - substitutions
-        return info.message.replace(/\$\$/g, '$');
-      }
-    }
-    return "";
+    return getLocalizedMessage(args.messageName, args.substitutions);
   };
 
 

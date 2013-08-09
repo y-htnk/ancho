@@ -22,6 +22,10 @@ var addonRootURL = require("extension.js").addonRootURL;
 
 var browserActionInfo;
 
+var getLocalizedMessage = require("i18n.js").getLocalizedMessage;
+var isLocalizedMessageIdentifier = require("i18n.js").isLocalizedMessageIdentifier;
+var getLocalizedMessageFromIdentifier = require("i18n.js").getLocalizedMessageFromIdentifier;
+
 
 //******************************************************************************
 //* main closure
@@ -248,8 +252,12 @@ exports.initBrowserAction = function(browserActionData) {
       debugString = debugString + " icon: " + browserActionData.default_icon + ";";
     }
     if (browserActionData.default_title) {
-      browserActionInfo.globalInfo.title = browserActionData.default_title;
-      debugString = debugString + " title: " + browserActionData.default_title + ";";
+      if (isLocalizedMessageIdentifier(browserActionData.default_title)){
+        browserActionInfo.globalInfo.title = getLocalizedMessageFromIdentifier(browserActionData.default_title);
+      } else {
+        browserActionInfo.globalInfo.title = browserActionData.default_title;
+      }
+      debugString = debugString + " title: " + browserActionInfo.globalInfo.title + ";";
     }
     if (browserActionData.default_popup) {
       browserActionInfo.globalInfo.popup = addonRootURL + browserActionData.default_popup;

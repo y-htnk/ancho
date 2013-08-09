@@ -20,6 +20,10 @@ var notImplemented = require("typeChecking.js").notImplemented;
 
 var addonRootURL = require("extension.js").addonRootURL;
 
+var getLocalizedMessage = require("i18n.js").getLocalizedMessage;
+var isLocalizedMessageIdentifier = require("i18n.js").isLocalizedMessageIdentifier;
+var getLocalizedMessageFromIdentifier = require("i18n.js").getLocalizedMessageFromIdentifier;
+
 //******************************************************************************
 //* main closure
 (function(){
@@ -249,7 +253,14 @@ currently no support for imageData
   exports.initPageAction = function(pageActionData) {
     if (pageActionData) {
       pageActionInfoGlobal = new PageActionInfo()
-      pageActionInfoGlobal.title = pageActionData.default_title || '';
+
+      // localize
+      if (pageActionData.default_title && isLocalizedMessageIdentifier(pageActionData.default_title)) {
+        pageActionInfoGlobal.title = getLocalizedMessageFromIdentifier(pageActionData.default_title);
+      } else {
+        pageActionInfoGlobal.title = pageActionData.default_title || '';
+      }
+
       pageActionInfoGlobal.popup = pageActionData.default_popup || '';
       if ('object' === typeof pageActionData.default_icon) {
         pageActionInfoGlobal.icon =
