@@ -94,6 +94,13 @@ std::wstring getSystemPathWithFallback(REFKNOWNFOLDERID aKnownFolderID, int aCLS
 namespace Ancho {
 namespace Utils {
 
+boost::filesystem::wpath getAnchoAppDataDirectory() {
+  boost::filesystem::wpath path = getSystemPathWithFallback(FOLDERID_LocalAppDataLow, CSIDL_LOCAL_APPDATA);
+
+  path /= L"Salsita";
+  return path;
+}
+
 std::wstring getProductName(HMODULE hInstance)
 {
   HRESULT hr = S_OK;
@@ -106,9 +113,6 @@ std::wstring getProductName(HMODULE hInstance)
   if (!GetFileVersionInfo(fileName, handle, size, versionInfo.get())) {
       ANCHO_THROW(EFail());
   }
-
-  // we have version information
-  VS_FIXEDFILEINFO*   vsfi = NULL;
 
   struct LANGANDCODEPAGE {
     WORD wLanguage;

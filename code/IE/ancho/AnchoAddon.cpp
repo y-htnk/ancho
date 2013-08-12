@@ -17,12 +17,13 @@
 static boost::filesystem::wpath processCRXFile(std::wstring aExtensionName, boost::filesystem::wpath aPath, UpdateState &aUpdateState)
 {
   aUpdateState = usNone;
-  boost::filesystem::wpath extractedExtensionPath = getSystemPathWithFallback(FOLDERID_LocalAppDataLow, CSIDL_LOCAL_APPDATA);
-  extractedExtensionPath /= L"Salsita";
-  extractedExtensionPath /= L"AnchoExtensions";
-  extractedExtensionPath /= aExtensionName;
+  boost::filesystem::wpath extractedExtensionPath = Ancho::Utils::getAnchoAppDataDirectory()
+                                                              / s_AnchoExtractedExtensionsDirName
+                                                              / aExtensionName;
+  //extractedExtensionPath /= s_AnchoExtractedExtensionsDirName;
+  //extractedExtensionPath /= aExtensionName;
 
-  boost::filesystem::wpath extensionSignaturePath = extractedExtensionPath / L"AnchoExtensionSignature.base64";
+  boost::filesystem::wpath extensionSignaturePath = extractedExtensionPath / s_AnchoExtensionSignatureFileName;
 
   std::string signature = crx::getCRXSignature(aPath);
   bool shouldExtract = true;

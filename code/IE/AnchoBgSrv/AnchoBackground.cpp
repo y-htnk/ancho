@@ -78,10 +78,9 @@ HRESULT CAnchoAddonBackground::Init(
     if (extension != L".crx") {
       return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
-    extensionPath = getSystemPathWithFallback(FOLDERID_LocalAppDataLow, CSIDL_LOCAL_APPDATA);
-    extensionPath /= L"Salsita";
-    extensionPath /= L"AnchoExtensions";
-    extensionPath /= bsID;
+    extensionPath = Ancho::Utils::getAnchoAppDataDirectory()
+                                          / s_AnchoExtractedExtensionsDirName
+                                          / bsID;
   }
 
   // register a protocol handler for this extension

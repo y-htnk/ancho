@@ -3,6 +3,7 @@
 #include <string>
 #include <boost/atomic.hpp>
 #include <ctime>
+#include <boost/filesystem.hpp>
 
 extern const wchar_t * s_AnchoMainAPIModuleID;
 extern const wchar_t * s_AnchoExtensionsRegistryKey;
@@ -11,6 +12,9 @@ extern const wchar_t * s_AnchoExtensionsRegistryEntryFlags;
 extern const wchar_t * s_AnchoExtensionsRegistryEntryPath;
 extern const wchar_t * s_AnchoRegistryEntryVersion;
 extern const wchar_t * s_AnchoUpdateUrlRegistryEntry;
+extern const wchar_t * s_AnchoExtractedExtensionsDirName;
+extern const wchar_t * s_AnchoExtensionSignatureFileName;
+extern const wchar_t * s_AnchoStorageLocalDatabaseFileName;
 extern const wchar_t * s_AnchoProtocolHandlerScheme;
 extern const wchar_t * s_AnchoProtocolHandlerPrefix;
 extern const wchar_t * s_AnchoInternalProtocolHandlerScheme;
@@ -96,28 +100,7 @@ namespace Utils {
 
 std::wstring getProductName(HMODULE hInstance);
 
-inline std::wstring getLastError(HRESULT hr)
-{
-    LPWSTR lpMsgBuf;
-    DWORD ret;
-    std::wstring def(L"(UNNKOWN)");
-    ret = FormatMessage(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER |
-        FORMAT_MESSAGE_FROM_HMODULE,
-        GetModuleHandle(TEXT("imapi2.dll")),
-        hr,
-        0,
-        (LPWSTR) &lpMsgBuf,
-        0, NULL );
-
-    if(ret)
-    {
-        std::wstring last(lpMsgBuf);
-        LocalFree(lpMsgBuf);
-        return last;
-    }
-    return def;
-}
+boost::filesystem::wpath getAnchoAppDataDirectory();
 
 /**
  * Thread safe generator of unique sequential IDs.

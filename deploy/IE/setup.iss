@@ -49,6 +49,10 @@ Source: "{#installBin}\x86\AnchoShared.dll"; DestDir: "{app}\x86"; Flags: ignore
 Source: "{#installBin}\x64\AnchoShared.dll"; DestDir: "{app}\x64"; Flags: ignoreversion; Check: ShouldInstallAncho64
 Source: "{#installBin}\x86\Magpie.dll"; DestDir: "{app}\x86"; Flags: ignoreversion; Check: ShouldInstallAncho
 Source: "{#installBin}\x64\Magpie.dll"; DestDir: "{app}\x64"; Flags: ignoreversion; Check: ShouldInstallAncho64
+Source: "{#installBin}\x86\anchoPageActions.dll"; DestDir: "{app}\x86"; Flags: ignoreversion; Check: ShouldInstallAncho
+Source: "{#installBin}\x64\anchoPageActions.dll"; DestDir: "{app}\x64"; Flags: ignoreversion; Check: ShouldInstallAncho64
+Source: "{#installBin}\x86\anchoPageActionsBroker.exe"; DestDir: "{app}\x86"; Flags: ignoreversion; Check: ShouldInstallAncho
+Source: "{#installBin}\x64\anchoPageActionsBroker.exe"; DestDir: "{app}\x64"; Flags: ignoreversion; Check: ShouldInstallAncho64
 Source: "{#installBin}\iesetuphelper.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#installBin}\vcredist_x86.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: ShouldInstallAncho
 Source: "{#installBin}\vcredist_x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: ShouldInstallAncho64

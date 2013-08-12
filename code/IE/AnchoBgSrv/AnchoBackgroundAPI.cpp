@@ -513,21 +513,19 @@ StorageDatabase & CAnchoBackgroundAPI::getStorageInstance(const std::wstring &aS
   }
 
   if (!mStorageLocalDb.isOpened()) {
-    std::wstring path = getSystemPathWithFallback(FOLDERID_LocalAppDataLow, CSIDL_LOCAL_APPDATA);
-    path += L"\\Salsita";
+    boost::filesystem::wpath path = Ancho::Utils::getAnchoAppDataDirectory();
 
-    if (!PathIsDirectory(path.c_str())) {
-      ATLTRACE(L"Creating directory: %s\n", path.c_str());
-      int rv = SHCreateDirectory(0, path.c_str());
-      if (rv != ERROR_SUCCESS) {
-        ATLTRACE(L"Failed to create directory: %s\n", path.c_str());
+    if (!boost::filesystem::exists(path)) {
+      ATLTRACE(L"Creating directory: %s\n", path.wstring().c_str());
+      if (!boost::filesystem::create_directories(path)) {
+        ATLTRACE(L"Failed to create directory: %s\n", path.wstring().c_str());
         ANCHO_THROW(std::runtime_error("Failed to create directory."));
       }
     }
-    path += L"\\StorageLocal.sqlite";
+    path /= s_AnchoStorageLocalDatabaseFileName;
     //TODO - escape table name
     std::wstring tableName = std::wstring(L"Ancho_") + m_bsID.m_str;
-    mStorageLocalDb.open(path, tableName);
+    mStorageLocalDb.open(path.wstring(), tableName);
   }
 
   return mStorageLocalDb;

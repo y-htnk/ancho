@@ -30,6 +30,18 @@ const wchar_t * s_AnchoUpdateUrlRegistryEntry =
 const wchar_t * s_AnchoRegistryEntryVersion =
     L"Version";
 
+// Name for directory containing extensions extracted from CRX packages
+const wchar_t * s_AnchoExtractedExtensionsDirName =
+    L"ExtractedExtensions";
+
+// signature for extracted extension is stored under this name
+const wchar_t * s_AnchoExtensionSignatureFileName =
+    L"AnchoExtensionSignature.base64";
+
+// signature for extracted extension is stored under this name
+const wchar_t * s_AnchoStorageLocalDatabaseFileName =
+    L"StorageLocal.sqlite";
+
 // scheme name for protocol handler
 const wchar_t * s_AnchoProtocolHandlerScheme =
     L"chrome-extension";

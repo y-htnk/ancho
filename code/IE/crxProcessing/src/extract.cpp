@@ -7,6 +7,7 @@
 #include <boost/archive/iterators/base64_from_binary.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
 #include <iterator>
+#include <windows.h>
 
 namespace crx {
 
@@ -29,22 +30,6 @@ namespace detail {
 
 class CRXFile
 {
-public:
-  static CRXFile* create(boost::filesystem::wpath aPath, std::string aMode)
-  {
-    try {
-      return new CRXFile(aPath, aMode);
-    } catch (std::exception &) {
-      return NULL;
-    }
-  }
-
-  static int destroy(CRXFile* aFile)
-  {
-    delete aFile;
-    return 0;
-  }
-
 public:
 
   struct Header
@@ -142,67 +127,66 @@ static voidpf ZCALLBACK fopen64_file_func (voidpf opaque, const void* filename, 
         mode_fopen = "wb";
 
     if ((filename!=NULL)) {
-      file = CRXFile::create((const wchar_t*)filename, mode_fopen);
+      file = new CRXFile((const wchar_t*)filename, mode_fopen);
     }
     return file;
 }
 
 static int ZCALLBACK fclose_file_func(voidpf opaque, voidpf stream)
 {
-    int ret;
-    ret = CRXFile::destroy(reinterpret_cast<CRXFile*>(stream));
-    return ret;
+  delete (reinterpret_cast<CRXFile*>(stream));
+  return 0;
 }
 
 static uLong ZCALLBACK fread_file_func (voidpf opaque, voidpf stream, void* buf, uLong size)
 {
-    uLong ret;
-    ret = reinterpret_cast<CRXFile*>(stream)->read(reinterpret_cast<unsigned char*>(buf), size); //in bytes
-    return ret;
+  uLong ret;
+  ret = reinterpret_cast<CRXFile*>(stream)->read(reinterpret_cast<unsigned char*>(buf), size); //in bytes
+  return ret;
 }
 
 static uLong ZCALLBACK fwrite_file_func (voidpf opaque, voidpf stream, const void* buf, uLong size)
 {
-    uLong ret;
-    ret = reinterpret_cast<CRXFile*>(stream)->write(reinterpret_cast<const unsigned char*>(buf), size); //in bytes
-    return ret;
+  uLong ret;
+  ret = reinterpret_cast<CRXFile*>(stream)->write(reinterpret_cast<const unsigned char*>(buf), size); //in bytes
+  return ret;
 }
 
 static ZPOS64_T ZCALLBACK ftell64_file_func (voidpf opaque, voidpf stream)
 {
-    ZPOS64_T ret;
-    ret = reinterpret_cast<CRXFile*>(stream)->zipPosition();
-    return ret;
+  ZPOS64_T ret;
+  ret = reinterpret_cast<CRXFile*>(stream)->zipPosition();
+  return ret;
 }
 
 static long ZCALLBACK fseek64_file_func (voidpf  opaque, voidpf stream, ZPOS64_T offset, int origin)
 {
-    int fseek_origin=0;
-    long ret = 0;
-    switch (origin)
-    {
-    case ZLIB_FILEFUNC_SEEK_CUR :
-        fseek_origin = SEEK_CUR;
-        break;
-    case ZLIB_FILEFUNC_SEEK_END :
-        fseek_origin = SEEK_END;
-        break;
-    case ZLIB_FILEFUNC_SEEK_SET :
-        fseek_origin = SEEK_SET;
-        break;
-    default: return -1;
-    }
-    ret = reinterpret_cast<CRXFile*>(stream)->zipSeek(static_cast<long>(offset), fseek_origin);
-    return ret;
+  int fseek_origin=0;
+  long ret = 0;
+  switch (origin)
+  {
+  case ZLIB_FILEFUNC_SEEK_CUR :
+      fseek_origin = SEEK_CUR;
+      break;
+  case ZLIB_FILEFUNC_SEEK_END :
+      fseek_origin = SEEK_END;
+      break;
+  case ZLIB_FILEFUNC_SEEK_SET :
+      fseek_origin = SEEK_SET;
+      break;
+  default: return -1;
+  }
+  ret = reinterpret_cast<CRXFile*>(stream)->zipSeek(static_cast<long>(offset), fseek_origin);
+  return ret;
 }
 
 
 
 static int ZCALLBACK ferror_file_func (voidpf opaque, voidpf stream)
 {
-    int ret;
-    ret = reinterpret_cast<CRXFile*>(stream)->error();
-    return ret;
+  int ret;
+  ret = reinterpret_cast<CRXFile*>(stream)->error();
+  return ret;
 }
 
 //-----------------------------------------------------------------------
@@ -212,7 +196,7 @@ static int ZCALLBACK ferror_file_func (voidpf opaque, voidpf stream)
 
 void extractCurrentFile(unzFile aFileHandle, const boost::filesystem::wpath &aOutputPath)
 {
-  char filename_inzip[256];
+  char filename_inzip[MAX_PATH];
 
   unz_file_info64 file_info;
   int err = UNZ_OK;
