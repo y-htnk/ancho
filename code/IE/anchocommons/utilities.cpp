@@ -4,6 +4,9 @@
 #include <ShlObj.h>
 #include <map>
 
+#pragma comment(lib, "Version.lib")
+
+#include <boost/format.hpp>
 //----------------------------------------------------------------------------
 //
 bool isExtensionPage(const std::wstring &aUrl)
@@ -86,3 +89,49 @@ std::wstring getSystemPathWithFallback(REFKNOWNFOLDERID aKnownFolderID, int aCLS
   gCachedSystemPaths[aCLSID] = appDataPath;
   return std::wstring(appDataPath);
 }
+
+
+namespace Ancho {
+namespace Utils {
+
+std::wstring getProductName(HMODULE hInstance)
+{
+  HRESULT hr = S_OK;
+  WCHAR fileName[_MAX_PATH];
+  DWORD size = GetModuleFileName(hInstance, fileName, _MAX_PATH);
+  fileName[size] = 0;
+  DWORD handle = 0;
+  size = GetFileVersionInfoSize(fileName, &handle);
+  boost::scoped_array<BYTE> versionInfo(new BYTE[size]);
+  if (!GetFileVersionInfo(fileName, handle, size, versionInfo.get())) {
+      ANCHO_THROW(EFail());
+  }
+
+  // we have version information
+  VS_FIXEDFILEINFO*   vsfi = NULL;
+
+  struct LANGANDCODEPAGE {
+    WORD wLanguage;
+    WORD wCodePage;
+  } *lpTranslate = NULL;
+  UINT cbTranslate = 0;
+
+  IF_FAILED_THROW(VerQueryValue(versionInfo.get(), L"\\VarFileInfo\\Translation", (void**)&lpTranslate, &cbTranslate));
+  if (cbTranslate/sizeof(struct LANGANDCODEPAGE) == 0) {
+    ANCHO_THROW(EFail());
+  }
+
+  std::wstring productNameBlock = boost::str(boost::wformat(L"\\StringFileInfo\\%04x%04x\\ProductName")
+                                                  % lpTranslate[0].wLanguage
+                                                  % lpTranslate[0].wCodePage);
+  wchar_t *lpBuffer = NULL;
+  UINT len = 0;
+  IF_FAILED_THROW(VerQueryValue(versionInfo.get(), productNameBlock.c_str(), (void**)&lpBuffer, &len));
+  if (lpBuffer == NULL || len == 0) {
+    ANCHO_THROW(EFail());
+  }
+  return lpBuffer;
+}
+
+} //namespace Utils
+} //namespace Ancho

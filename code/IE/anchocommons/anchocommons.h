@@ -94,6 +94,8 @@ inline HWND findParentWindowByClass(HWND aWindow, std::wstring aClassName)
 namespace Ancho {
 namespace Utils {
 
+std::wstring getProductName(HMODULE hInstance);
+
 inline std::wstring getLastError(HRESULT hr)
 {
     LPWSTR lpMsgBuf;

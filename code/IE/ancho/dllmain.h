@@ -6,6 +6,8 @@ extern class CAnchoModule _AtlModule;
 #define __L(x) L ##x
 #define _L(x) __L(x)
 
+#include <anchocommons.h>
+
 class CAnchoModule : public CAtlDllModuleT<CAnchoModule>
 {
 public :
@@ -30,7 +32,14 @@ public :
 
   virtual HRESULT AddCommonRGSReplacements(_Inout_ IRegistrarBase* pRegistrar) throw()
   {
-    pRegistrar->AddReplacement(L"PRODUCTNAME", _L(ANCHO_BHO_VERSION_PRODUCT_NAME));
+    std::wstring productName;
+    try {
+      productName = Ancho::Utils::getProductName(_AtlModule.m_hInstance);
+    } catch (std::exception &) {
+      // fallback
+      productName = _L(ANCHO_BHO_VERSION_PRODUCT_NAME);
+    }
+    pRegistrar->AddReplacement(L"PRODUCTNAME", productName.c_str());
     return CAtlDllModuleT<CAnchoModule>::AddCommonRGSReplacements(pRegistrar);
   }
 
