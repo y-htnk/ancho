@@ -44,6 +44,12 @@ add_definitions(-DUNICODE -D_UNICODE)
 
 option(DISABLE_REGISTRATION "Disable registration" OFF)
 
+option(${PROJECT_NAME}_DEBUG_THREAD_JOINS "By default thread join is timeouted (detach as a fallback)" OFF)
+
+if(${${PROJECT_NAME}_DEBUG_THREAD_JOINS})
+  add_definitions(-DANCHO_DEBUG_THREAD_JOINS)
+endif(${${PROJECT_NAME}_DEBUG_THREAD_JOINS})
+
 #-----------------------------------------
 if(NOT BOOST_ROOT)
   set(BOOST_ROOT "BOOST_ROOT-NOT_FOUND" CACHE PATH "Where you installed boost?")

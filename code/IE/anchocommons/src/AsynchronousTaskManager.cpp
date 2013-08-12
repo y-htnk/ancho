@@ -119,7 +119,12 @@ void AsynchronousTaskManager::finalize()
 
     //wait till it finishes
     if (!mPimpl->mWorkerThread.try_join_for(boost::chrono::seconds(3))) {
+      mPimpl->mWorkerThread.interrupt();
+#ifndef ANCHO_DEBUG_THREAD_JOINS
+      mPimpl->mWorkerThread.detach();
+#else
       mPimpl->mWorkerThread.join();
+#endif //ANCHO_DEBUG_THREAD_JOINS
     }
   }
 
