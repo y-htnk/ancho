@@ -3,9 +3,8 @@
 #include "AnchoBackgroundServer/TabManager.hpp"
 #include <Exceptions.h>
 #include <SimpleWrappers.h>
-#include "AnchoBackgroundServer/AsynchronousTaskManager.hpp"
-#include "AnchoBackgroundServer/COMConversions.hpp"
-#include "AnchoBackgroundServer/JavaScriptCallback.hpp"
+#include <AnchoCommons/COMConversions.hpp>
+#include <AnchoCommons/JavaScriptCallback.hpp>
 #include "PopupWindow.h"
 #include "AnchoAddonService.h"
 
@@ -28,7 +27,11 @@ HWND getCurrentWindowHWND()
 
 namespace Service {
 
-CComObject<Ancho::Service::WindowManager> *gWindowManager = NULL;
+Ancho::Service::WindowManager & Ancho::Service::WindowManager::instance()
+{
+  // this is a singleton and member of CAnchoAddonService
+  return CAnchoAddonService::instance().getWindowManagerInstance();
+}
 
 //==========================================================================================
 struct CreateWindowTask
@@ -140,11 +143,11 @@ void WindowManager::getAllWindows(
     std::wstring extensionId = aExtensionId;
     int apiId = aApiId;
 
-    CComPtr<IDispatch> windowList = TabManager::instance().createArray(aExtensionId, aApiId);
+    CComPtr<IDispatch> windowList = CAnchoAddonService::instance().createArray(aExtensionId, aApiId);
     Utils::JSArrayWrapper windowListWrapper = Ancho::Utils::JSValueWrapper(windowList).toArray();
 
     WindowManager::instance().forEachWindow([&, extensionId, apiId](const WindowRecord &rec) {
-      CComPtr<IDispatch> info = TabManager::instance().createObject(extensionId, apiId);
+      CComPtr<IDispatch> info = CAnchoAddonService::instance().createObject(extensionId, apiId);
       Utils::JSObjectWrapper infoWrapper = Ancho::Utils::JSValueWrapper(info).toObject();
       WindowManager::instance().fillWindowInfo(rec.getHWND(), infoWrapper);
       windowListWrapper.push_back(infoWrapper);
@@ -250,7 +253,7 @@ void WindowManager::getWindow(
 {
   mAsyncTaskManager.addTask([=, this](){
     HWND win = getHandleFromWindowId(aWindowId);
-    CComPtr<IDispatch> info = TabManager::instance().createObject(aExtensionId, aApiId);
+    CComPtr<IDispatch> info = CAnchoAddonService::instance().createObject(aExtensionId, aApiId);
     //TODO - populate: aGetInfo[L"populate"];
     WindowManager::instance().fillWindowInfo(win, Utils::JSValueWrapper(info).toObject());
     aCallback(info);
@@ -268,12 +271,12 @@ STDMETHODIMP WindowManager::createPopupWindow(BSTR aUrl, INT aX, INT aY, LPDISPA
   CIDispatchHelper closeCallback(aCloseCallback);
   DispatchMap injectedDataMap;
 
-  IDispatch* api;
-  IF_FAILED_RET((injectedData.Get<IDispatch*, VT_DISPATCH>((LPOLESTR)s_AnchoBackgroundPageAPIName, api)));
+  CComPtr<IDispatch> api;
+  IF_FAILED_RET((injectedData.Get<CComPtr<IDispatch>, VT_DISPATCH, IDispatch*>((LPOLESTR)s_AnchoBackgroundPageAPIName, api)));
   injectedDataMap[s_AnchoBackgroundPageAPIName] = api;
 
-  IDispatch* console;
-  IF_FAILED_RET((injectedData.Get<IDispatch*, VT_DISPATCH>((LPOLESTR)s_AnchoBackgroundConsoleObjectName, console)));
+  CComPtr<IDispatch> console;
+  IF_FAILED_RET((injectedData.Get<CComPtr<IDispatch>, VT_DISPATCH, IDispatch*>((LPOLESTR)s_AnchoBackgroundConsoleObjectName, console)));
   injectedDataMap[s_AnchoBackgroundConsoleObjectName] = console;
 
   HWND hwnd = Utils::getCurrentWindowHWND();
@@ -298,6 +301,11 @@ WindowId WindowManager::getCurrentWindowId()
   }
   ANCHO_THROW(EFail());
 }
+
+HWND WindowManager::getCurrentWindowHWND()
+{
+  return Utils::getCurrentWindowHWND();
+}
 //==========================================================================================
 STDMETHODIMP WindowManager::getWindowIdFromHWND(OLE_HANDLE aHWND, LONG *aWindowId)
 {
@@ -321,13 +329,15 @@ HWND WindowManager::getHandleFromWindowId(WindowId aWindowId)
 //==========================================================================================
 WindowId WindowManager::getWindowIdFromHWND(HWND aHWND)
 {
-  boost::unique_lock<Mutex> lock(mWindowAccessMutex);
-  auto it = mWindowIds.find(aHWND);
-  if (it == mWindowIds.end()) {
-    return createNewWindowRecord(aHWND);
+  {
+    boost::unique_lock<Mutex> lock(mWindowAccessMutex);
+    auto it = mWindowIds.find(aHWND);
+    if (it != mWindowIds.end()) {
+      return it->second;
+    }
   }
 
-  return it->second;
+  return createNewWindowRecord(aHWND);
 }
 
 //==========================================================================================
@@ -418,6 +428,20 @@ void WindowManager::updateWindowImpl(HWND aWndHandle, Utils::JSObject aInfo)
     }
   }
   //TODO - drawAttention
+}
+
+void WindowManager::finalize()
+{
+  mAsyncTaskManager.finalize();
+  WindowMap tmp;
+
+  {
+    boost::unique_lock<Mutex> lock(mWindowAccessMutex);
+    tmp = mWindows; //we need to a copy to destroy items without lock
+    mWindows.clear();
+  }
+
+  //Window records are released in destructor of tmp
 }
 
 } //namespace Service

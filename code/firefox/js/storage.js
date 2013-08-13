@@ -7,16 +7,13 @@
   Cu.import('resource://gre/modules/Services.jsm');
   Cu.import('resource://gre/modules/FileUtils.jsm');
 
-  var StorageAPI = function(extensionState, contentWindow, storageSpace) {
-    var dbFile = FileUtils.getFile('ProfD', ['ancho_storage.sqlite3']);
-    if (!extensionState.storageConnection) {
-      extensionState.storageConnection = Services.storage.openDatabase(dbFile); // create the file if it does not exist
-    }
-    this._connection = extensionState.storageConnection;
-    this._tableName = extensionState.id.replace(/[^A-Za-z]/g, '_') + '_' + storageSpace; // no sanitization necessary
-    this._connection.executeSimpleSQL('CREATE TABLE IF NOT EXISTS '+this._tableName+' ( key TEXT PRIMARY KEY, value TEXT )');
-    // A separate CREATE INDEX command for keys not needed:
-    // http://stackoverflow.com/questions/3379292/is-an-index-needed-for-a-primary-key-in-sqlite
+  var Global = require('./state').Global;
+
+  var StorageAPI = function(extension, storageSpace) {
+    this._tableName = extension.getStorageTableName(storageSpace);
+    this._storageConnection = extension.storageConnection;
+    this._storageConnection.executeSimpleSQL('CREATE TABLE IF NOT EXISTS ' + this._tableName +
+      ' ( key TEXT PRIMARY KEY, value TEXT )');
   };
 
   function dbError(err) {
@@ -59,7 +56,7 @@
         };
         if (myKeys.length) {
           var statement =
-            this._connection.createStatement('SELECT key, value FROM '+this._tableName+' WHERE key IN (:key)');
+            this._storageConnection.createStatement('SELECT key, value FROM '+this._tableName+' WHERE key IN (:key)');
           var par, params = statement.newBindingParamsArray();
           for (var i=0; i<myKeys.length; i++) {
             par = params.newBindingParams();
@@ -102,7 +99,7 @@
     set: function(items, callback) {
       if (typeof items === 'object') {
         var statement =
-          this._connection.createStatement('REPLACE INTO '+this._tableName+' (key, value) VALUES (:key, :value)');
+          this._storageConnection.createStatement('REPLACE INTO '+this._tableName+' (key, value) VALUES (:key, :value)');
 
         var par, params = statement.newBindingParamsArray();
         for (var key in items) {
@@ -140,7 +137,7 @@
           throw new Error('Invocation of method remove does not match definition');
         }
         var statement =
-          this._connection.createStatement('DELETE FROM '+this._tableName+' WHERE key IN (:key)');
+          this._storageConnection.createStatement('DELETE FROM '+this._tableName+' WHERE key IN (:key)');
 
         var par, params = statement.newBindingParamsArray();
         for (var i=0; i<myKeys.length; i++) {

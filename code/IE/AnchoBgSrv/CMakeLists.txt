@@ -7,6 +7,7 @@ if(${${PROJECT_NAME}_DISABLE_LOGWINDOW})
   add_definitions(-DANCHO_DISABLE_LOGWINDOW)
 endif(${${PROJECT_NAME}_DISABLE_LOGWINDOW})
 
+add_definitions(-D_SCL_SECURE_NO_WARNINGS) #Disable few paranoic warnings
 set(CMAKE_CONFIGURATION_TYPES Debug Release )
 set(CMAKE_CONFIGURATION_TYPES "${CMAKE_CONFIGURATION_TYPES}" CACHE STRING "Reset the configurations to those we need" FORCE)
 
@@ -20,16 +21,20 @@ set(${PROJECT_NAME}_RC_DIR ${${PROJECT_NAME}_SOURCE_DIR})
 
 include_directories(
   ${${PROJECT_NAME}_INC_DIR}
+  ${anchocommons_INC_DIR}
   ${${PROJECT_NAME}_GENERATED_FILES_DIR}
   )
 
 set(${PROJECT_NAME}_HEADERS
-  "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/AsynchronousTaskManager.hpp"
-  "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/COMConversions.hpp"
-  "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/JavaScriptCallback.hpp"
+  "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/UpdateChecking.hpp"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/PeriodicTimer.hpp"
-  "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/TabManager.hpp"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/WindowManager.hpp"
+  "${${PROJECT_NAME}_INC_DIR}/AnchoBackGroundServer/PageActionProxy.hpp"
+  "${${PROJECT_NAME}_INC_DIR}/AnchoBackgroundServer/UpdateChecking.hpp"
+  "${${PROJECT_NAME}_INC_DIR}/AnchoBackgroundServer/PeriodicTimer.hpp"
+  "${${PROJECT_NAME}_INC_DIR}/AnchoBackgroundServer/TabManager.hpp"
+  "${${PROJECT_NAME}_INC_DIR}/AnchoBackgroundServer/WindowManager.hpp"
+  "${${PROJECT_NAME}_INC_DIR}/AnchoBackgroundServer/JSConstructorManager.hpp"
   "${${PROJECT_NAME}_INC_DIR}/AnchoAddonService.h"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackgroundAPI.h"
   "${${PROJECT_NAME}_INC_DIR}/AnchoBackground.h"
@@ -50,9 +55,10 @@ set(${PROJECT_NAME}_HEADERS
   )
 
 set(${PROJECT_NAME}_SOURCES
-  "${${PROJECT_NAME}_SRC_DIR}/src/AsynchronousTaskManager.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/src/TabManager.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/src/WindowManager.cpp"
+  "${${PROJECT_NAME}_SRC_DIR}/src/UpdateChecking.cpp"
+  "${${PROJECT_NAME}_SRC_DIR}/src/PageActionProxy.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoAddonService.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoBackgroundAPI.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoBackground.cpp"
@@ -71,6 +77,47 @@ set(${PROJECT_NAME}_SOURCES
   )
 set(${PROJECT_NAME}_C_SOURCES
   "${${PROJECT_NAME}_SRC_DIR}/sqlite3.c"
+  )
+
+set(${PROJECT_NAME}_API_JS
+  "${${PROJECT_NAME}_RC_DIR}/res/js/"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/api.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/bookmarks.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/browserAction.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/browsingData.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/contentSettings.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/contextMenus.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/cookies.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/debugger.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/events.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/extension.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/fileBrowserHandler.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/history.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/i18n.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/idle.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/management.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/omnibox.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/pageAction.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/pageCapture.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/permissions.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/privacy.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/proxy.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/runtime.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/storage.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/tabs.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/topSites.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/ttsEngine.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/tts.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/webNavigation.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/webRequest.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/webstore.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/windows.js"
+  )
+source_group("API_JS" FILES ${${PROJECT_NAME}_API_JS})
+set_source_files_properties(
+  ${${PROJECT_NAME}_API_JS}
+  PROPERTIES
+    HEADER_FILE_ONLY 1
   )
 
 # precompiled headers
@@ -182,8 +229,11 @@ add_executable(${PROJECT_NAME} WIN32
   ${${PROJECT_NAME}_GENERATED_FILES}
   ${${PROJECT_NAME}_RC_FILES}
   ${${PROJECT_NAME}_IDL_FILE}
+  ${${PROJECT_NAME}_API_JS}
   )
-target_link_libraries(${PROJECT_NAME} libbhohelper anchocommons libprothandlers Wininet AnchoShared)
+target_link_libraries(${PROJECT_NAME} Gdiplus libbhohelper anchocommons libprothandlers Wininet AnchoShared)
+
+target_link_libraries(${PROJECT_NAME} libbhohelper anchocommons libprothandlers Wininet AnchoShared crxProcessing zlibstatic)
 
 # set UNICODE
 set_target_properties(${PROJECT_NAME} PROPERTIES COMPILE_DEFINITIONS _UNICODE,UNICODE)
@@ -197,12 +247,12 @@ add_custom_command(TARGET ${PROJECT_NAME}
                    )
 
 # Register service - using start to handle bug in cmake (wrong quote escaping in COMMAND section
-if (NOT ${DISABLE_REGISTRATION})
+if (NOT ${DISABLE_REGISTRATION} AND NOT ${CMAKE_CL_64})
   add_custom_command(TARGET ${PROJECT_NAME}
                      POST_BUILD
                      COMMAND "start" ARGS "\"DUMMY\"" "/B" "/WAIT" "\"\$(TargetPath)\"" "/RegServer" "/s"
                      )
-endif (NOT ${DISABLE_REGISTRATION})
+endif (NOT ${DISABLE_REGISTRATION} AND NOT ${CMAKE_CL_64})
 
 # export variables
 set(${PROJECT_NAME}_INC_DIRS ${${PROJECT_NAME}_INC_DIRS} PARENT_SCOPE)

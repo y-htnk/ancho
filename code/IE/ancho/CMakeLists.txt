@@ -21,32 +21,27 @@ set(${PROJECT_NAME}_HEADERS
   "${${PROJECT_NAME}_INC_DIR}/AnchoBrowserEvents.h"
   "${${PROJECT_NAME}_INC_DIR}/AnchoPassthruAPP.h"
   "${${PROJECT_NAME}_INC_DIR}/AnchoRuntime.h"
+  "${${PROJECT_NAME}_INC_DIR}/CookieManager.h"
   "${${PROJECT_NAME}_INC_DIR}/dllmain.h"
   "${${PROJECT_NAME}_INC_DIR}/DOMWindowWrapper.h"
-  "${${PROJECT_NAME}_INC_DIR}/HtmlPanel.h"
-  "${${PROJECT_NAME}_INC_DIR}/HtmlPanelUIHandler.h"
   "${${PROJECT_NAME}_INC_DIR}/HtmlToolbarWindow.h"
   "${${PROJECT_NAME}_INC_DIR}/resource.h"
   "${${PROJECT_NAME}_INC_DIR}/stdafx.h"
   "${${PROJECT_NAME}_INC_DIR}/targetver.h"
-  "${${PROJECT_NAME}_INC_DIR}/Toolbar.h"
-  "${${PROJECT_NAME}_INC_DIR}/Toolbar.ipp"
   "${${PROJECT_NAME}_INC_DIR}/WindowDocumentMap.h"
   )
 
-set(${PROJECT_NAME}_SOURCES 
+set(${PROJECT_NAME}_SOURCES
   "${${PROJECT_NAME}_SRC_DIR}/ancho.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoAddon.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoBrowserEvents.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoPassthruAPP.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/AnchoRuntime.cpp"
+  "${${PROJECT_NAME}_SRC_DIR}/CookieManager.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/dllmain.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/DOMWindowWrapper.cpp"
-  "${${PROJECT_NAME}_SRC_DIR}/HtmlPanel.cpp"
-  "${${PROJECT_NAME}_SRC_DIR}/HtmlPanelUIHandler.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/HtmlToolbarWindow.cpp"
   "${${PROJECT_NAME}_SRC_DIR}/stdafx.cpp"
-  "${${PROJECT_NAME}_SRC_DIR}/Toolbar.cpp"
   )
 # precompiled headers
 foreach( src_file ${${PROJECT_NAME}_SOURCES} )
@@ -105,7 +100,7 @@ if (${CMAKE_CL_64})
   set(MIDL_ENV_ARG win64)
 endif (${CMAKE_CL_64})
 
-set(${PROJECT_NAME}_MIDL_ARGUMENTS 
+set(${PROJECT_NAME}_MIDL_ARGUMENTS
                      "${${PROJECT_NAME}_IDL_FILE}"
                      /D $<$<CONFIG:Debug>:"_DEBUG"> $<$<CONFIG:Release>:"NDEBUG">
                      /D "MODULES_HAVE_EXPORT_PROPERTY"
@@ -137,22 +132,21 @@ set (${PROJECT_NAME}_RC_FILES
   ${${PROJECT_NAME}_RC_DIR}/${PROJECT_NAME}.rc
   ${${PROJECT_NAME}_RC_DIR}/${PROJECT_NAME}.rgs
   ${${PROJECT_NAME}_RC_DIR}/AnchoRuntime.rgs
-  ${${PROJECT_NAME}_RC_DIR}/AnchoToolbar.rgs
 )
 source_group("Resources" FILES ${${PROJECT_NAME}_RC_FILES})
 
 
 ################# MAIN TARGET SETUP #########################
 
-add_library(${PROJECT_NAME} SHARED 
-  ${${PROJECT_NAME}_HEADERS} 
+add_library(${PROJECT_NAME} SHARED
+  ${${PROJECT_NAME}_HEADERS}
   ${${PROJECT_NAME}_SOURCES}
   ${${PROJECT_NAME}_GENERATED_FILES}
   ${${PROJECT_NAME}_RC_FILES}
   ${${PROJECT_NAME}_DEF_FILES}
   ${${PROJECT_NAME}_IDL_FILE}
   )
-target_link_libraries(${PROJECT_NAME} libbhohelper anchocommons libprothandlers AnchoShared)
+target_link_libraries(${PROJECT_NAME} libbhohelper anchocommons libprothandlers AnchoShared crxProcessing zlibstatic)
 
 # set UNICODE
 set_target_properties(${PROJECT_NAME} PROPERTIES COMPILE_DEFINITIONS _UNICODE,UNICODE)

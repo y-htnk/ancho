@@ -32,10 +32,11 @@ HRESULT CAnchoBackgroundAPI::Init(LPCTSTR lpszThisPath, LPCTSTR lpszRootURL, BST
   // set our ID
   m_bsID = bsID;
   m_GUID = lpszGUID;
+  mPath = lpszPath;
+  PathAddBackslash(mPath.GetBuffer(mPath.GetLength() + 2));
+  mPath.ReleaseBuffer();
 
   m_sRootURL = lpszRootURL;
-
-  CString sPath(lpszPath);
 
   // set service API inteface
   m_ServiceApi = pServiceApi;
@@ -69,7 +70,7 @@ HRESULT CAnchoBackgroundAPI::Init(LPCTSTR lpszThisPath, LPCTSTR lpszRootURL, BST
   m_Magpie->Init((LPWSTR)(LPCWSTR)appName);
 
   // add a loader for scripts in the extension filesystem
-  IF_FAILED_RET(m_Magpie->AddFilesystemScriptLoader((LPWSTR)(LPCWSTR)sPath));
+  IF_FAILED_RET(m_Magpie->AddFilesystemScriptLoader((LPWSTR)(LPCWSTR)mPath));
 
   // add a loder for scripts in this exe file
   IF_FAILED_RET(m_Magpie->AddResourceScriptLoader((HANDLE_PTR)_AtlModule.GetResourceInstance()));
@@ -81,13 +82,13 @@ HRESULT CAnchoBackgroundAPI::Init(LPCTSTR lpszThisPath, LPCTSTR lpszRootURL, BST
 
   // load manifest
   CString sManifestFilename;
-  sManifestFilename.Format(_T("%smanifest.json"), sPath);
+  sManifestFilename.Format(_T("%smanifest.json"), mPath);
   CString code;
   IF_FAILED_RET(appendJSONFileToVariableAssignment(sManifestFilename, L"exports.manifest", code));
   IF_FAILED_RET(m_Magpie->RunScript(L"manifest", (LPWSTR)(LPCWSTR)code));
 
   CString localesRootDir;
-  localesRootDir.Format(L"%s_locales\\", sPath);
+  localesRootDir.Format(L"%s_locales\\", mPath);
   loadAddonLocales(localesRootDir);
 
   // set ourselfs in magpie as a global accessible object
@@ -314,6 +315,15 @@ STDMETHODIMP CAnchoBackgroundAPI::get_guid(BSTR * pVal)
 
 //----------------------------------------------------------------------------
 //
+STDMETHODIMP CAnchoBackgroundAPI::get_path(BSTR * aPath)
+{
+  ENSURE_RETVAL(aPath);
+  (*aPath) = mPath.AllocSysString();
+  return S_OK;
+}
+
+//----------------------------------------------------------------------------
+//
 STDMETHODIMP CAnchoBackgroundAPI::startBackgroundWindow(BSTR bsPartialURL)
 {
   // it's safe to call this method multiple times, anyhow the window
@@ -411,7 +421,10 @@ STDMETHODIMP CAnchoBackgroundAPI::invokeEventObject(BSTR aEventName, INT aSelect
   VariantVector args;
   VariantVector results;
 
-  IF_FAILED_RET(addJSArrayToVariantVector(aArgs, args, true));
+  HRESULT hr = addJSArrayToVariantVector(aArgs, args, true);
+  if (FAILED(hr)) {
+    return hr;
+  }
 
   IF_FAILED_RET(invokeEvent(aEventName, aSelectedInstance, aSkipInstance != FALSE, args, results));
 

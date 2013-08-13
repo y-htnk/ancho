@@ -32,6 +32,8 @@
 #include <atlctrls.h>
 #include <atltypes.h>
 
+using namespace ATL;
+
 #include <Wininet.h>
 #include <KnownFolders.h>
 #include <ShlObj.h>
@@ -39,8 +41,10 @@
 #include <comutil.h>
 
 #include <anchocommons.h>
+#include <Exceptions.h>
 
-using namespace ATL;
+#include <gdiplus.h>
+using namespace Gdiplus;
 
 // Magpie
 #import "Magpie.tlb" named_guids raw_interfaces_only raw_native_types no_smart_pointers exclude("tagSAFEARRAYBOUND")
@@ -56,6 +60,15 @@ using namespace LIB_BhoHelper;
 #else
 #define ASSERT_
 #endif
+
+/*
+#define WIDEN2(x) L ## x
+#define WIDEN(x) WIDEN2(x)
+#define __WFILE__ WIDEN(__FILE__)
+CString s; \
+s.Format(_T("ASSERTION FAILED: 0x%08x in file %s line %i"), _hr__, __WFILE__, __LINE__); \
+::MessageBox(NULL, s, _T("ancho debug"), MB_OK); \
+*/
 
 #define IF_FAILED_RET(_hr) \
   do \
@@ -111,6 +124,9 @@ using namespace LIB_BhoHelper;
 #include <boost/foreach.hpp>
 #include <boost/asio.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/scope_exit.hpp>
 
 #include <boost/tuple/tuple.hpp>
 #include <boost/tuple/tuple_comparison.hpp>

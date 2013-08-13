@@ -23,10 +23,10 @@ enum {
 };
 
 static CComBSTR
-getMethodNameFromBindInfo(BINDINFO &aInfo)
+getMethodNameFromBindVerb(DWORD bindVerb)
 {
-  CComBSTR method;
-  switch (aInfo.dwBindVerb) {
+  CComBSTR method; 
+  switch (bindVerb) {
   case BINDVERB_GET:
     method = L"GET";
     break;
@@ -102,16 +102,7 @@ STDMETHODIMP CAnchoProtocolSink::BeginningTransaction(
     // event firing
     CAnchoPassthruAPP *protocol = CAnchoPassthruAPP::GetProtocol(this);
 
-    CComBSTR method;
-    BINDINFO bindInfo = {0};
-    bindInfo.cbSize = sizeof(BINDINFO);
-    DWORD grfBINDF;
-    if (SUCCEEDED(GetBindInfo(&grfBINDF, &bindInfo))) {
-      method = getMethodNameFromBindInfo(bindInfo);
-    } else {
-      method = L"GET";
-    }
-
+    CComBSTR method = getMethodNameFromBindVerb(m_bindVerb);
 
     WebRequestReporterComObject * pNewObject = NULL;
     if (SUCCEEDED(WebRequestReporterComObject::CreateInstance(&pNewObject))) {
@@ -209,9 +200,9 @@ STDMETHODIMP CAnchoProtocolSink::ReportProgress(
 //----------------------------------------------------------------------------
 //  ReportData
 STDMETHODIMP CAnchoProtocolSink::ReportData(
-	/* [in] */ DWORD grfBSCF,
-	/* [in] */ ULONG ulProgress,
-	/* [in] */ ULONG ulProgressMax)
+  /* [in] */ DWORD grfBSCF,
+  /* [in] */ ULONG ulProgress,
+  /* [in] */ ULONG ulProgressMax)
 {
   PROTOCOLDATA data;
   data.grfFlags = PD_FORCE_SWITCH;
@@ -227,9 +218,9 @@ STDMETHODIMP CAnchoProtocolSink::ReportData(
 //----------------------------------------------------------------------------
 //  ReportResult
 STDMETHODIMP CAnchoProtocolSink::ReportResult(
-	/* [in] */ HRESULT hrResult,
-	/* [in] */ DWORD dwError,
-	/* [in] */ LPCWSTR szResult)
+  /* [in] */ HRESULT hrResult,
+  /* [in] */ DWORD dwError,
+  /* [in] */ LPCWSTR szResult)
 {
   if (hrResult == 0) {
     PROTOCOLDATA data;
@@ -242,6 +233,22 @@ STDMETHODIMP CAnchoProtocolSink::ReportResult(
   }
 
   return m_spInternetProtocolSink->ReportResult(hrResult, dwError, szResult);
+}
+
+//----------------------------------------------------------------------------
+// GetBindInfo
+STDMETHODIMP CAnchoProtocolSink::GetBindInfoEx(
+  /* [out] */ DWORD *grfBINDF,
+  /* [in, out] */ BINDINFO *pbindinfo,
+  /* [out] */ DWORD *grfBINDF2,
+  /* [out] */ DWORD* pdwReserved)
+{
+  CComQIPtr<IInternetBindInfoEx> pBindInfo(m_spInternetProtocolSink);
+  HRESULT hr = pBindInfo->GetBindInfoEx(grfBINDF, pbindinfo, grfBINDF2, pdwReserved);
+  if (SUCCEEDED(hr)) {
+    m_bindVerb = pbindinfo->dwBindVerb;
+  }
+  return hr;
 }
 
 //----------------------------------------------------------------------------
@@ -368,26 +375,16 @@ STDMETHODIMP CAnchoPassthruAPP::getEventsFromBrowser(CComPtr<IWebBrowser2> aBrow
 //----------------------------------------------------------------------------
 //  StartEx
 STDMETHODIMP CAnchoPassthruAPP::StartEx(
-		IUri *pUri,
-		IInternetProtocolSink *pOIProtSink,
-		IInternetBindInfo *pOIBindInfo,
-		DWORD grfPI,
-		HANDLE_PTR dwReserved)
+    IUri *pUri,
+    IInternetProtocolSink *pOIProtSink,
+    IInternetBindInfo *pOIBindInfo,
+    DWORD grfPI,
+    HANDLE_PTR dwReserved)
 {
   CComBSTR rawUri;
   IF_FAILED_RET(pUri->GetRawUri(&rawUri));
   CComPtr<CAnchoProtocolSink> pSink = GetSink();
 
-  CComBSTR method;
-  BINDINFO bindInfo = {0};
-  bindInfo.cbSize = sizeof(BINDINFO);
-  DWORD grfBINDF = 0;
-  //When I move GetBindInfo() after __super::StartEx it crashes
-  if (SUCCEEDED(pOIBindInfo->GetBindInfo(&grfBINDF, &bindInfo))) {
-    method = getMethodNameFromBindInfo(bindInfo);
-  } else {
-    method = L"GET";
-  }
   ATLTRACE(L"CAnchoPassthruAPP - processing %s\n", rawUri);
   if (std::wstring(L"http:///") == std::wstring(rawUri.m_str)) {
     //Hack used for connecting browser navigate call and actual tab (request ID passed in url)
@@ -396,6 +393,10 @@ STDMETHODIMP CAnchoPassthruAPP::StartEx(
     return S_FALSE;
   }
   IF_FAILED_RET(__super::StartEx(pUri, pOIProtSink, pOIBindInfo, grfPI, dwReserved));
+
+  CComBSTR method;
+  DWORD bindVerb = GetSink()->GetBindVerb();
+  method = getMethodNameFromBindVerb(bindVerb);
 
   if (!m_BrowserEvents) {
     if (!m_DocumentRecord.window) {
@@ -527,22 +528,37 @@ STDMETHODIMP CAnchoPassthruAPP::Continue(PROTOCOLDATA* data)
 
       IF_FAILED_RET(m_BrowserEvents->OnFrameStart(bstrUrl, m_IsRefreshingMainFrame ? VARIANT_TRUE : VARIANT_FALSE));
 
-      if (m_Doc) { //in few situations the document is not yet ready
-        CComBSTR readyState;
-        m_Doc->get_readyState(&readyState);
-        if (wcscmp(readyState, L"complete") == 0) {
-          IF_FAILED_RET(m_BrowserEvents->OnFrameEnd(bstrUrl, m_IsRefreshingMainFrame ? VARIANT_TRUE : VARIANT_FALSE));
-        }
-        else {
-          m_DocSink = new DocumentSink(this, m_Doc, m_BrowserEvents, bstrUrl, m_IsRefreshingMainFrame);
-          m_DocSink->DispEventAdvise(m_Doc);
-        }
-      }
+      tryToNotifyAboutFrameEnd(bstrUrl, m_IsRefreshingMainFrame);
     }
-    else if (data->dwState == ANCHO_SWITCH_REDIRECT) {
-      IF_FAILED_RET(m_BrowserEvents->OnFrameRedirect(bstrUrl, bstrAdditional));
+    else {
+      if (data->dwState == ANCHO_SWITCH_REDIRECT) {
+        IF_FAILED_RET(m_BrowserEvents->OnFrameRedirect(bstrUrl, bstrAdditional));
+      } else if (data->dwState == ANCHO_SWITCH_REPORT_RESULT && !m_Doc) {
+        tryToNotifyAboutFrameEnd(bstrUrl, m_IsRefreshingMainFrame);
+      }
     }
   }
 
   return __super::Continue(data);
+}
+
+STDMETHODIMP CAnchoPassthruAPP::tryToNotifyAboutFrameEnd(CComBSTR aUrl, bool aIsRefreshingMainFrame)
+{
+  if (!m_Doc) {
+    m_Doc = m_DocumentRecord.getDocument();
+  }
+  if (m_Doc) {
+    CComBSTR readyState;
+    m_Doc->get_readyState(&readyState);
+    if (wcscmp(readyState, L"complete") == 0) {
+      IF_FAILED_RET(m_BrowserEvents->OnFrameEnd(aUrl, aIsRefreshingMainFrame ? VARIANT_TRUE : VARIANT_FALSE));
+    }
+    else {
+      m_DocSink = new DocumentSink(this, m_Doc, m_BrowserEvents, aUrl, aIsRefreshingMainFrame);
+      m_DocSink->DispEventAdvise(m_Doc);
+    }
+  } else {
+    return S_FALSE;
+  }
+  return S_OK;
 }

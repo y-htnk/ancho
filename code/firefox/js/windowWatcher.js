@@ -8,14 +8,26 @@
     return BROWSER_WINDOW_TYPE === browserWindow.document.documentElement.getAttribute('windowtype');
   }
 
-  exports.WindowWatcher = {
-    registry: [],
-    initialized: false,
+  function WindowWatcher(owner) {
+    this._owner = owner;
+    this._registry = [];
+    this._initialized = false;
+  }
+
+  WindowWatcher.prototype = {
+    init: function() {
+      Services.ww.registerNotification(this);
+      this._owner.once('unload', function() {
+        this.unload();
+      }.bind(this));
+      this._initialized = true;
+    },
 
     getContext: function(entry, win, remove) {
+      var context;
       for (var i=0; i<entry.contexts.length; i++) {
         if (win === entry.contexts[i].window) {
-          var context = entry.contexts[i].context;
+          context = entry.contexts[i].context;
           if (remove) {
             entry.contexts.splice(i, 1);
           }
@@ -24,7 +36,7 @@
       }
 
       // This entry doesn't have a context yet for the specified window.
-      var context = {};
+      context = {};
       if (!remove) {
         entry.contexts.push({ window: win, context: context });
       }
@@ -35,21 +47,16 @@
     },
 
     fire: function(isLoad, win) {
-      for (var i=0; i<this.registry.length; i++) {
-        var callback = isLoad ? this.registry[i].loader : this.registry[i].unloader;
-        callback.call(callback, win, this.getContext(this.registry[i], win, !isLoad));
+      for (var i=0; i<this._registry.length; i++) {
+        var callback = isLoad ? this._registry[i].loader : this._registry[i].unloader;
+        callback.call(callback, win, this.getContext(this._registry[i], win, !isLoad));
       }
     },
 
     unload: function() {
       Services.ww.unregisterNotification(this);
       this.forAllWindows(this.fire.bind(this, false));
-      this.registry = [];
-    },
-
-    init: function() {
-      Services.ww.registerNotification(this);
-      this._initialized = true;
+      this._registry = [];
     },
 
     register: function(loader, unloader) {
@@ -58,7 +65,7 @@
         unloader: unloader,
         contexts: []
       };
-      this.registry.push(entry);
+      this._registry.push(entry);
 
       // start listening of browser window open/close events
       if (!this._initialized) {
@@ -121,4 +128,5 @@
     }
   };
 
+  module.exports = WindowWatcher;
 }).call(this);

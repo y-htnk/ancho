@@ -5,7 +5,7 @@
   Cu.import('resource://gre/modules/XPCOMUtils.jsm');
   Cu.import('resource://gre/modules/Services.jsm');
 
-  const SCHEME = 'chrome-extension';
+  const SCHEME = 'ancho-extension';
 
   var classID = Components.ID('{b0a95b24-4270-4e74-8179-f170d6dab4a1}');
 
@@ -33,19 +33,34 @@
       Ci.nsIProtocolHandler.URI_IS_LOCAL_RESOURCE,
 
     newURI: function(aSpec, aOriginCharset, aBaseURI) {
-      let uri = Cc['@mozilla.org/network/standard-url;1'].createInstance(Ci.nsIStandardURL);
-      uri.init(Ci.nsIStandardURL.URLTYPE_STANDARD, null, aSpec, aOriginCharset, aBaseURI);
-      return uri.QueryInterface(Ci.nsIURI);
+      var uri = Cc["@mozilla.org/network/simple-uri;1"].createInstance(Ci.nsIURI);
+      if (aBaseURI) {
+        var url = Cc['@mozilla.org/network/standard-url;1'].createInstance(Ci.nsIStandardURL);
+        url.init(Ci.nsIStandardURL.URLTYPE_STANDARD, null, aBaseURI.spec, null, null);
+        uri.spec = url.QueryInterface(Ci.nsIURI).resolve(aSpec);
+      }
+      else {
+        uri.spec = aSpec;
+      }
+      return uri;
     },
 
     _mapToFileURI: function(aURI) {
-      var path = '.' + aURI.path;
-      let baseURI = extensionURIs[aURI.host];
+      var url = Cc['@mozilla.org/network/standard-url;1'].createInstance(Ci.nsIStandardURL);
+      url.init(Ci.nsIStandardURL.URLTYPE_STANDARD, null, aURI.spec, null, null);
+      var uri = url.QueryInterface(Ci.nsIURI);
+      var path = '.' + uri.path;
+      var id = uri.userPass;
+      if (id) {
+        id += '@';
+      }
+      id += uri.host;
+      var baseURI = exports.getExtensionURI(id);
       return NetUtil.newURI(path, null, baseURI);
     },
 
     newChannel: function(aURI) {
-      let channel = NetUtil.newChannel(this._mapToFileURI(aURI), null, null);
+      var channel = NetUtil.newChannel(this._mapToFileURI(aURI), null, null);
       channel.originalURI = aURI;
 
       if (/.[^?]\.html?(\?.*)?$/.test(aURI.path)) {
@@ -71,7 +86,7 @@
     Cm.QueryInterface(Ci.nsIComponentRegistrar).registerFactory(
       classID,
       '',
-      '@mozilla.org/network/protocol;1?name=chrome-extension',
+      '@mozilla.org/network/protocol;1?name=' + SCHEME,
       factory
     );
   };

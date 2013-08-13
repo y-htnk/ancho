@@ -17,7 +17,9 @@ struct PeriodicTimer: public boost::noncopyable
       ATLASSERT(!timer->mCallback.empty());
       try {
         timer->mCallback();
-      } catch (std::exception &e) {
+      }
+      #pragma warning(suppress : 4101) //unreferenced variable e
+      catch (std::exception &e) {
         ATLTRACE("Timer callback exception : %s\n", e.what());
       }
     }
@@ -70,6 +72,8 @@ struct PeriodicTimer: public boost::noncopyable
   {
     if (isRunning()) {
       DeleteTimerQueueTimer(mTimerQueue, mTimerHandle, NULL);
+      mTimerHandle = NULL;
+      mTimerQueue = NULL;
     }
   }
 

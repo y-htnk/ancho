@@ -13,96 +13,73 @@
 
   Cu.import('resource://gre/modules/Services.jsm');
 
-  var Event = require('./event');
+  var ProxiedEvent = require('./events').ProxiedEvent;
+  var Global = require('./state').Global;
   var Utils = require('./utils');
+  var inherits = require('inherits');
 
   // Special event that knows about web request filters.
-  function WebRequestEvent(window, tabId, state, type) {
-    var proxies = [];
+  function WebRequestEvent(owner, type) {
+    ProxiedEvent.apply(this, arguments);
+  }
+  inherits(WebRequestEvent, ProxiedEvent);
 
-    // Proxy that checks the filter before triggering the real listener.
-    function ListenerProxy(listener, filter) {
-      this.listener = listener;
-
-      var urls = [];
-      for (let i=0; i<filter.urls.length; i++) {
-        urls.push(Utils.matchPatternToRegexp(filter.urls[i]));
+  WebRequestEvent.prototype.wrapListener = function(listener, filter) {
+    if (!filter) {
+      throw 'No filter provided to addListener';
+    }
+    if (!filter.urls) {
+      throw 'No urls property provided to filter in addListener';
+    }
+    return function(details, callback) {
+      if (this._checkFilter(filter, details, callback)) {
+        listener.apply(this, arguments);
       }
+    }.bind(this);
+  };
 
-      function checkFilter(details, callback) {
-        if (urls.length > 0) {
-          let matched = false;
-          for (let i=0; i<urls.length; i++) {
-            if (details.url.match(urls[i])) {
-              matched = true;
-              break;
-            }
-          }
-          if (!matched) {
-            return;
-          }
-        }
-        if (filter.types) {
-          if (filter.types.indexOf(details.type) === -1) {
-            return;
-          }
-        }
-        if (filter.tabId) {
-          if (filter.tabId != details.tabId) {
-            return;
-          }
-        }
-        // TODO: Implement filter.windowId
-        return callback();
-      }
-
-      var self = this;
-      this.sink = function(details, callback) {
-        return checkFilter(details, self.listener.bind(this, details, callback));
-      };
+  WebRequestEvent.prototype._checkFilter = function(filter, details, callback) {
+    var urls = [];
+    for (var i=0; i<filter.urls.length; i++) {
+      urls.push(Utils.matchPatternToRegexp(filter.urls[i]));
     }
 
-    Event.call(this, window, tabId, state, type);
-
-    var superAddListener = this.addListener;
-    this.addListener = function(listener, filter) {
-      // TODO: Use generic code for checking parameters.
-      if (!filter) {
-        throw 'No filter provided to addListener';
-      }
-      if (!filter.urls) {
-        throw 'No urls property provided to filter in addListener';
-      }
-      var proxy = new ListenerProxy(listener, filter);
-      superAddListener.call(this, proxy.sink);
-      proxies.push(proxy);
-    };
-
-    var superRemoveListener = this.removeListener;
-    this.removeListener = function(listener) {
-      for (let i=0; i<proxies.length; i++) {
-        if (proxies[i].listener === listener) {
-          proxies.splice(i, 1);
+    if (urls.length > 0) {
+      var matched = false;
+      for (var i=0; i<urls.length; i++) {
+        if (details.url.match(urls[i])) {
+          matched = true;
           break;
         }
       }
-      superRemoveListener.call(this, listener);
+      if (!matched) {
+        return;
+      }
     }
-  }
+    if (filter.types) {
+      if (filter.types.indexOf(details.type) === -1) {
+        return;
+      }
+    }
+    if (filter.tabId) {
+      if (filter.tabId != details.tabId) {
+        return;
+      }
+    }
+    // TODO: Implement filter.windowId
+    return callback();
+  };
 
-  var WebRequestAPI = function(state, window) {
-    this._state = state;
-    this._tab = Utils.getWindowId(window);
-
-    this.onCompleted = new WebRequestEvent(window, this._tab, this._state, 'webRequest.completed');
-    this.onHeadersReceived = new WebRequestEvent(window, this._tab, this._state, 'webRequest.headersReceived');
-    this.onBeforeRedirect = new WebRequestEvent(window, this._tab, this._state, 'webRequest.beforeRedirect');
-    this.onAuthRequired = new WebRequestEvent(window, this._tab, this._state, 'webRequest.authRequired');
-    this.onBeforeSendHeaders = new WebRequestEvent(window, this._tab, this._state, 'webRequest.beforeSendHeaders');
-    this.onErrorOccurred = new WebRequestEvent(window, this._tab, this._state, 'webRequest.errorOccurred');
-    this.onResponseStarted = new WebRequestEvent(window, this._tab, this._state, 'webRequest.responseStarted');
-    this.onSendHeaders = new WebRequestEvent(window, this._tab, this._state, 'webRequest.sendHeaders');
-    this.onBeforeRequest = new WebRequestEvent(window, this._tab, this._state, 'webRequest.beforeRequest');
+  var WebRequestAPI = function(extension) {
+    this.onCompleted = new WebRequestEvent(Global, 'webRequest.completed');
+    this.onHeadersReceived = new WebRequestEvent(Global, 'webRequest.headersReceived');
+    this.onBeforeRedirect = new WebRequestEvent(Global, 'webRequest.beforeRedirect');
+    this.onAuthRequired = new WebRequestEvent(Global, 'webRequest.authRequired');
+    this.onBeforeSendHeaders = new WebRequestEvent(Global, 'webRequest.beforeSendHeaders');
+    this.onErrorOccurred = new WebRequestEvent(Global, 'webRequest.errorOccurred');
+    this.onResponseStarted = new WebRequestEvent(Global, 'webRequest.responseStarted');
+    this.onSendHeaders = new WebRequestEvent(Global, 'webRequest.sendHeaders');
+    this.onBeforeRequest = new WebRequestEvent(Global, 'webRequest.beforeRequest');
   };
 
   WebRequestAPI.prototype.handlerBehaviorChanged = function(callback) {

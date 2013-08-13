@@ -5,7 +5,7 @@
 
   Cu.import('resource://gre/modules/Services.jsm');
 
-  function ConsoleAPI(state, contentWindow) {
+  function ConsoleAPI(extension) {
     try {
       this.debugEnabled = Services.prefs.getBoolPref('extensions.ancho@salsitasoft.com.loggingEnabled');
     }

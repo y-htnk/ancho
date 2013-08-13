@@ -14,6 +14,7 @@
 // get manifest
 var manifest = require("manifest").manifest;
 
+console.info("Engine \"" + ScriptEngine() + " " + ScriptEngineMajorVersion() + "." + ScriptEngineMinorVersion() + " build " + ScriptEngineBuildVersion() + "\" loaded.");
 console.info("Loading extension [" + addonAPI.id + "] [" + addonAPI.guid + "]");
 
 //------------------------------------------------------------------------------
@@ -42,6 +43,7 @@ var API_NAMES = ["bookmarks",
     "permissions",
     "privacy",
     "proxy",
+    "runtime",
     "storage",
     "tabs",
     "topSites",
@@ -59,8 +61,9 @@ var CONTENT_API_NAMES = [
 
 function createChromeAPISubset(chrome, aInstanceID, aAPINames) {
   //TODO - use constructors from right context - these are from Magpie
-  serviceAPI.tabManager.registerConstructors(function(){ return new Object; }, function(){ return new Array; }, addonAPI.id, aInstanceID);
-
+  console.debug("Registering constructors for extension: '" + addonAPI.id + "' and API instance: " + aInstanceID);
+  serviceAPI.registerJSConstructors(function(){ return new Object; }, function(){ return new Array; }, addonAPI.id, aInstanceID);
+  console.debug("Registering constructors ... Done");
   for (var i = 0; i < aAPINames.length; ++i) {
     console.debug("Creating chrome." + aAPINames[i] + " API instance n. " + aInstanceID);
     chrome[aAPINames[i]] = require(aAPINames[i] + ".js").createAPI(aInstanceID);
@@ -72,6 +75,7 @@ function releaseAPISubsetByName(aInstanceID, aAPINames) {
     console.debug("Releasing chrome." + aAPINames[i] + " API instance n. " + aInstanceID);
     require(aAPINames[i] + ".js").releaseAPI(aInstanceID);
   }
+  serviceAPI.removeJSConstructors(addonAPI.id, aInstanceID);
 }
 
 function releaseAPISubset(aInstanceID, aAPIInstance) {
@@ -87,6 +91,7 @@ function releaseAPISubset(aInstanceID, aAPIInstance) {
       console.error("Releasing of chrome." + apiName + " API instance n. " + aInstanceID + " failed! " + e.description);
     }
   }
+  serviceAPI.removeJSConstructors(addonAPI.id, aInstanceID);
 }
 
 // create and initialize the background API
@@ -145,6 +150,9 @@ exports.releaseFullAPI = function(aInstanceID) {
 var browserAction = require("browserAction.js");
 browserAction.initBrowserAction(manifest.browser_action);
 
+var pageAction = require("pageAction.js");
+pageAction.initPageAction(manifest.page_action);
+
 
 //------------------------------------------------------------------------------
 // CONTENT API
@@ -183,6 +191,7 @@ exports.getContentInfo = function(aInstanceID, aUrl) {
     } else {
       contentInstances[aInstanceID] = new restrictedAPI(aInstanceID);
     }
+    pageAction.register(aInstanceID);
   }
   var api = contentInstances[aInstanceID];
   var scripts = (
@@ -199,6 +208,7 @@ exports.getContentInfo = function(aInstanceID, aUrl) {
 // The name of this method must match the one defined in anchocommons/strings.cpp
 // Called from the addon when a browser window or tab closes
 exports.releaseContentInfo = function(instanceID) {
+  pageAction.unregister(instanceID);
   console.debug("Content API release requested for [" + instanceID + "]");
   if (contentInstances[instanceID]) {
     releaseAPISubset(instanceID, contentInstances[instanceID]);

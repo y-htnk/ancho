@@ -2,12 +2,15 @@
 
 #include <string>
 #include <boost/atomic.hpp>
+#include <ctime>
 
 extern const wchar_t * s_AnchoMainAPIModuleID;
 extern const wchar_t * s_AnchoExtensionsRegistryKey;
 extern const wchar_t * s_AnchoExtensionsRegistryEntryGUID;
 extern const wchar_t * s_AnchoExtensionsRegistryEntryFlags;
 extern const wchar_t * s_AnchoExtensionsRegistryEntryPath;
+extern const wchar_t * s_AnchoRegistryEntryVersion;
+extern const wchar_t * s_AnchoUpdateUrlRegistryEntry;
 extern const wchar_t * s_AnchoProtocolHandlerScheme;
 extern const wchar_t * s_AnchoProtocolHandlerPrefix;
 extern const wchar_t * s_AnchoInternalProtocolHandlerScheme;
@@ -19,6 +22,7 @@ extern const wchar_t * s_AnchoBackgroundConsoleObjectName;
 extern const wchar_t * s_AnchoFnGetContentAPI;
 extern const wchar_t * s_AnchoFnReleaseContentAPI;
 extern const wchar_t * s_AnchoTabIDPropertyName;
+
 
 
 #include <SHTypes.h>
@@ -38,6 +42,20 @@ inline std::wstring stripFragmentFromUrl(std::wstring aUrl)
   }
   return aUrl;
 }
+
+inline std::wstring stripTrailingSlash(std::wstring aUrl)
+{
+  size_t idx = aUrl.size();
+  while (idx-1 && aUrl[idx-1] == L'/') {
+    --idx;
+  }
+
+  if (idx < aUrl.size()) {
+    aUrl.erase(idx);
+  }
+  return aUrl;
+}
+
 
 inline int getWindowZOrder(HWND hWnd)
 {
@@ -120,3 +138,21 @@ protected:
 
 } //namespace Utils
 } //namespace Ancho
+
+
+#define EPOCH_DIFF 0x019DB1DED53E8000LL /* 116444736000000000 nsecs */
+#define RATE_DIFF 10000000 /* 100 nsecs */
+
+typedef INT64 filetime_t;
+
+/* Convert a UNIX time_t into a Windows filetime_t */
+inline filetime_t unixTimeToFileTime(time_t utime) {
+        INT64 tconv = ((INT64)utime * RATE_DIFF) + EPOCH_DIFF;
+        return tconv;
+}
+
+/* Convert a Windows filetime_t into a UNIX time_t */
+inline time_t fileTimeToUnixTime(filetime_t ftime) {
+        INT64 tconv = (ftime - EPOCH_DIFF) / RATE_DIFF;
+        return (time_t)tconv;
+}

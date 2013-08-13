@@ -1,9 +1,9 @@
 #pragma once
 #include "resource.h"
 #include "AnchoBgSrv_i.h"
-#include "AnchoBackgroundServer/AsynchronousTaskManager.hpp"
-#include "AnchoBackgroundServer/COMConversions.hpp"
-#include "AnchoBackgroundServer/JavaScriptCallback.hpp"
+#include <AnchoCommons/AsynchronousTaskManager.hpp>
+#include <AnchoCommons/COMConversions.hpp>
+#include <AnchoCommons/JavaScriptCallback.hpp>
 #include "AnchoBackgroundServer/PeriodicTimer.hpp"
 #include <IPCHeartbeat.h>
 #include <Exceptions.h>
@@ -28,11 +28,6 @@ typedef boost::function<void(WindowInfo)> WindowCallback;
 typedef boost::function<void(WindowInfoList)> WindowListCallback;
 typedef boost::function<void(void)> SimpleCallback;
 
-class WindowManager;
-//Pointer to windowmanager singleton instance
-extern CComObject<Ancho::Service::WindowManager> *gWindowManager;
-
-
 /**
  * Singleton class.
  * This manager stores information and references to all IE windows currently available.
@@ -49,7 +44,6 @@ class WindowManager:
 public:
 //  friend struct CreateTabTask;
 
-
   class WindowRecord;
   typedef boost::recursive_mutex Mutex;
 
@@ -57,6 +51,10 @@ public:
   {
   }
 
+  ~WindowManager()
+  {
+    finalize();
+  }
 public:
   ///@{
   /** Asynchronous methods available to JS.**/
@@ -78,9 +76,14 @@ public:
   template<typename TCallable>
   TCallable forEachWindow(TCallable aCallable)
   {
-    boost::unique_lock<Mutex> lock(mWindowAccessMutex);
-    auto it = mWindows.begin();
-    while (it != mWindows.end()) {
+    WindowMap tmp;
+    {
+      boost::unique_lock<Mutex> lock(mWindowAccessMutex);
+      tmp = mWindows;
+    }
+
+    auto it = tmp.begin();
+    while (it != tmp.end()) {
       ATLASSERT(it->second);
       aCallable(*it->second);
       ++it;
@@ -99,13 +102,18 @@ public:
   template<typename TContainer, typename TCallable>
   TContainer forWindowsInList(const TContainer &aWindowIds, TCallable aCallable)
   {
-    //Create list of tabs which do not exist
+    //Create list of windows which do not exist
     TContainer missed;
-    boost::unique_lock<Mutex> lock(mWindowAccessMutex);
+    WindowMap tmp;
+
+    {
+      boost::unique_lock<Mutex> lock(mWindowAccessMutex);
+      tmp = mWindows; //we need to work on a copy to prevent deadlocks caused by COM calls
+    }
 
     BOOST_FOREACH(auto windowId, aWindowIds) {
-      auto it = mWindows.find(windowId);
-      if (it != mTabs.end()) {
+      auto it = tmp.find(windowId);
+      if (it != tmp.end()) {
         ATLASSERT(it->second);
         aCallable(*it->second);
         ++it;
@@ -116,19 +124,7 @@ public:
     return std::move(missed);
   }
 
-  static void initSingleton()
-  {
-    ATLASSERT(gWindowManager == NULL);
-    CComObject<Ancho::Service::WindowManager> *windowManager = NULL;
-    IF_FAILED_THROW(CComObject<Ancho::Service::WindowManager>::CreateInstance(&windowManager));
-    gWindowManager = windowManager;
-  }
-
-  static CComObject<Ancho::Service::WindowManager> & instance()
-  {
-    ATLASSERT(gWindowManager != NULL);
-    return *gWindowManager;
-  }
+  static Ancho::Service::WindowManager & instance();
 
   STDMETHOD(getWindowIdFromHWND)(OLE_HANDLE aHWND, LONG *aWindowId);
   STDMETHOD(createPopupWindow)(BSTR aUrl, INT aX, INT aY, LPDISPATCH aInjectedData, LPDISPATCH aCloseCallback);
@@ -166,6 +162,9 @@ public:
                  int aApiId);
 
   WindowId getCurrentWindowId();
+  void finalize();
+
+  HWND getCurrentWindowHWND();
 public:
   // -------------------------------------------------------------------------
   // COM standard stuff
@@ -179,7 +178,7 @@ public:
   }
   void FinalRelease()
   {
-
+    finalize();
   }
 
 public:

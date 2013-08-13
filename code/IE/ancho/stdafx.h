@@ -27,6 +27,8 @@
 #include <exdispid.h>
 #include <activscp.h>
 
+#include <ShlObj.h>
+#include <Wininet.h>
 #include <map>
 #include <string>
 
@@ -53,6 +55,15 @@ using namespace LIB_BhoHelper;
 #else
 #define ASSERT_
 #endif
+
+/*
+#define WIDEN2(x) L ## x
+#define WIDEN(x) WIDEN2(x)
+#define __WFILE__ WIDEN(__FILE__)
+CString s; \
+s.Format(_T("ASSERTION FAILED: 0x%08x in file %s line %i"), _hr__, __WFILE__, __LINE__); \
+::MessageBox(NULL, s, _T("ancho debug"), MB_OK); \
+*/
 
 #define IF_FAILED_RET(_hr) \
   do \
@@ -100,6 +111,15 @@ using namespace LIB_BhoHelper;
 #include <SimpleWrappers.h>
 #include <IPCHeartbeat.h>
 
+#include <deque>
+#include <string>
+#include <map>
+#include <set>
+#include <vector>
+#include <algorithm>
+#include <locale>
+#include <sstream>
+
 #include <boost/regex.hpp>
 #include <boost/bind.hpp>
 #include <boost/format.hpp>
@@ -112,6 +132,16 @@ using namespace LIB_BhoHelper;
 #include <boost/function.hpp>
 #include <boost/thread/future.hpp>
 #include <boost/thread.hpp>
+#include <boost/atomic.hpp>
+#include <boost/foreach.hpp>
+#include <boost/asio.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/date_time/time_facet.hpp>
+#include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
+
+#include <boost/tuple/tuple.hpp>
+#include <boost/tuple/tuple_comparison.hpp>
 
 #include <boost/fusion/container/vector.hpp>
 #include <boost/fusion/support/is_sequence.hpp>

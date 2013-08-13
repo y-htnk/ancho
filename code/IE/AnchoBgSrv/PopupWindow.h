@@ -1,6 +1,7 @@
 #pragma once
 
 #include <exdispid.h>
+#define NOT_IMPLEMENTED {return E_NOTIMPL;}
 
 class CAnchoAddonService;
 
@@ -12,6 +13,7 @@ class CPopupWindow :
   public CComObjectRootEx<CComSingleThreadModel>,
   public CWindowImpl<CPopupWindow, CAxWindow>,
   public IUnknown,
+  public CMessageFilter,
   public PopupWebBrowserEvents
 {
 public:
@@ -20,7 +22,9 @@ public:
   static const unsigned defaultHeight = 2;
   DECLARE_FRAME_WND_CLASS(NULL, IDR_MAINFRAME)
 
+	virtual BOOL PreTranslateMessage(MSG* pMsg);
   virtual void OnFinalMessage(HWND);
+  void InjectJsObjects();
 
   DECLARE_PROTECT_FINAL_CONSTRUCT()
 
@@ -30,12 +34,14 @@ public:
 
   BEGIN_SINK_MAP(CPopupWindow)
     SINK_ENTRY_EX(1, DIID_DWebBrowserEvents2, DISPID_PROGRESSCHANGE, OnBrowserProgressChange)
+    SINK_ENTRY_EX(1, DIID_DWebBrowserEvents2, DISPID_NAVIGATECOMPLETE2, OnNavigateComplete)
   END_SINK_MAP()
 
   BEGIN_MSG_MAP(CPopupWindow)
     MESSAGE_HANDLER(WM_CREATE, OnCreate)
     MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
     MESSAGE_HANDLER(WM_ACTIVATE, OnActivate)
+    MESSAGE_HANDLER(WM_TIMER, OnTimer)
   END_MSG_MAP()
 
   HRESULT FinalConstruct();
@@ -46,21 +52,31 @@ public:
   LRESULT OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
   LRESULT OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled);
   LRESULT OnActivate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
+  LRESULT OnTimer(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/);
 
   STDMETHOD_(void, OnBrowserProgressChange)(LONG Progress, LONG ProgressMax);
+  STDMETHOD_(void, OnNavigateComplete)(IDispatch* pDispBrowser, VARIANT * vtURL);
 
   void checkResize();
+
 private:
+  enum { TIMER_ID = 22 };
+  enum { TIMER_TIMEOUT = 300 }; // 3 times per second
+
   CComPtr<IHTMLElement> getBodyElement();
 
   CComQIPtr<IWebBrowser2>   mWebBrowser;     // Embedded WebBrowserControl
   DispatchMap mInjectedObjects;
   CStringW    mURL;
-  DWORD       mWebBrowserEventsCookie;
   CIDispatchHelper mCloseCallback;
   CAnchoAddonService *mService;
+  CRect mRectBorders;
 
-  CComVariant mResizeEventHandler;
-  CComVariant mOnClickEventHandler;
+  DOMEventHandlerAdapter mResizeEventAdapter;
+  CComPtr<IDispatch> mResizeEventHandler;
+
+  DOMEventHandlerAdapter mClickEventAdapter;
+  CComPtr<IDispatch> mClickEventHandler;
 };
 
+#undef NOT_IMPLEMENTED

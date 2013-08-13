@@ -6,8 +6,8 @@
 #include "AnchoShared/AnchoShared.h"
 
 #include "AnchoBackgroundServer/TabManager.hpp"
-#include "AnchoBackgroundServer/COMConversions.hpp"
-#include "AnchoBackgroundServer/JavaScriptCallback.hpp"
+#include <AnchoCommons/COMConversions.hpp>
+#include <AnchoCommons/JavaScriptCallback.hpp>
 
 //class CPopupResizeEventHandler;
 //typedef CComObject<CPopupResizeEventHandler> CPopupResizeEventHandlerComObject;
@@ -159,11 +159,35 @@ typedef CComObject<PopupOnClickEventHandler> PopupOnClickEventHandlerComObject;
 // -------------------------------------------------------------------------
 // -------------------------------------------------------------------------
 
+void CPopupWindow::InjectJsObjects()
+{
+  // We don't care here if it works, if not, fail silently.
+  // It will anyway be called again later when script and window
+  // are available.
+  if (!mWebBrowser) {
+    return;
+  }
+  CIDispatchHelper script = CIDispatchHelper::GetScriptDispatch(mWebBrowser);
+  if (!script) {
+    return;
+  }
+  CIDispatchHelper window;
+  script.Get<CIDispatchHelper, VT_DISPATCH, IDispatch*>(L"window", window);
+  for (DispatchMap::iterator it = mInjectedObjects.begin(); it != mInjectedObjects.end(); ++it) {
+    CComVariant vt(it->second);
+    // set in any case to global script dispatch..
+    script.SetProperty((LPOLESTR)(it->first.c_str()), vt);
+    if (window) {
+      //.. and just in case also window if we have already one
+      window.SetProperty((LPOLESTR)(it->first.c_str()), vt);
+    }
+  }
+}
+
 
 
 HRESULT CPopupWindow::FinalConstruct()
 {
-  mWebBrowserEventsCookie = 0;
   CComPtr<PopupResizeEventHandlerComObject> onResizeEventHandler;
   PopupResizeEventHandler::createObject(OnResizeFunctor(this), onResizeEventHandler.p);
   mResizeEventHandler = onResizeEventHandler;
@@ -171,13 +195,22 @@ HRESULT CPopupWindow::FinalConstruct()
 
   CComPtr<PopupOnClickEventHandlerComObject> onClickEventHandler;
   PopupOnClickEventHandler::createObject(OnClickFunctor(this), onClickEventHandler.p);
-  mOnClickEventHandler = onClickEventHandler;
+  mClickEventHandler = onClickEventHandler;
   return S_OK;
 }
 
 void CPopupWindow::FinalRelease()
 {
-  int asd = 0;
+}
+
+BOOL CPopupWindow::PreTranslateMessage(MSG* pMsg)
+{
+	if((pMsg->message < WM_KEYFIRST || pMsg->message > WM_KEYLAST) &&
+	   (pMsg->message < WM_MOUSEFIRST || pMsg->message > WM_MOUSELAST))
+		return FALSE;
+
+	// give HTML page a chance to translate this message
+	return (BOOL)SendMessage(WM_FORWARDMSG, 0, (LPARAM)pMsg);
 }
 
 void CPopupWindow::OnFinalMessage(HWND)
@@ -190,11 +223,15 @@ LRESULT CPopupWindow::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam
 {
   DefWindowProc();
 
+  mRectBorders.left = mRectBorders.right = GetSystemMetrics(SM_CXBORDER);
+  mRectBorders.top = mRectBorders.bottom = GetSystemMetrics(SM_CYBORDER);
+  ::SetClassLongPtr(*this, GCL_STYLE, ::GetClassLongPtr(*this, GCL_STYLE)|CS_DROPSHADOW);
+
   CComPtr<IAxWinHostWindow> spHost;
   IF_FAILED_RET2(QueryHost(__uuidof(IAxWinHostWindow), (void**)&spHost), -1);
 
   CComPtr<IUnknown>  p;
-  IF_FAILED_RET2(spHost->CreateControlEx(mURL, *this, NULL, &p, /*DIID_DWebBrowserEvents2, GetEventUnk()*/ IID_NULL, NULL), -1);
+  IF_FAILED_RET2(spHost->CreateControlEx(_T("{8856F961-340A-11D0-A96B-00C04FD705A2}"), *this, NULL, &p, DIID_DWebBrowserEvents2, (IUnknown *)(PopupWebBrowserEvents *) this), -1);
 
   mWebBrowser = p;
   if (!mWebBrowser)
@@ -202,24 +239,24 @@ LRESULT CPopupWindow::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam
     return -1;
   }
 
-  AtlAdvise(mWebBrowser, (IUnknown *)(PopupWebBrowserEvents *) this, DIID_DWebBrowserEvents2, &mWebBrowserEventsCookie);
-
-
-  CIDispatchHelper script = CIDispatchHelper::GetScriptDispatch(mWebBrowser);
-  for (DispatchMap::iterator it = mInjectedObjects.begin(); it != mInjectedObjects.end(); ++it) {
-    ATLTRACE(L"INJECTING OBJECT %s\n", it->first.c_str());
-    script.SetProperty((LPOLESTR)(it->first.c_str()), CComVariant(it->second));
-  }
+  _AtlModule.GetMessageLoop()->AddMessageFilter(this);
 
   //Replacing XMLHttpRequest by wrapper
   CComPtr<IAnchoXmlHttpRequest> pRequest;
   IF_FAILED_RET(createAnchoXHRInstance(&pRequest));
+  mInjectedObjects[L"XMLHttpRequest"] = pRequest.p;
 
-  CIDispatchHelper window;
-  script.Get<CIDispatchHelper, VT_DISPATCH, IDispatch*>(L"window", window);
-  if (window) {
-    IF_FAILED_RET(window.SetProperty((LPOLESTR)L"XMLHttpRequest", CComVariant(pRequest.p)));
-  }
+  //Workaround to rid of the ActiveXObject
+  mInjectedObjects[L"ActiveXObject"] = NULL;
+
+  // inject all objects the first time
+  InjectJsObjects();
+
+  // and load page
+  mWebBrowser->Navigate(CComBSTR(mURL), NULL, NULL, NULL, NULL);
+
+  // set a timer for resizing
+  SetTimer(TIMER_ID, TIMER_TIMEOUT, NULL);
 
   // This AddRef call is paired with the Release call in OnFinalMessage
   // to keep the object alive as long as the window exists.
@@ -229,9 +266,15 @@ LRESULT CPopupWindow::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam
 
 LRESULT CPopupWindow::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled)
 {
-  AtlUnadvise(mWebBrowser, DIID_DWebBrowserEvents2, mWebBrowserEventsCookie);
+  _AtlModule.GetMessageLoop()->RemoveMessageFilter(this);
+
   bHandled = FALSE;
   //Cleanup procedure
+  KillTimer(TIMER_ID);
+
+  mResizeEventAdapter.remove();
+  mClickEventAdapter.remove();
+
   mCloseCallback.Invoke0(DISPID(0));
   mWebBrowser.Release();
   return 1;
@@ -246,15 +289,20 @@ LRESULT CPopupWindow::OnActivate(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/
   return 1;
 }
 
+LRESULT CPopupWindow::OnTimer(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/, BOOL& /*bHandled*/)
+{
+  if (TIMER_ID == wParam) {
+    checkResize();
+  }
+  return 0;
+}
+
 STDMETHODIMP_(void) CPopupWindow::OnBrowserProgressChange(LONG Progress, LONG ProgressMax)
 {
   //Workaround to rid of the ActiveXObject
   //?? still some scripts are started earlier ??
   //also executed multiple times
-  CIDispatchHelper script = CIDispatchHelper::GetScriptDispatch(mWebBrowser);
-  CIDispatchHelper window;
-  script.Get<CIDispatchHelper, VT_DISPATCH, IDispatch*>(L"window", window);
-  window.SetProperty((LPOLESTR)L"ActiveXObject", CComVariant());
+  InjectJsObjects();
 
   //Autoresize
   checkResize();
@@ -262,7 +310,7 @@ STDMETHODIMP_(void) CPopupWindow::OnBrowserProgressChange(LONG Progress, LONG Pr
   CComQIPtr<IHTMLElement2> bodyElement = getBodyElement();
 
   if (bodyElement) {
-    bodyElement->put_onresize(mResizeEventHandler);
+    mResizeEventAdapter.addTo(bodyElement, L"resize", mResizeEventHandler);
   }
 
   CComPtr<IDispatch> doc;
@@ -270,11 +318,15 @@ STDMETHODIMP_(void) CPopupWindow::OnBrowserProgressChange(LONG Progress, LONG Pr
     return;
   }
   CComQIPtr<IHTMLDocument2> htmlDocument2 = doc;
-  if (!htmlDocument2) {
+  if (htmlDocument2) {
+    mClickEventAdapter.addTo(htmlDocument2, L"click", mClickEventHandler);
     return;
   }
-  htmlDocument2->put_onclick(mOnClickEventHandler);
+}
 
+STDMETHODIMP_(void) CPopupWindow::OnNavigateComplete(IDispatch* pDispBrowser, VARIANT * vtURL)
+{
+  InjectJsObjects();
 }
 
 void CPopupWindow::checkResize()
@@ -291,6 +343,8 @@ void CPopupWindow::checkResize()
     return;
   }
   if (contentHeight > 0 && contentWidth > 0) {
+    contentWidth += mRectBorders.left + mRectBorders.right;
+    contentHeight += mRectBorders.top + mRectBorders.bottom;
     CRect rect;
     BOOL res = GetWindowRect(rect);
 
@@ -329,10 +383,11 @@ HRESULT CPopupWindow::CreatePopupWindow(HWND aParent, CAnchoAddonService *aServi
   pNewWindow->mService = aService;
   RECT r = {aX, aY, aX + defaultWidth, aY + defaultHeight};
 
-  if (!pNewWindow->Create(aParent, r, NULL, WS_POPUP))
+  if (!pNewWindow->Create(aParent, r, NULL, WS_POPUP|WS_BORDER))
   {
     return E_FAIL;
   }
   pNewWindow->ShowWindow(SW_SHOW);
   return S_OK;
 }
+

@@ -8,43 +8,41 @@
   Cu.import('resource://gre/modules/NetUtil.jsm');
 
   var Utils = require('./utils');
-  var Event = require('./event');
+  var TabSpecificEvent = require('./events').TabSpecificEvent;
 
-  function sendHelper(self, tabId, request, callback, event) {
-    // tabId is optional
-    if ('number' !== typeof(tabId)) {
-      callback = request;
-      request = tabId;
-      tabId = null;
-    }
-    callback = callback || function() {};
-
-    var sender = Utils.getSender(self._state.id, self._tab);
-    event.fire([ request, sender, callback ], tabId);
-  }
-
-  function ExtensionAPI(state, window) {
-    this._state = state;
+  function ExtensionAPI(extension, window) {
+    // TODO: Make sure we are running in a tab
     this._tab = Utils.getWindowId(window);
+    this._chromeWindow = Utils.getChromeWindow(window);
+
+    this._extension = extension;
     // Event handlers
-    this.onRequest = new Event(window, this._tab, this._state, 'extension.request');
-    this.onMessage = new Event(window, this._tab, this._state, 'extension.message');
+    this.onRequest = new TabSpecificEvent(extension, 'extension.request', this._tab);
+    this.onMessage = new TabSpecificEvent(extension, 'extension.message', this._tab);
   }
 
   ExtensionAPI.prototype = {
-
-    sendRequest: function(tabId, request, callback) {
-      sendHelper(this, tabId, request, callback, this.onRequest);
+    sendRequest: function(extensionId, request, callback) {
+      this._sendHelper(extensionId, request, callback, 'extension.request.*');
     },
 
-    sendMessage: function(tabId, request, callback) {
-      sendHelper(this, tabId, request, callback, this.onMessage);
+    sendMessage: function(extensionId, message, callback) {
+      this._sendHelper(extensionId, message, callback, 'extension.message.*');
     },
 
     getURL: function(path) {
-      var baseURI = NetUtil.newURI('chrome-extension://ancho/', null, null);
-      var URI = NetUtil.newURI(path, null, baseURI);
-      return URI.spec;
+      return this._extension.getURL(path);
+    },
+
+    _sendHelper: function(extensionId, message, callback, type) {
+      if ('undefined' === typeof(message) || 'function' === typeof(message)) {
+        callback = message;
+        message = extensionId;
+      }
+      callback = callback || function() {};
+
+      var sender = Utils.getSender(this._extension.id, this._tab);
+      this._extension.emit(type, message, sender, callback);
     }
   };
 

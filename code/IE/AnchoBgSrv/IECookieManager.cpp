@@ -13,7 +13,7 @@
 #include <Iepmapi.h>
 #pragma comment(lib, "Iepmapi.lib")
 
-CString lastErrorMessage(const DWORD& dwErrorCode)
+std::wstring lastErrorMessage(const DWORD& dwErrorCode)
 {
   LPTSTR lpErrorText = NULL;
 
@@ -22,7 +22,7 @@ CString lastErrorMessage(const DWORD& dwErrorCode)
 
   CString msg = lpErrorText;
   ::LocalFree( lpErrorText );
-  return msg;
+  return std::wstring(msg);
 }
 
 
@@ -269,7 +269,11 @@ STDMETHODIMP CIECookieManager::enumCookies(LPDISPATCH pCallback)
   BOOL ok = FALSE;
   dwEntrySize = MAX_CACHE_ENTRY_INFO_SIZE;
   entry = (LPINTERNET_CACHE_ENTRY_INFO)malloc(MAX_CACHE_ENTRY_INFO_SIZE);
-  hCacheDir = FindFirstUrlCacheEntry(filter, entry, &dwEntrySize);
+  hCacheDir = FindFirstUrlCacheEntryEx(filter, 0, COOKIE_CACHE_ENTRY, 0, entry, &dwEntrySize, NULL, NULL, NULL);
+
+
+
+  //hCacheDir = FindFirstUrlCacheEntry(filter, entry, &dwEntrySize);
   if (hCacheDir) {
     CComVariant cookieVT;
     DISPPARAMS params = {&cookieVT, NULL, 1, 0};
@@ -283,7 +287,8 @@ STDMETHODIMP CIECookieManager::enumCookies(LPDISPATCH pCallback)
         callback.Call(NULL, &params);
         nCount++;
       }
-      ok = FindNextUrlCacheEntry(hCacheDir, entry, &dwEntrySize);
+      ok = FindNextUrlCacheEntryEx(hCacheDir, entry, &dwEntrySize, NULL, NULL, NULL);
+      //ok = FindNextUrlCacheEntry(hCacheDir, entry, &dwEntrySize);
     } while (ok);
     FindCloseUrlCache(hCacheDir);
   } else {
@@ -333,7 +338,7 @@ STDMETHODIMP CIECookieManager::setCookie(BSTR aUrl, BSTR aName, BSTR aData)
 {
   if (!InternetSetCookie(aUrl, aName, aData)) {
     HRESULT hr = GetLastError();
-    ATLTRACE(_T("Could not set the cookie. URL=%s; Name=%s; Error: %d : %s\n"), aUrl, aName, hr, lastErrorMessage(hr));
+    ATLTRACE(_T("Could not set the cookie. URL=%s; Name=%s; Error: %d : %s"), aUrl, aName, hr, lastErrorMessage(hr));
     return hr;
   }
   return S_OK;
@@ -360,7 +365,6 @@ HRESULT tryToGetCookie(BSTR aUrl, BSTR aName, VARIANT &aData)
   data.ReleaseBuffer();
   aData.vt = VT_BSTR;
   aData.bstrVal = data.AllocSysString();
-
   //TODO construct IECookie object from string
   return S_OK;
 }
@@ -368,7 +372,8 @@ HRESULT tryToGetCookie(BSTR aUrl, BSTR aName, VARIANT &aData)
 HRESULT tryToGetCookieProtectedMode(BSTR aUrl, BSTR aName, VARIANT &aData)
 {
   DWORD size = 0;
-  if (!IEGetProtectedModeCookie(aUrl, aName, NULL, &size, NULL)){
+  HRESULT cookiehr = S_OK;
+  if (!(cookiehr = IEGetProtectedModeCookie(aUrl, aName, NULL, &size, NULL))){
     HRESULT hr = HRESULT_FROM_WIN32(GetLastError());
     ATLTRACE(_T("Could not get size of the cookie. URL=%s; Name=%s; Error: %d : %s\n"), aUrl, aName, hr, lastErrorMessage(hr));
     return hr;
@@ -376,7 +381,7 @@ HRESULT tryToGetCookieProtectedMode(BSTR aUrl, BSTR aName, VARIANT &aData)
   CString data;
   //Size was returned in bytes not in number of characters.
   TCHAR * buffer = data.GetBuffer(size/sizeof(TCHAR) + 1);
-  if (!IEGetProtectedModeCookie(aUrl, aName, buffer, &size, NULL)){
+  if (!(cookiehr = IEGetProtectedModeCookie(aUrl, aName, buffer, &size, NULL))){
     data.ReleaseBuffer();
     HRESULT hr = HRESULT_FROM_WIN32(GetLastError());
     ATLTRACE(_T("Could not get the cookie. URL=%s; Name=%s; Error: %d : %s\n"), aUrl, aName, hr, lastErrorMessage(hr));
@@ -386,7 +391,6 @@ HRESULT tryToGetCookieProtectedMode(BSTR aUrl, BSTR aName, VARIANT &aData)
   data.ReleaseBuffer();
   aData.vt = VT_BSTR;
   aData.bstrVal = data.AllocSysString();
-
   //TODO construct IECookie object from string
   return S_OK;
 }
@@ -395,7 +399,11 @@ STDMETHODIMP CIECookieManager::getCookie(BSTR aUrl, BSTR aName, VARIANT *aData)
 {
   ENSURE_RETVAL(aData);
   if (FAILED(tryToGetCookie(aUrl, aName, *aData))) {
-    return tryToGetCookieProtectedMode(aUrl, aName, *aData);
+    //if (FAILED(tryToGetCookieProtectedMode(aUrl, aName, *aData)))
+    {
+      CCookieArray cookies;
+      ReadCookieFile((LPCWSTR) aUrl, cookies);
+    }
   }
 
   //TODO construct IECookie object from string

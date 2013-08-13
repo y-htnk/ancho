@@ -1,52 +1,21 @@
 (function() {
 
-  Cu.import('resource://gre/modules/Services.jsm');
-
-  const Cc = Components.classes;
-
-  let Manifest = require('./config').manifest;
-
-  let messages = {};
-  let loaded = false;
-
-  function loadMessages() {
-    loaded = true;
-    let protocolHandler = require('./protocolHandler');
-    let utils = require('./utils');
-    // TODO: Use the real extension ID.
-    let rootURI = protocolHandler.getExtensionURI('ancho');
-    let localeDir = rootURI.QueryInterface(Ci.nsIFileURL).file;
-    localeDir.append('_locales');
-    if (localeDir.exists()) {
-      let entries = localeDir.directoryEntries;
-      while (entries.hasMoreElements()) {
-        let entry = entries.getNext().QueryInterface(Ci.nsIFile);
-        let locale = entry.leafName;
-        entry.append('messages.json');
-        if (entry.exists()) {
-          let entryURI = Services.io.newFileURI(entry);
-          let json = utils.readStringFromUrl(entryURI);
-          messages[locale] = JSON.parse(json);
-        }
-      }
-    }
-  }
-
-  function I18nAPI(state, contentWindow) {
-    if (!loaded) {
-      loadMessages();
-    }
+  function I18nAPI(extension) {
+    this._extension = extension;
   }
 
   I18nAPI.prototype = {
     getMessage: function(messageName, substitutions) {
-      let currentLocale = Manifest.default_locale;
-      if (messages[currentLocale]) {
-        var info = messages[currentLocale][messageName];
+      try {
+        // TODO: Use the right locale
+        var info = this._extension.getLocaleMessage(messageName);
         if (info && info.message) {
-          // TODO - substitutions
+          // TODO: substitutions
           return info.message.replace(/\$\$/g, '$');
         }
+      }
+      catch (e) {
+        // Do nothing so empty string is returned.
       }
       return '';
     }

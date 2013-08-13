@@ -18,18 +18,21 @@
 #include <SimpleWrappers.h>
 #include <IPCHeartbeat.h>
 
-#include "AnchoBackgroundServer/AsynchronousTaskManager.hpp"
+#include <AnchoCommons/AsynchronousTaskManager.hpp>
 #include "AnchoBackgroundServer/TabManager.hpp"
 #include "AnchoBackgroundServer/WindowManager.hpp"
-#include "AnchoBackgroundServer/COMConversions.hpp"
-#include "AnchoBackgroundServer/JavaScriptCallback.hpp"
+#include "AnchoBackgroundServer/JSConstructorManager.hpp"
+#include "AnchoBackgroundServer/PageActionProxy.hpp"
+
+#include <AnchoCommons/COMConversions.hpp>
+#include <AnchoCommons/JavaScriptCallback.hpp>
 
 #if defined(_WIN32_WCE) && !defined(_CE_DCOM) && !defined(_CE_ALLOW_SINGLE_THREADED_OBJECTS_IN_MTA)
 #error "Single-threaded COM objects are not properly supported on Windows CE platform, such as the Windows Mobile platforms that do not include full DCOM support. Define _CE_ALLOW_SINGLE_THREADED_OBJECTS_IN_MTA to force ATL to support creating single-thread COM object's and allow use of it's single-threaded COM object implementations. The threading model in your rgs file was set to 'Free' as that is the only threading model supported in non DCOM Windows CE platforms."
 #endif
 
 class CAnchoAddonService;
-extern CComObject<CAnchoAddonService> *gAnchoAddonService;
+extern CAnchoAddonService *gAnchoAddonService;
 /*============================================================================
  * class CAnchoAddonServiceCallback
  */
@@ -46,12 +49,13 @@ class ATL_NO_VTABLE CAnchoAddonService :
   public CComObjectRootEx<CComSingleThreadModel>,
   public CComCoClass<CAnchoAddonService, &CLSID_AnchoAddonService>,
   public IAnchoAddonService,
-  public IDispatchImpl<IAnchoServiceApi, &IID_IAnchoServiceApi, &LIBID_AnchoBgSrvLib, /*wMajor =*/ 0xffff, /*wMinor =*/ 0xffff>
+  public IDispatchImpl<IAnchoServiceApi, &IID_IAnchoServiceApi, &LIBID_AnchoBgSrvLib, /*wMajor =*/ 0xffff, /*wMinor =*/ 0xffff>,
+  public Ancho::Service::JSConstructorManager
 {
 public:
   // -------------------------------------------------------------------------
   // ctor
-  CAnchoAddonService()
+  CAnchoAddonService() : mGDIpToken(NULL)
   {
   }
 
@@ -97,13 +101,20 @@ public:
 
   STDMETHOD(invokeExternalEventObject)(BSTR aExtensionId, BSTR aEventName, LPDISPATCH aArgs, VARIANT* aRet);
 
+  STDMETHOD(registerJSConstructors)(LPDISPATCH aObjectConstructor, LPDISPATCH aArrayConstructor, BSTR aExtensionId, INT aApiId);
+  STDMETHOD(removeJSConstructors)(BSTR aExtensionId, INT aApiId);
+  STDMETHOD(createJSObject)(BSTR aExtensionId, INT aApiId, LPDISPATCH *aObject);
+  STDMETHOD(createJSArray)(BSTR aExtensionId, INT aApiId, LPDISPATCH *aArray);
+
   //STDMETHOD(get_browserActionInfos)(VARIANT* aBrowserActionInfos);
   STDMETHOD(getBrowserActions)(VARIANT* aBrowserActionsArray);
   STDMETHOD(addBrowserActionInfo)(LPDISPATCH aBrowserActionInfo);
   STDMETHOD(setBrowserActionUpdateCallback)(INT aTabId, LPDISPATCH aBrowserActionUpdateCallback);
   STDMETHOD(browserActionNotification)();
+  STDMETHOD(isImageData)(LPDISPATCH aObject, VARIANT_BOOL * aRetVal);
+  STDMETHOD(pageActionToolbar)(INT aTabId, VARIANT * aRetVal);
 
-  STDMETHOD(testFunction)(LPDISPATCH aObject, LPDISPATCH aCallback)
+  STDMETHOD(testFunction)(BSTR aData)
   {
     ATLTRACE(L"TEST FUNCTION -----------------\n");
     BEGIN_TRY_BLOCK;
@@ -112,7 +123,7 @@ public:
   }
   // -------------------------------------------------------------------------
   // IAnchoAddonService methods. See .idl for description.
-  STDMETHOD(GetAddonBackground)(BSTR bsID, IAnchoAddonBackground ** ppRet);
+  STDMETHOD(GetCreateAddonBackground)(BSTR bsID, IAnchoAddonBackground ** ppRet);
   STDMETHOD(GetModulePath)(BSTR * pbsPath);
   STDMETHOD(getInternalProtocolParameters)(BSTR * aServiceHost, BSTR * aServicePath);
   STDMETHOD(invokeEventObjectInAllExtensions)(BSTR aEventName, LPDISPATCH aArgs, VARIANT* aRet);
@@ -124,12 +135,27 @@ public:
   STDMETHOD(unregisterBrowserActionToolbar)(INT aTabId);
   STDMETHOD(getDispatchObject)(IDispatch **aRet);
 
-  static CComObject<CAnchoAddonService> & instance()
+  STDMETHOD(initPageActions)(OLE_HANDLE aHwndBrowser, INT aTabId);
+  STDMETHOD(releasePageActions)(INT aTabId);
+  STDMETHOD(advicePageActionBar)(OLE_HANDLE hwndBrowser, IDispatch * aDispatch);
+  STDMETHOD(unadvicePageActionBar)(OLE_HANDLE hwndBrowser);
+  STDMETHOD(onTabNavigate)(INT aTabId);
+  STDMETHOD(onTabActivate)(INT aNewTabId);
+
+  Ancho::Service::TabManager & getTabManagerInstance() {return mTabManager;}
+  Ancho::Service::WindowManager & getWindowManagerInstance() {return mWindowManager;}
+
+  static CAnchoAddonService & instance()
   {
     ATLASSERT(gAnchoAddonService != NULL);
     return *gAnchoAddonService;
   }
 
+  template<typename TCallable>
+  void addBackgroundTask(TCallable aCallable)
+  {
+    mAsyncTaskManager.addTask(aCallable);
+  }
 public:
 
   HRESULT FindActiveBrowser(IWebBrowser2** webBrowser);
@@ -141,8 +167,6 @@ private:
   typedef std::map<int, CIDispatchHelper> BrowserActionCallbackMap;
 
   typedef CComCritSecLock<CComAutoCriticalSection> CSLock;
-private:
-  //private methods
 
 private:
   // -------------------------------------------------------------------------
@@ -150,8 +174,12 @@ private:
 
 
   BackgroundObjectsMap          m_BackgroundObjects;
+  CComObjectStackEx<Ancho::Service::WindowManager>
+                                mWindowManager;
+  CComObjectStackEx<Ancho::Service::TabManager>
+                                mTabManager;
 
-  CComPtr<ComSimpleJSArray>     m_BrowserActionInfos;
+  CComObjectStackEx<SimpleJSArray> m_BrowserActionInfos;
   BrowserActionCallbackMap      m_BrowserActionCallbacks;
   CommandQueue                  m_WebBrowserPostInitTasks;
 
@@ -159,12 +187,16 @@ private:
 
   // Path to this exe and also to magpie.
   CString                       m_sThisPath;
+  // Install path from registry
+  CString                       mInstallPath32;
+  CString                       mInstallPath64;
 
-  CComPtr<IIECookieManager>     m_Cookies;
+  CComObjectStackEx<CIECookieManager> m_Cookies;
 
-  CComPtr<ITabManager>          mITabManager;
+  Ancho::PageAction::ProxyManager
+                                mPageActionProxies;
 
-  CComPtr<IWindowManager>          mIWindowManager;
+  ULONG_PTR                     mGDIpToken;
 };
 
 OBJECT_ENTRY_AUTO(__uuidof(AnchoAddonService), CAnchoAddonService)

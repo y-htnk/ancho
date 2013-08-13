@@ -10,3 +10,6 @@
 [submodule "code/IE/passthruapp"]
 	path = code/IE/passthruapp
 	url = git@github.com:salsita/passthruapp.git
+[submodule "code/IE/zlib"]
+	path = code/IE/zlib
+	url = git@github.com:madler/zlib.git

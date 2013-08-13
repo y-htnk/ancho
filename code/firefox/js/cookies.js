@@ -2,25 +2,23 @@
 
   var Cu = Components.utils;
   var Cc = Components.classes;
+  var Ci = Components.interfaces;
 
   Cu.import('resource://gre/modules/Services.jsm');
 
-  var Event = require('./event');
+  var Event = require('./events').Event;
   var Utils = require('./utils');
-
 
   var COOKIE_CHANGED = 'cookie-changed';
   var COOKIE_CHANGED_DATA_ADDED = 'added';
   var COOKIE_CHANGED_DATA_CHANGED = 'changed';
   var COOKIE_CHANGED_DATA_DELETED = 'deleted';
 
-  var CookiesAPI = function(state, window) {
-    this._state = state;
-    this._tab = Utils.getWindowId(window);
-    this.onChanged = new Event(window, this._tab, this._state, 'cookie.changed');
+  var CookiesAPI = function(extension) {
+    this.onChanged = new Event(extension, 'cookie.changed');
     Services.obs.addObserver(this, COOKIE_CHANGED, false);
     var self = this;
-    state.registerUnloader(window, function() {
+    extension.once('unload', function() {
       Services.obs.removeObserver(self, COOKIE_CHANGED, false);
     });
   };

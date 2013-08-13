@@ -10,13 +10,37 @@ HRESULT CBackgroundWindow::FinalConstruct()
 
 void CBackgroundWindow::FinalRelease()
 {
-  int asd = 0;
 }
 
 void CBackgroundWindow::OnFinalMessage(HWND)
 {
   // This Release call is paired with the AddRef call in OnCreate.
   Release();
+}
+
+void CBackgroundWindow::InjectJsObjects()
+{
+  // We don't care here if it works, if not, fail silently.
+  // It will anyway be called again later when script and window
+  // are available.
+  if (!m_pWebBrowser) {
+    return;
+  }
+  CIDispatchHelper script = CIDispatchHelper::GetScriptDispatch(m_pWebBrowser);
+  if (!script) {
+    return;
+  }
+  CIDispatchHelper window;
+  script.Get<CIDispatchHelper, VT_DISPATCH, IDispatch*>(L"window", window);
+  for (DispatchMap::iterator it = m_InjectedObjects.begin(); it != m_InjectedObjects.end(); ++it) {
+    CComVariant vt(it->second);
+    // set in any case to global script dispatch..
+    script.SetProperty((LPOLESTR)(it->first.c_str()), vt);
+    if (window) {
+      //.. and just in case also window if we have already one
+      window.SetProperty((LPOLESTR)(it->first.c_str()), vt);
+    }
+  }
 }
 
 LRESULT CBackgroundWindow::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
@@ -27,28 +51,26 @@ LRESULT CBackgroundWindow::OnCreate(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*l
   IF_FAILED_RET2(QueryHost(__uuidof(IAxWinHostWindow), (void**)&spHost), -1);
 
   CComPtr<IUnknown>  p;
-  IF_FAILED_RET2(spHost->CreateControlEx(m_sURL, *this, NULL, &p, DIID_DWebBrowserEvents2, (IUnknown *)(BackgroundWindowWebBrowserEvents *) this), -1);
+  IF_FAILED_RET2(spHost->CreateControlEx(_T("{8856F961-340A-11D0-A96B-00C04FD705A2}"), *this, NULL, &p, DIID_DWebBrowserEvents2, (IUnknown *)(BackgroundWindowWebBrowserEvents *) this), -1);
 
   m_pWebBrowser = p;
-  if (!m_pWebBrowser)
-  {
+  if (!m_pWebBrowser) {
     return -1;
   }
 
-  CIDispatchHelper script = CIDispatchHelper::GetScriptDispatch(m_pWebBrowser);
-  for (DispatchMap::iterator it = m_InjectedObjects.begin(); it != m_InjectedObjects.end(); ++it) {
-    script.SetProperty((LPOLESTR)(it->first.c_str()), CComVariant(it->second));
-  }
   //Replacing XMLHttpRequest by wrapper
   CComPtr<IAnchoXmlHttpRequest> pRequest;
   IF_FAILED_RET(createAnchoXHRInstance(&pRequest));
-  IF_FAILED_RET(script.SetProperty((LPOLESTR)L"XMLHttpRequest", CComVariant(pRequest.p)));
+  m_InjectedObjects[L"XMLHttpRequest"] = pRequest.p;
 
-  CIDispatchHelper window;
-  script.Get<CIDispatchHelper, VT_DISPATCH, IDispatch*>(L"window", window);
-  if (window) {
-    IF_FAILED_RET(window.SetProperty((LPOLESTR)L"XMLHttpRequest", CComVariant(pRequest.p)));
-  }
+  //Workaround to rid of the ActiveXObject
+  m_InjectedObjects[L"ActiveXObject"] = NULL;
+
+  // inject all objects the first time
+  InjectJsObjects();
+
+  // and load page
+  m_pWebBrowser->Navigate(CComBSTR(m_sURL), NULL, NULL, NULL, NULL);
 
   // This AddRef call is paired with the Release call in OnFinalMessage
   // to keep the object alive as long as the window exists.
@@ -66,14 +88,15 @@ LRESULT CBackgroundWindow::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*
 
 STDMETHODIMP_(void) CBackgroundWindow::OnBrowserProgressChange(LONG Progress, LONG ProgressMax)
 {
-  //Workaround to rid of the ActiveXObject
-  //?? still some scripts are started earlier ??
-  //also executed multiple times
-  if(!m_pWebBrowser) { return; } //Event is fired also before m_pWebBrowser is initialized
-  CIDispatchHelper script = CIDispatchHelper::GetScriptDispatch(m_pWebBrowser);
-  CIDispatchHelper window;
-  script.Get<CIDispatchHelper, VT_DISPATCH, IDispatch*>(L"window", window);
-  window.SetProperty((LPOLESTR)L"ActiveXObject", CComVariant());
+  // This method of injecting again and again is brutal, but it seems to be the
+  // only way to reliably inject things like "chrome", "XMLHttpRequest" etc.
+  // It is done here, in OnCreate() and in OnNavigateComplete(). All together it seems to work.
+  InjectJsObjects();
+}
+
+STDMETHODIMP_(void) CBackgroundWindow::OnNavigateComplete(IDispatch* pDispBrowser, VARIANT * vtURL)
+{
+  InjectJsObjects();
 }
 
 HRESULT CBackgroundWindow::CreateBackgroundWindow(const DispatchMap &aInjectedObjects, LPCWSTR lpszURL, CBackgroundWindowComObject ** ppRet)

@@ -14,7 +14,7 @@ namespace detail {
 
 inline CComVariant getMember(CComVariant &aObject, const std::wstring &aProperty)
 {
-  if (aObject.vt != VT_DISPATCH) {
+  if (aObject.vt != VT_DISPATCH || aObject.pdispVal == NULL) {
     ANCHO_THROW(ENotAnObject());
   }
   DISPID did = 0;
@@ -32,7 +32,7 @@ inline CComVariant getMember(CComVariant &aObject, const std::wstring &aProperty
 
 inline void setMember(CComVariant &aObject, const std::wstring &aProperty, const CComVariant &aValue)
 {
-  if (aObject.vt != VT_DISPATCH) {
+  if (aObject.vt != VT_DISPATCH || aObject.pdispVal == NULL) {
     ANCHO_THROW(ENotAnObject());
   }
 
@@ -125,13 +125,18 @@ public:
     : mCurrentValue(aValue) {}
 
   JS_VALUE_TYPE_METHODS(std::wstring, String, BSTR, VT_BSTR, ENotAString)
-#pragma warning( push )
-#pragma warning( disable : 4800 )
-  JS_VALUE_TYPE_METHODS(bool, Bool, BOOL, VT_BOOL, ENotABool)
-#pragma warning( pop )
+
+  JS_VALUE_IS_TYPE(Bool, VT_BOOL);
+  bool toBool() const {
+    if (!isBool()) {
+      ANCHO_THROW(ENotABool());
+    }
+    return mCurrentValue.boolVal != VARIANT_FALSE;
+  }
+
   JS_VALUE_TYPE_METHODS(int, Int, INT, VT_I4, ENotAnInt)
   JS_VALUE_TYPE_METHODS(double, Double, double, VT_R8, ENotADouble)
-  //JS_VALUE_TYPE_METHODS(CComPtr<IDispatch>, Object, IDispatch*, VT_DISPATCH, ENotAnObject)
+
 
   void attach(VARIANT &aVariant)
   {
@@ -247,28 +252,33 @@ public:
     : JSValueWrapper(aValue), mOwner(aOwner), mPropertyName(aPropertyName)
   { /*empty*/ }
 
-  JSValueAssigner & operator=(const std::wstring &aValue)
+  JSValueAssigner operator=(const std::wstring &aValue)const
   {
     Utils::detail::setMember(mOwner, mPropertyName, CComVariant(aValue.c_str()));
     return *this;
   }
-  JSValueAssigner & operator=(int aValue)
+  JSValueAssigner operator=(const wchar_t *aValue)const
   {
     Utils::detail::setMember(mOwner, mPropertyName, CComVariant(aValue));
     return *this;
   }
-  JSValueAssigner & operator=(double aValue)
+  JSValueAssigner operator=(int aValue)const
   {
     Utils::detail::setMember(mOwner, mPropertyName, CComVariant(aValue));
     return *this;
   }
-  JSValueAssigner & operator=(bool aValue)
+  JSValueAssigner operator=(double aValue)const
+  {
+    Utils::detail::setMember(mOwner, mPropertyName, CComVariant(aValue));
+    return *this;
+  }
+  JSValueAssigner operator=(bool aValue)const
   {
     Utils::detail::setMember(mOwner, mPropertyName, CComVariant(aValue));
     return *this;
   }
 protected:
-  CComVariant mOwner;
+  mutable CComVariant mOwner;
   std::wstring mPropertyName;
 };
 

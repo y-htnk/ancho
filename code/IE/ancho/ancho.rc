@@ -49,7 +49,6 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 //
 
 IDR_ANCHO               REGISTRY                "ancho.rgs"
-IDR_ANCHOTOOLBAR        REGISTRY                "AnchoToolbar.rgs"
 
 #ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////
@@ -57,12 +56,12 @@ IDR_ANCHOTOOLBAR        REGISTRY                "AnchoToolbar.rgs"
 // TEXTINCLUDE
 //
 
-1 TEXTINCLUDE 
+1 TEXTINCLUDE
 BEGIN
     "resource.h\0"
 END
 
-2 TEXTINCLUDE 
+2 TEXTINCLUDE
 BEGIN
     "#ifndef APSTUDIO_INVOKED\r\n"
     "#include ""targetver.h""\r\n"
@@ -71,7 +70,7 @@ BEGIN
     "\0"
 END
 
-3 TEXTINCLUDE 
+3 TEXTINCLUDE
 BEGIN
     "1 TYPELIB ""ancho.tlb""\r\n"
     "\0"
@@ -102,14 +101,14 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "Salsita Software"
-            VALUE "FileDescription", "Browser Helper Object for Ancho based browser addons."
+            VALUE "CompanyName", ANCHO_BHO_VERSION_COMPANY
+            VALUE "FileDescription", ANCHO_BHO_VERSION_FILE_DESCRIPTION
             VALUE "FileVersion", "1.0.0.1"
             VALUE "InternalName", "ancho.dll"
-            VALUE "LegalCopyright", "(c) Salsita Software 2013.  All rights reserved."
+            VALUE "LegalCopyright", ANCHO_BHO_VERSION_LEGAL_COPYRIGHT
             VALUE "OriginalFilename", "ancho.dll"
-            VALUE "ProductName", "Ancho"
-            VALUE "ProductVersion", "1.0.0.1"
+            VALUE "ProductName", ANCHO_BHO_VERSION_PRODUCT_NAME
+            VALUE "ProductVersion", ANCHO_BHO_VERSION_PRODUCT_VERSION
         END
     END
     BLOCK "VarFileInfo"
@@ -124,7 +123,7 @@ END
 // String Table
 //
 
-STRINGTABLE 
+STRINGTABLE
 BEGIN
     IDS_PROJNAME            "ancho"
 END
