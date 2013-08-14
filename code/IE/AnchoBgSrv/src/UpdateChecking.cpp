@@ -114,8 +114,21 @@ VersionInfo getCurrentBinaryVersion()
 // -------------------------------------------------------------------------
 void checkForUpdate(std::wstring aRegistryKey, std::wstring aName)
 {
-  std::wstring updateUrl = getCheckUpdateLinkFromRegistry(aRegistryKey);
-  Ancho::Service::VersionInfo currentVersion = getVersionInfoFromRegistry(aRegistryKey);
+  Ancho::Service::VersionInfo currentVersion;
+  std::wstring updateUrl;
+  try {
+    updateUrl = getCheckUpdateLinkFromRegistry(aRegistryKey);
+  } catch (std::exception &) {
+    ATLTRACE(L"WARNING!!! Autoupdate for %s is DISABLED - unable to read URL from registry key '%s'\n", aName.c_str(), aRegistryKey.c_str());
+    throw;
+  }
+
+  try {
+    currentVersion = getVersionInfoFromRegistry(aRegistryKey);
+  } catch (std::exception &) {
+    ATLTRACE(L"WARNING!!! Autoupdate for %s is DISABLED - unable to read version from registry key '%s'\n", aName.c_str(), aRegistryKey.c_str());
+    throw;
+  }
 
   std::wstring updateInfoText = Ancho::Service::getUpdateInfoText(updateUrl);
   Ancho::Service::UpdateInfo info = Ancho::Service::parseUpdateInfoText(updateInfoText);
@@ -123,8 +136,7 @@ void checkForUpdate(std::wstring aRegistryKey, std::wstring aName)
   Ancho::Service::VersionInfo availableVersion(info.version);
 
   if (currentVersion < availableVersion) {
-    int result = ::MessageBox(NULL,
-                              //Ancho::Service::WindowManager::instance().getCurrentWindowHWND(), //this blocks IE page loading :-(
+    int result = ::MessageBox(NULL, //Ancho::Service::WindowManager::instance().getCurrentWindowHWND(), //this blocks IE page loading :-(
                               boost::str(boost::wformat(L"New version of %1% was found. Do you want to go to the download page?") % aName).c_str(),
                               L"New version detected",
                               MB_ICONQUESTION | MB_YESNO | MB_TOPMOST | MB_SYSTEMMODAL);

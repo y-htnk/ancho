@@ -25,7 +25,7 @@ enum {
 static CComBSTR
 getMethodNameFromBindVerb(DWORD bindVerb)
 {
-  CComBSTR method; 
+  CComBSTR method;
   switch (bindVerb) {
   case BINDVERB_GET:
     method = L"GET";
@@ -491,7 +491,11 @@ STDMETHODIMP CAnchoPassthruAPP::Continue(PROTOCOLDATA* data)
 
     {
       CComVariant tmp;
-      m_DocumentRecord.topLevelBrowser->GetProperty(CComBSTR(L"_anchoNavigateURL"), &tmp);
+      IF_FAILED_RET(m_DocumentRecord.topLevelBrowser->GetProperty(CComBSTR(L"_anchoNavigateURL"), &tmp));
+      if (tmp.vt != VT_BSTR) {
+        ATLTRACE(L"PAPP couldn't get _anchoNavigateURL property from browser.\n");
+        return E_FAIL;
+      }
       std::wstring navigateUrl = tmp.bstrVal;
 
       CComBSTR topLevelUrl; // = var.bstrVal;
