@@ -82,6 +82,7 @@ set(${PROJECT_NAME}_C_SOURCES
 set(${PROJECT_NAME}_API_JS
   "${${PROJECT_NAME}_RC_DIR}/res/js/"
   "${${PROJECT_NAME}_RC_DIR}/res/js/api.js"
+  "${${PROJECT_NAME}_RC_DIR}/res/js/app.js"
   "${${PROJECT_NAME}_RC_DIR}/res/js/bookmarks.js"
   "${${PROJECT_NAME}_RC_DIR}/res/js/browserAction.js"
   "${${PROJECT_NAME}_RC_DIR}/res/js/browsingData.js"

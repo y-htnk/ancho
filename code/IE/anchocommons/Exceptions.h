@@ -27,8 +27,15 @@ struct EHResult: EAnchoException
   HRESULT mHResult;
 };
 
+#define WIDEN2(x) L ## x
+#define WIDEN(x) WIDEN2(x)
+#define WFILE WIDEN(__FILE__)
+
 #define ANCHO_THROW(...) \
-  throw __VA_ARGS__
+  do {\
+    ATLTRACE(L"ANCHO - throwing exception in %s, line %d\n", WFILE, __LINE__); \
+    throw __VA_ARGS__ ;\
+  } while (0);
 
 
 inline HRESULT exceptionToHRESULT()
@@ -71,14 +78,16 @@ hresultToException(HRESULT hr)
 #define IF_THROW_RET(...) \
   try { \
     __VA_ARGS__ ; \
-} catch (...) { \
+} catch (std::exception &) { \
+  ATLTRACE(L"Exception caught to HRESULT in %s, line %d\n", WFILE, __LINE__);\
   return exceptionToHRESULT();\
 }
 
 #define BEGIN_TRY_BLOCK try {
 
 #define END_TRY_BLOCK_CATCH_TO_HRESULT \
-} catch (...) { \
+} catch (std::exception &) { \
+  ATLTRACE(L"Exception caught to HRESULT in %s, line %d\n", WFILE, __LINE__);\
   return exceptionToHRESULT();\
 }
 

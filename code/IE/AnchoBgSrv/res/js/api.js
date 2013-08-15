@@ -24,7 +24,9 @@ console.info("Loading extension [" + addonAPI.id + "] [" + addonAPI.guid + "]");
 //------------------------------------------------------------------------------
 exports.chrome = {};
 
-var API_NAMES = ["bookmarks",
+var API_NAMES = [
+    "app",
+    "bookmarks",
     "browserAction",
     "browsingData",
     "contentSettings",
@@ -55,9 +57,9 @@ var API_NAMES = ["bookmarks",
     "windows"];
 
 var CONTENT_API_NAMES = [
+    "app",
     "extension",
     "i18n"];
-
 
 function createChromeAPISubset(chrome, aInstanceID, aAPINames) {
   //TODO - use constructors from right context - these are from Magpie

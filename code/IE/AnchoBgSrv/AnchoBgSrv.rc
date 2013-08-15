@@ -56,6 +56,7 @@ IDR_ANCHOBGSRV          REGISTRY                "AnchoBgSrv.rgs"
 //
 
 API.JS                  HTML                    "res\\js\\api.js"
+APP.JS                  HTML                    "res\\js\\app.js"
 BOOKMARKS.JS            HTML                    "res\\js\\bookmarks.js"
 EVENTS.JS               HTML                    "res\\js\\events.js"
 BROWSERACTION.JS        HTML                    "res\\js\\browserAction.js"
