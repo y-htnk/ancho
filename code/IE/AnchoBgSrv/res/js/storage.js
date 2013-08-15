@@ -102,7 +102,7 @@ exports.createAPI = function(instanceID) {
   //============================================================================
   // public properties
 
-  this.sync = null;
+  this.sync = new StorageArea('sync');
   this.local = new StorageArea('local');
   //============================================================================
   // events

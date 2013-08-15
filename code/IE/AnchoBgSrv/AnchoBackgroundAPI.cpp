@@ -508,7 +508,7 @@ STDMETHODIMP CAnchoBackgroundAPI::invokeEvent(BSTR aEventName, INT aSelectedInst
 
 StorageDatabase & CAnchoBackgroundAPI::getStorageInstance(const std::wstring &aStorageType)
 {
-  if (aStorageType != L"local") {
+  if (aStorageType != L"local" && aStorageType != L"sync") {
     ANCHO_THROW(std::runtime_error("Unsupported storage type"));
   }
 
