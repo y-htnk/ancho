@@ -59,7 +59,8 @@ var API_NAMES = [
 var CONTENT_API_NAMES = [
     "app",
     "extension",
-    "i18n"];
+    "i18n",
+    "storage"];
 
 function createChromeAPISubset(chrome, aInstanceID, aAPINames) {
   //TODO - use constructors from right context - these are from Magpie
