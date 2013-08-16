@@ -363,10 +363,15 @@ library AnchoBgSrvLib
     HRESULT setIDispatchEventInvocationHandler([in] LPDISPATCH aFunction);
     HRESULT callFunction([in] LPDISPATCH aFunction, [in] LPDISPATCH aArgs, [out, retval] VARIANT* aRet);
 
-    HRESULT storageGet([in] BSTR aStorageType, [in] BSTR aKey, [out, retval] VARIANT* aValue);
+    /*HRESULT storageGet([in] BSTR aStorageType, [in] BSTR aKey, [out, retval] VARIANT* aValue);
     HRESULT storageSet([in] BSTR aStorageType, [in] BSTR aKey, [in] BSTR aValue);
     HRESULT storageRemove([in] BSTR aStorageType, [in] BSTR aKey);
-    HRESULT storageClear([in] BSTR aStorageType);
+    HRESULT storageClear([in] BSTR aStorageType);*/
+
+    HRESULT storageGet([in] BSTR aStorageType, [in] LPDISPATCH aKeysArray, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+    HRESULT storageSet([in] BSTR aStorageType, [in] LPDISPATCH aValuesObject, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+    HRESULT storageRemove([in] BSTR aStorageType, [in] LPDISPATCH aKeysArray, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
+    HRESULT storageClear([in] BSTR aStorageType, [in] LPDISPATCH aCallback, [in] BSTR aExtensionId, [in] INT aApiId);
   };
 
 /*==========================================================================*/
