@@ -32,7 +32,7 @@
     fire: function() {
       var args = Array.prototype.slice.call(arguments);
       args.unshift(this._type);
-      this._owner.emit.apply(this, args);
+      this._owner.emit.apply(this._owner, args);
     }
   };
 

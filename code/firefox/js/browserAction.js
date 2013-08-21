@@ -240,6 +240,10 @@
     },
 
     _drawButton: function(tabId, button, canvas) {
+      if (!button) {
+        // No button visible so we don't need to draw it.
+        return;
+      }
       var ctx = canvas.getContext('2d');
       ctx.textBaseline = 'top';
       ctx.font = 'bold 9px sans-serif';

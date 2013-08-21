@@ -65,7 +65,7 @@
         }
 
         var url;
-        if (id[0] != '.' && id[0] != '/') {
+        if (id[0] !== '.' && id[0] !== '/') {
           // Try to find the module in the search path
           url = findModuleInPath(id, scriptUrl);
         }
