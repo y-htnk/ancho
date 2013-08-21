@@ -83,7 +83,9 @@ void CAnchoRuntime::DestroyAddons()
 //  Cleanup
 HRESULT CAnchoRuntime::Cleanup()
 {
-  mToolbarWindow.DestroyWindow();
+  if (mToolbarWindow) {
+    mToolbarWindow.DestroyWindow();
+  }
 
   // release page actions first
   if (mAnchoService) {
