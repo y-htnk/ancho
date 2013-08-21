@@ -33,7 +33,6 @@
         // https://developer.mozilla.org/en-US/docs/XPCOM_Interface_Reference/nsICookieService
         if (changed) {
           var cookie = this.toCookie(subject);
-          var listeners = this.onChanged._owner.listeners('cookie.changed');
           this.onChanged.fire({
             cookie : cookie,
             removed : data === COOKIE_CHANGED_DATA_DELETED
