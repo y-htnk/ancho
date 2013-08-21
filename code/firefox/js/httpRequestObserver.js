@@ -306,13 +306,13 @@
           httpChannel.cancel(Cr.NS_BINDING_ABORTED);
           context._setRequest(tabId, Utils.removeFragment(url), null);
           params.error = 'REQUEST_CANCELLED_BY_EXTENSION';
-          context.onErrorOccurred.fire([ params ]);
+          context.onErrorOccurred.fire(params);
           if (DebugData.getProperty(tabId, 'networkMonitor')) {
             var data = {
               timestamp: params.timeStamp / 1000,
               requestId: params.requestId
             };
-            context.onEvent.fire([ { tabId: tabId }, 'Network.loadingFailed', data ]);
+            context.onEvent.fire({ tabId: tabId }, 'Network.loadingFailed', data);
           }
           return true;
         }
@@ -334,11 +334,11 @@
         parentFrameId: params.parentFrameId,
         frameId: params.frameId
       };
-      this.onEvent.fire([ { tabId: tabId }, 'Network.requestWillBeSent', data ]);
+      this.onEvent.fire({ tabId: tabId }, 'Network.requestWillBeSent', data);
     }
 
     // fire onBeforeRequest; TODO: implement redirection
-    var results = this.onBeforeRequest.synchronousFire([ params ]);
+    var results = this.onBeforeRequest.synchronousFire(params);
     if (resultCancelledRequest(results, this)) {
       return;
     }
@@ -349,7 +349,7 @@
     // fire onBeforeSendHeaders; TODO: implement changing the request headers
     params.timeStamp = (new Date()).getTime();
     params.requestHeaders = visitor.headers;
-    results = this.onBeforeSendHeaders.synchronousFire([ params ]);
+    results = this.onBeforeSendHeaders.synchronousFire(params);
     if (resultCancelledRequest(results, this)) {
       return;
     }
@@ -358,7 +358,7 @@
     // TODO: possibly include request body,
     // legacy code: firefox/components/apicawatch.js:535
     params.timeStamp = (new Date()).getTime();
-    this.onSendHeaders.fire([ params ]);
+    this.onSendHeaders.fire(params);
 
     // watch the document being loaded. when complete, reset the tab flags, so
     // subsequent HTTP requests are recognized as xmlhttprequests
@@ -435,7 +435,7 @@
     params.statusLine = '' + statusCode + ' ' + statusText;
 
     // fire onHeadersReceived
-    var results = this.onHeadersReceived.synchronousFire([ params ]);
+    var results = this.onHeadersReceived.synchronousFire(params);
 
     params.statusCode = statusCode;
     params.fromCache = (HTTP_ON_EXAMINE_CACHED_RESPONSE === topic);
@@ -446,7 +446,7 @@
         requestId: params.requestId
       };
       if (params.fromCache) {
-        this.onEvent.fire([ { tabId: tabId }, 'Network.requestServedFromCache', data ]);
+        this.onEvent.fire({ tabId: tabId }, 'Network.requestServedFromCache', data);
       }
       data.type = params.type;
       if ('xmlhttprequest' === data.type) {
@@ -526,7 +526,7 @@
         requestVisitor.headers
       );
 
-      this.onEvent.fire([ { tabId: tabId }, 'Network.responseReceived', data ]);
+      this.onEvent.fire({ tabId: tabId }, 'Network.responseReceived', data);
     }
 
     // TODO: get IP address of the remote server
@@ -539,7 +539,7 @@
       params.redirectUrl = httpChannel.getResponseHeader('Location');
       this._setRequest(tabId, Utils.removeFragment(url), null);
       this._setRequest(tabId, Utils.removeFragment(params.redirectUrl), params);
-      this.onBeforeRedirect.fire([ params ]);
+      this.onBeforeRedirect.fire(params);
       return;
     }
 
@@ -550,7 +550,7 @@
 
     // fire onResponseStarted
     params.timeStamp = (new Date()).getTime();
-    this.onResponseStarted.fire([ params ]);
+    this.onResponseStarted.fire(params);
   };
 
   // get request-related data
@@ -683,17 +683,17 @@
       switch (statusCode) {
         case Cr.NS_OK:
           // fire onCompleted
-          this.requestData.monitor.onCompleted.fire([ data ]);
+          this.requestData.monitor.onCompleted.fire(data);
           if (DebugData.getProperty(data.tabId, 'networkMonitor')) {
             var debuggerData = {
               timestamp: data.timeStamp / 1000,
               requestId: data.requestId
             };
-            this.requestData.monitor.onEvent.fire([
+            this.requestData.monitor.onEvent.fire(
               { tabId: data.tabId },
               'Network.loadingFinished',
               debuggerData
-            ]);
+            );
           }
           break;
 
@@ -708,17 +708,17 @@
           // (a) what errors are covered here, and
           // (b) how to cover the remaining ones we need.
           data.error = Utils.mapHttpError(statusCode);
-          this.requestData.monitor.onErrorOccurred.fire([ data ]);
+          this.requestData.monitor.onErrorOccurred.fire(data);
           if (DebugData.getProperty(data.tabId, 'networkMonitor')) {
             var debuggerData = {
               timestamp: data.timeStamp / 1000,
               requestId: data.requestId
             };
-            this.requestData.monitor.onEvent.fire([
+            this.requestData.monitor.onEvent.fire(
               { tabId: data.tabId },
               'Network.loadingFailed',
               debuggerData
-            ]);
+            );
           }
           break;
       }
@@ -757,11 +757,11 @@
           requestId: data.requestId,
           dataLength: count
         };
-        this.requestData.monitor.onEvent.fire([
+        this.requestData.monitor.onEvent.fire(
           { tabId: data.tabId },
           'Network.dataReceived',
           debuggerData
-        ]);
+        );
       }
     }
 
