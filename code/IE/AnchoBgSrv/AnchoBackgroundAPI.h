@@ -12,6 +12,10 @@
 #include "BackgroundWindow.h"
 #include "StorageDatabase.h"
 
+#include <AnchoCommons/AsynchronousTaskManager.hpp>
+#include <AnchoCommons/COMConversions.hpp>
+#include <AnchoCommons/JavaScriptCallback.hpp>
+
 #include <list>
 #include <vector>
 #include <map>
@@ -22,6 +26,10 @@
 #endif
 
 struct CAnchoAddonServiceCallback;
+
+typedef CComPtr<IDispatch> StorageItemsObject;
+typedef boost::function<void(void)> SimpleCallback;
+typedef boost::function<void(StorageItemsObject)> StorageItemsObjectCallback;
 
 class CAnchoBackgroundAPI;
 typedef IDispEventImpl<1, CAnchoBackgroundAPI, &DIID__IMagpieLoggerEvents, &LIBID_AnchoBgSrvLib, 0xffff, 0xffff> CAnchoAddonBackgroundLogger;
@@ -113,11 +121,22 @@ public:
   STDMETHOD(setIDispatchEventInvocationHandler)(LPDISPATCH aFunction);
   STDMETHOD(callFunction)(LPDISPATCH aFunction, LPDISPATCH aArgs, VARIANT* pvRet);
 
-  STDMETHOD(storageGet)(BSTR aStorageType, BSTR aKey, VARIANT* aValue);
+  /*STDMETHOD(storageGet)(BSTR aStorageType, BSTR aKey, VARIANT* aValue);
   STDMETHOD(storageSet)(BSTR aStorageType, BSTR aKey, BSTR aValue);
   STDMETHOD(storageRemove)(BSTR aStorageType, BSTR aKey);
-  STDMETHOD(storageClear)(BSTR aStorageType);
+  STDMETHOD(storageClear)(BSTR aStorageType);*/
 
+  STDMETHOD(storageGet)(BSTR aStorageType, LPDISPATCH aKeysArray, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
+  void storageGet(const std::wstring &aStorageType, const Ancho::Utils::JSArray &aKeysArray, StorageItemsObjectCallback aCallback, const std::wstring &aExtensionId, int aApiId);
+
+  STDMETHOD(storageSet)(BSTR aStorageType, LPDISPATCH aValuesObject, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
+  void storageSet(const std::wstring &aStorageType, const Ancho::Utils::JSObject &aValuesObject, SimpleCallback aCallback, const std::wstring &aExtensionId, int aApiId);
+
+  STDMETHOD(storageRemove)(BSTR aStorageType, LPDISPATCH aKeysArray, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
+  void storageRemove(const std::wstring &aStorageType, const Ancho::Utils::JSArray &aKeysArray, SimpleCallback aCallback, const std::wstring &aExtensionId, int aApiId);
+
+  STDMETHOD(storageClear)(BSTR aStorageType, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
+  void storageClear(const std::wstring &aStorageType, SimpleCallback aCallback, const std::wstring &aExtensionId, int aApiId);
 
   // -------------------------------------------------------------------------
   // _IMagpieLoggerEvents methods
@@ -186,5 +205,8 @@ private:
   CIDispatchHelper              m_InvokeEventWithIDispatch;
 
   StorageDatabase               mStorageLocalDb;
+  boost::recursive_mutex        mStorageMutex;
+
+  Ancho::Utils::AsynchronousTaskManager mAsyncTaskManager;
 };
 

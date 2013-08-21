@@ -512,6 +512,8 @@ StorageDatabase & CAnchoBackgroundAPI::getStorageInstance(const std::wstring &aS
     ANCHO_THROW(std::runtime_error("Unsupported storage type"));
   }
 
+  boost::unique_lock<boost::recursive_mutex> lock(mStorageMutex);
+
   if (!mStorageLocalDb.isOpened()) {
     boost::filesystem::wpath path = Ancho::Utils::getAnchoAppDataDirectory();
 
@@ -531,54 +533,153 @@ StorageDatabase & CAnchoBackgroundAPI::getStorageInstance(const std::wstring &aS
   return mStorageLocalDb;
 }
 
-STDMETHODIMP CAnchoBackgroundAPI::storageGet(BSTR aStorageType, BSTR aKey, VARIANT* aValue)
+STDMETHODIMP CAnchoBackgroundAPI::storageGet(BSTR aStorageType, LPDISPATCH aKeysArray, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId)
 {
   BEGIN_TRY_BLOCK;
-
-  ENSURE_RETVAL(aValue);
-
-  std::wstring value;
-  try {
-    getStorageInstance(aStorageType).getItem(std::wstring(aKey), value);
-  } catch (StorageDatabase::EItemNotFound &) {
-    aValue->vt = VT_EMPTY;
-    return S_OK;
+  if (aExtensionId == NULL || aStorageType == NULL) {
+    return E_INVALIDARG;
   }
+  std::wstring storageType(aStorageType);
+  if (storageType != L"local" && storageType != L"sync") {
+    ANCHO_THROW(std::runtime_error("Unsupported storage type"));
+  }
+  Ancho::Utils::JavaScriptCallback<StorageItemsObject, void> callback(aCallback);
 
-  CComVariant retValue(value.c_str());
-  return retValue.Detach(aValue);
+  CComQIPtr<IDispatchEx> tmp(aKeysArray);
+  if (!tmp) {
+    return E_FAIL;
+  }
+  Ancho::Utils::JSArray keysArray = boost::get<Ancho::Utils::JSArray>(Ancho::Utils::convertToJSVariant(*tmp));
 
+  storageGet(std::wstring(aStorageType), keysArray, callback, std::wstring(aExtensionId), aApiId);
   END_TRY_BLOCK_CATCH_TO_HRESULT;
+  return S_OK;
 }
 
-STDMETHODIMP CAnchoBackgroundAPI::storageSet(BSTR aStorageType, BSTR aKey, BSTR aValue)
+void CAnchoBackgroundAPI::storageGet(const std::wstring &aStorageType, const Ancho::Utils::JSArray &aKeysArray, StorageItemsObjectCallback aCallback, const std::wstring &aExtensionId, int aApiId)
 {
-  BEGIN_TRY_BLOCK;
-
-  getStorageInstance(aStorageType).setItem(std::wstring(aKey), std::wstring(aValue));
-  return S_OK;
-
-  END_TRY_BLOCK_CATCH_TO_HRESULT;
+  mAsyncTaskManager.addTask([=, this](){
+    auto &storage = this->getStorageInstance(aStorageType);
+    CComPtr<IDispatch> data = CAnchoAddonService::instance().createObject(aExtensionId, aApiId);
+    _variant_t vtData(data);
+    Ancho::Utils::JSObjectWrapper dataWrapper = Ancho::Utils::JSValueWrapper(vtData.GetVARIANT()).toObject();
+    for (size_t i = 0; i < aKeysArray.size(); ++i) {
+      std::wstring key = boost::get<std::wstring>(aKeysArray[i]);
+      std::wstring value;
+      try {
+        storage.getItem(key, value);
+        dataWrapper[key] = value;
+      } catch (StorageDatabase::EItemNotFound &) {
+        // Item not in the database -> nothing stored in the result object
+      }
+    }
+    aCallback(data);
+  });
 }
 
-STDMETHODIMP CAnchoBackgroundAPI::storageRemove(BSTR aStorageType, BSTR aKey)
+STDMETHODIMP CAnchoBackgroundAPI::storageSet(BSTR aStorageType, LPDISPATCH aValuesObject, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId)
 {
   BEGIN_TRY_BLOCK;
+  if (aExtensionId == NULL || aStorageType == NULL) {
+    return E_INVALIDARG;
+  }
+  std::wstring storageType(aStorageType);
+  if (storageType != L"local" && storageType != L"sync") {
+    ANCHO_THROW(std::runtime_error("Unsupported storage type"));
+  }
+  Ancho::Utils::JavaScriptCallback<void, void> callback(aCallback);
 
-  getStorageInstance(aStorageType).removeItem(std::wstring(aKey));
-  return S_OK;
+  CComQIPtr<IDispatchEx> tmp(aValuesObject);
+  if (!tmp) {
+    return E_FAIL;
+  }
+  Ancho::Utils::JSObject valuesObject = boost::get<Ancho::Utils::JSObject>(Ancho::Utils::convertToJSVariant(*tmp));
 
+  storageSet(std::wstring(aStorageType), valuesObject, callback, std::wstring(aExtensionId), aApiId);
   END_TRY_BLOCK_CATCH_TO_HRESULT;
+  return S_OK;
 }
 
-STDMETHODIMP CAnchoBackgroundAPI::storageClear(BSTR aStorageType)
+void CAnchoBackgroundAPI::storageSet(const std::wstring &aStorageType, const Ancho::Utils::JSObject &aValuesObject, SimpleCallback aCallback, const std::wstring &aExtensionId, int aApiId)
+{
+  mAsyncTaskManager.addTask([=, this](){
+    auto &storage = this->getStorageInstance(aStorageType);
+
+    for (auto it = aValuesObject.begin(); it != aValuesObject.end(); ++it) {
+      std::wstring key = it->first;
+      if (it->second.which() != Ancho::Utils::jsString) {
+        ATLTRACE(L"Skipping store of key %s - value is not a string\n", key.c_str());
+        continue;
+      }
+      std::wstring value = boost::get<std::wstring>(it->second);
+      storage.setItem(key, value);
+    }
+    aCallback();
+  });
+}
+
+STDMETHODIMP CAnchoBackgroundAPI::storageRemove(BSTR aStorageType, LPDISPATCH aKeysArray, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId)
 {
   BEGIN_TRY_BLOCK;
+  if (aExtensionId == NULL || aStorageType == NULL) {
+    return E_INVALIDARG;
+  }
+  std::wstring storageType(aStorageType);
+  if (storageType != L"local" && storageType != L"sync") {
+    ANCHO_THROW(std::runtime_error("Unsupported storage type"));
+  }
+  Ancho::Utils::JavaScriptCallback<void, void> callback(aCallback);
 
-  getStorageInstance(aStorageType).clear();
-  return S_OK;
+  CComQIPtr<IDispatchEx> tmp(aKeysArray);
+  if (!tmp) {
+    return E_FAIL;
+  }
+  Ancho::Utils::JSArray keysArray = boost::get<Ancho::Utils::JSArray>(Ancho::Utils::convertToJSVariant(*tmp));
 
+  storageRemove(std::wstring(aStorageType), keysArray, callback, std::wstring(aExtensionId), aApiId);
   END_TRY_BLOCK_CATCH_TO_HRESULT;
+  return S_OK;
+}
+
+void CAnchoBackgroundAPI::storageRemove(const std::wstring &aStorageType, const Ancho::Utils::JSArray &aKeysArray, SimpleCallback aCallback, const std::wstring &aExtensionId, int aApiId)
+{
+  mAsyncTaskManager.addTask([=, this](){
+    auto &storage = this->getStorageInstance(aStorageType);
+
+    for (size_t i = 0; i < aKeysArray.size(); ++i) {
+      std::wstring key = boost::get<std::wstring>(aKeysArray[i]);
+      try {
+        storage.removeItem(key);
+      } catch (StorageDatabase::EItemNotFound &) {
+        // No item - no problem
+      }
+    }
+    aCallback();
+  });
+}
+
+STDMETHODIMP CAnchoBackgroundAPI::storageClear(BSTR aStorageType, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId)
+{
+  BEGIN_TRY_BLOCK;
+  if (aExtensionId == NULL || aStorageType == NULL) {
+    return E_INVALIDARG;
+  }
+  std::wstring storageType(aStorageType);
+  if (storageType != L"local" && storageType != L"sync") {
+    ANCHO_THROW(std::runtime_error("Unsupported storage type"));
+  }
+  Ancho::Utils::JavaScriptCallback<void, void> callback(aCallback);
+
+  storageClear(std::wstring(aStorageType), callback, std::wstring(aExtensionId), aApiId);
+  END_TRY_BLOCK_CATCH_TO_HRESULT;
+  return S_OK;
+}
+
+void CAnchoBackgroundAPI::storageClear(const std::wstring &aStorageType, SimpleCallback aCallback, const std::wstring &aExtensionId, int aApiId) {
+  mAsyncTaskManager.addTask([=, this](){
+    getStorageInstance(aStorageType).clear();
+    aCallback();
+  });
 }
 
 //----------------------------------------------------------------------------

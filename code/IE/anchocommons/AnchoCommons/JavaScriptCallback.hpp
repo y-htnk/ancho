@@ -1,5 +1,7 @@
 #pragma once
 
+#include <AnchoCommons/COMConversions.hpp>
+
 namespace Ancho {
 namespace Utils {
 
@@ -36,7 +38,7 @@ protected:
 
   JavaScriptCallbackBase(JavaScriptCallbackBase&& aCallback);
 
-  ObjectMarshaller<IDispatch>::Ptr mCallbackMarshaller;
+  Ancho::Utils::ObjectMarshaller<IDispatch>::Ptr mCallbackMarshaller;
 };
 } //namespace detail
 

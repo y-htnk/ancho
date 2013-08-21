@@ -74,13 +74,17 @@ struct AsynchronousTaskManager::Pimpl
   boost::condition_variable mCondVariable;
   boost::mutex mMutex;
 
-  boost::thread mWorkerThread; //TODO - used thread_group after testing to increase parallelism
+  std::list<boost::thread> mWorkerThreads;
 };
 
 
 AsynchronousTaskManager::AsynchronousTaskManager(): mPimpl(new AsynchronousTaskManager::Pimpl())
 {
-  mPimpl->mWorkerThread = boost::thread(detail::WorkerThreadFunc(mPimpl->mQueue, mPimpl->mCondVariable, mPimpl->mMutex));
+  //TODO - decide in what situations we should create additional worker threads
+  for (size_t i = 0; i < 2; ++i) {
+    mPimpl->mWorkerThreads.push_back(boost::thread(detail::WorkerThreadFunc(mPimpl->mQueue, mPimpl->mCondVariable, mPimpl->mMutex)));
+  }
+
   mPimpl->mFinalized = false;
 }
 
@@ -109,26 +113,53 @@ void AsynchronousTaskManager::finalize()
     // we are already done
     return;
   }
+  mPimpl->mFinalized = true;
   {//synchronize only queue management
     boost::unique_lock<boost::mutex> lock(mPimpl->mMutex);
     mPimpl->mQueue.clear();
   }
 
-  if (mPimpl->mWorkerThread.joinable()) {
-    mPimpl->mWorkerThread.interrupt();
+  //Inform all threads that we want them finished
+  for (auto it = mPimpl->mWorkerThreads.begin(); it != mPimpl->mWorkerThreads.end(); ++it) {
+    it->interrupt();
+  }
 
-    //wait till it finishes
-    if (!mPimpl->mWorkerThread.try_join_for(boost::chrono::seconds(3))) {
-      mPimpl->mWorkerThread.interrupt();
-#ifndef ANCHO_DEBUG_THREAD_JOINS
-      mPimpl->mWorkerThread.detach();
-#else
-      mPimpl->mWorkerThread.join();
-#endif //ANCHO_DEBUG_THREAD_JOINS
+  //Try to join finished threads
+  for (auto it = mPimpl->mWorkerThreads.begin(); it != mPimpl->mWorkerThreads.end(); ++it) {
+    if (it->joinable()) {
+      if (!it->try_join_for(boost::chrono::milliseconds(50))) {
+        continue;
+      }
+    }
+    it = mPimpl->mWorkerThreads.erase(it);
+    if (it == mPimpl->mWorkerThreads.end()) {
+      break;
     }
   }
 
-  mPimpl->mFinalized = true;
+  //No remaining worker threads? -> We are done.
+  if (mPimpl->mWorkerThreads.empty()) {
+    return;
+  }
+
+  //Wait for the remaining threads and let them go in case of unsuccesfull join
+  for (auto it = mPimpl->mWorkerThreads.begin(); it != mPimpl->mWorkerThreads.end(); ++it) {
+    if (it->joinable()) {
+      if (!it->try_join_for(boost::chrono::seconds(2))) {
+        it->interrupt();
+#ifndef ANCHO_DEBUG_THREAD_JOINS
+        it->detach();
+#else
+        it->join();
+#endif //ANCHO_DEBUG_THREAD_JOINS
+      }
+    }
+    it = mPimpl->mWorkerThreads.erase(it);
+    if (it == mPimpl->mWorkerThreads.end()) {
+      break;
+    }
+  }
+  ATLASSERT(mPimpl->mWorkerThreads.empty());
 }
 
 } //namespace Utils

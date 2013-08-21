@@ -20,35 +20,49 @@ require("storage_spec.js");
 var preprocessArguments = require("typeChecking.js").preprocessArguments;
 var notImplemented = require("typeChecking.js").notImplemented;
 
-var StorageArea = function(aStorageType) {
+var StorageArea = function(aStorageType, instanceID) {
   var mStorageType = aStorageType;
+  var mInstanceID = instanceID;
 
   this.get = function(keys, callback) {
     var args = preprocessArguments('chrome.storage.StorageArea.get', arguments);
     var items = {};
     var keyList = args.keys;
+    var defaults = {}
     if (utils.isString(args.keys)) {
       keyList = [args.keys];
     }
-    if (utils.isArray(keyList)) {
-      for (var i = 0; i < keyList.length; ++i) {
-        var item = addonAPI.storageGet(mStorageType, keyList[i]);
-        items[keyList[i]] = (item && JSON.parse(item)) || item;
-      }
-    } else {
-      for (var key in keyList) {
-        if (keyList.hasOwnProperty(key)) {
-          var item = addonAPI.storageGet(mStorageType, key);
-          item = (item && JSON.parse(item)) || item;
-          if (item) {
-            items[key] = item;
-          } else {
-            items[key] = keyList[key];
-          }
+    if (!utils.isArray(args.keys)) {
+      defaults = args.keys;
+      keyList = [];
+      for (var key in args.keys) {
+        if (args.keys.hasOwnProperty(key)) {
+          keyList.push(key);
         }
       }
     }
-    args.callback(items);
+
+    var internalCallback = function(data) {
+      try {
+        items = {};
+        for (var key in data) {
+          if (data.hasOwnProperty(key)) {
+            var item = data[key];
+            item = (item && JSON.parse(item)) || item;
+            if (item != null && item != undefined) {
+              items[key] = item;
+            } else {
+              items[key] = defaults[key];
+            }
+          }
+        }
+        args.callback(items);
+      } catch (e) {
+        console.error("Exception in chrome.storage." + mStorageType + ".get() callback: " + e.message);
+      }
+    }
+
+    addonAPI.storageGet(mStorageType, keyList, internalCallback, addonAPI.id, mInstanceID);
   }
 
   this.getBytesInUse = function(keys, callback) {
@@ -58,34 +72,55 @@ var StorageArea = function(aStorageType) {
 
   this.set = function(items, callback) {
     var args = preprocessArguments('chrome.storage.StorageArea.set', arguments);
+    var serializedValues = {};
     for (var key in args.items) {
       if (args.items.hasOwnProperty(key)) {
         var value = args.items[key];
         var serializedValue = JSON.stringify(value);
-        addonAPI.storageSet(mStorageType, key, serializedValue);
+        serializedValues[key] = serializedValue;
       }
     }
-    //TODO - fire event
-    args.callback && args.callback();
+    var internalCallback = function() {
+      //TODO - fire event
+      try {
+        args.callback && args.callback();
+      } catch (e) {
+        console.error("Exception in chrome.storage." + mStorageType + ".set() callback: " + e.message);
+      }
+    }
+
+    addonAPI.storageSet(mStorageType, serializedValues, internalCallback, addonAPI.id, mInstanceID);
   }
 
   this.remove = function(keys, callback) {
     var args = preprocessArguments('chrome.storage.StorageArea.remove', arguments);
-    if (utils.isString(args.keys)) {
-      args.keys = [args.keys];
+    var keyList = args.keys;
+    if (utils.isString(keyList)) {
+      keyList = [args.keys];
     }
-    for (var i = 0; i < args.keys.length; ++i) {
-      addonAPI.storageRemove(mStorageType, args.keys[i]);
+    var internalCallback = function() {
+      //TODO - fire event
+      try {
+        args.callback && args.callback();
+      } catch (e) {
+        console.error("Exception in chrome.storage." + mStorageType + ".remove() callback: " + e.message);
+      }
     }
-    //TODO - fire event
-    args.callback && args.callback();
+    addonAPI.storageRemove(mStorageType, keyList, internalCallback, addonAPI.id, mInstanceID);
   }
 
   this.clear = function(callback) {
     var args = preprocessArguments('chrome.storage.StorageArea.clear', arguments);
-    addonAPI.storageClear(mStorageType);
-    //TODO - fire event
-    args.callback && args.callback();
+
+    var internalCallback = function() {
+      //TODO - fire event
+      try {
+        args.callback && args.callback();
+      } catch (e) {
+        console.error("Exception in chrome.storage." + mStorageType + ".clear() callback: " + e.message);
+      }
+    }
+    addonAPI.storageClear(mStorageType, internalCallback, addonAPI.id, mInstanceID);
   }
 
   this.QUOTA_BYTES = 880;
@@ -102,8 +137,8 @@ exports.createAPI = function(instanceID) {
   //============================================================================
   // public properties
 
-  this.sync = new StorageArea('sync');
-  this.local = new StorageArea('local');
+  this.sync = new StorageArea('sync', instanceID);
+  this.local = new StorageArea('local', instanceID);
   //============================================================================
   // events
 
