@@ -175,6 +175,17 @@ public:
     return S_OK;
   }
 
+  HRESULT getProperty(const std::wstring &aName, CComVariant &aValue)
+  {
+    MapDISPID::iterator it = mNameToID.find(aName);
+    if (it != mNameToID.end()) {
+      aValue = it->second;
+      return S_OK;
+    }
+    aValue.Clear();
+    return S_FALSE;
+  }
+
   DISPID getDispId(const std::wstring &aName)
   {
     MapDISPID::const_iterator it = mNameToID.find(aName);

@@ -655,12 +655,31 @@ STDMETHODIMP TabManager::registerRuntime(OLE_HANDLE aFrameTab, IAnchoRuntime * a
   }
   ATLTRACE(L"ADDON SERVICE - registering tab: %d\n", tabId);
 
+  fireOnCreatedEvent(aRuntime);
+
   if (!mHeartbeatTimer.isRunning()) {
     mHeartbeatTimer.start();
     mHeartbeatActive = true;
   }
   return S_OK;
   END_TRY_BLOCK_CATCH_TO_HRESULT;
+}
+
+void TabManager::fireOnCreatedEvent(IAnchoRuntime * aRuntime)
+{
+  ATLASSERT(aRuntime != NULL);
+  //Fire an event
+  CComPtr<ComSimpleJSArray> argArray;
+  IF_FAILED_THROW(SimpleJSArray::createInstance(argArray));
+
+  CComPtr<ComSimpleJSObject> tabInfo;
+  IF_FAILED_THROW(SimpleJSObject::createInstance(tabInfo));
+  CComVariant vtTabInfo(tabInfo.p);
+  IF_FAILED_THROW(aRuntime->fillTabInfo(&vtTabInfo));
+  argArray->push_back(vtTabInfo);
+
+  CComVariant result;
+  IF_FAILED_THROW(CAnchoAddonService::instance().invokeEventObjectInAllExtensions(CComBSTR(L"tabs.onCreated"), argArray.p, &result));
 }
 //==========================================================================================
 //

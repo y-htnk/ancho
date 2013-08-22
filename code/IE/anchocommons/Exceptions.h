@@ -95,6 +95,6 @@ hresultToException(HRESULT hr)
   {\
     HRESULT _hr__ = __VA_ARGS__;\
     if (FAILED(_hr__)) {\
-      hresultToException(_hr__);\
+      ANCHO_THROW(EHResult(_hr__));\
     }\
   }

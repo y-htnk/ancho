@@ -636,9 +636,52 @@ HRESULT CAnchoRuntime::fireOnBeforeSendHeaders(const std::wstring &aUrl, const s
 }
 
 //----------------------------------------------------------------------------
+void CAnchoRuntime::fireTabsOnUpdate()
+{
+  try {
+    if (!mCurrentTabInfo) {
+      //We just created the tab - no updates
+      IF_FAILED_THROW(SimpleJSObject::createInstance(mCurrentTabInfo));
+      CComVariant vtTabInfo(mCurrentTabInfo.p);
+      IF_FAILED_THROW(fillTabInfo(&vtTabInfo));
+      return;
+    }
+    CComPtr<ComSimpleJSArray> argArray;
+    IF_FAILED_THROW(SimpleJSArray::createInstance(argArray));
+    argArray->push_back(CComVariant(mTabId));
+
+    CComPtr<ComSimpleJSObject> changeInfo;
+    IF_FAILED_THROW(SimpleJSObject::createInstance(changeInfo));
+    argArray->push_back(CComVariant(changeInfo.p));
+
+
+    CComPtr<ComSimpleJSObject> tabInfo;
+    IF_FAILED_THROW(SimpleJSObject::createInstance(tabInfo));
+    CComVariant vtTabInfo(tabInfo.p);
+    IF_FAILED_THROW(fillTabInfo(&vtTabInfo));
+    argArray->push_back(vtTabInfo);
+
+    //TODO - list all changed attributes when supported
+    CComVariant url;
+    tabInfo->getProperty(L"url", url);
+    changeInfo->setProperty(L"url", url);
+
+    mCurrentTabInfo = tabInfo;
+    CComVariant result;
+    IF_FAILED_THROW(mAnchoService->invokeEventObjectInAllExtensions(CComBSTR(L"tabs.onUpdated"), argArray.p, &result));
+  } catch (std::exception &e) {
+    ATLTRACE("FIRING tabs.onUpdatedEventFailed\n");
+  }
+}
+
+//----------------------------------------------------------------------------
 //  InitializeContentScripting
 HRESULT CAnchoRuntime::InitializeContentScripting(BSTR bstrUrl, VARIANT_BOOL isRefreshingMainFrame, documentLoadPhase aPhase)
 {
+  if (aPhase == documentLoadEnd) {
+    fireTabsOnUpdate();
+  }
+
   CComPtr<IWebBrowser2> webBrowser;
   if (isRefreshingMainFrame) {
     webBrowser = mWebBrowser;
@@ -769,7 +812,7 @@ STDMETHODIMP CAnchoRuntime::SetSite(IUnknown *pUnkSite)
     if (SUCCEEDED(hr)) {
       hr = InitAddons();
       if (SUCCEEDED(hr)) {
-        // in case IE has already a page loaded initialize scripting 
+        // in case IE has already a page loaded initialize scripting
         READYSTATE readyState;
         mWebBrowser->get_ReadyState(&readyState);
         if (readyState >= READYSTATE_INTERACTIVE) {
@@ -852,6 +895,7 @@ STDMETHODIMP CAnchoRuntime::updateTab(LPDISPATCH aProperties)
       acc->accDoDefaultAction(var);
     }
   }
+  fireTabsOnUpdate();
   return S_OK;
 }
 

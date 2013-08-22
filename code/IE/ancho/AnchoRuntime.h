@@ -189,6 +189,8 @@ private:
   };
   HRESULT fireOnBeforeSendHeaders(const std::wstring &aUrl, const std::wstring &aMethod, const CAnchoRuntime::FrameRecord *aFrameRecord, /*out*/ BeforeSendHeadersInfo &aOutInfo);
 
+  void fireTabsOnUpdate();
+
   HWND getTabWindowClassWindow();
   bool isTabActive();
 private:
@@ -218,6 +220,8 @@ private:
   CComObjectStackEx<HtmlToolbarWindow>    mToolbarWindow;
   DWORD m_dwBandID;
   DWORD m_dwViewMode;
+
+  CComPtr<ComSimpleJSObject>              mCurrentTabInfo;
 };
 
 OBJECT_ENTRY_AUTO(__uuidof(AnchoRuntime), CAnchoRuntime)

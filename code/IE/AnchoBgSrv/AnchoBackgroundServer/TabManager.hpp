@@ -201,6 +201,8 @@ public:
 
 
 protected:
+  void fireOnCreatedEvent(IAnchoRuntime * aRuntime);
+
   struct CreateTabCallbackRequestInfo
   {
     TabCallback callback;
