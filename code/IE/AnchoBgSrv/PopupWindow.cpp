@@ -113,6 +113,16 @@ struct OnClickFunctor
       return;
     }
 
+    // Check if event was not already handled
+    CComVariant ret;
+    hr = htmlEvent->get_returnValue(&ret);
+    if (FAILED(hr)
+      || (ret.vt == VT_BOOL && VARIANT_FALSE == ret.boolVal))
+    {
+      return;
+    }
+
+
     CComQIPtr<IHTMLElement> htmlElement;
     hr = htmlEvent->get_srcElement(&htmlElement);
     if (FAILED(hr) || !htmlElement) {
@@ -141,7 +151,6 @@ struct OnClickFunctor
     if (hrefValue.Length() == 0) {
       return;
     }
-
     htmlEvent->put_returnValue(CComVariant(false));
 
     Ancho::Utils::JSObject properties;
