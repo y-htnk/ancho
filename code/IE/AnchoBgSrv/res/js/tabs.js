@@ -28,6 +28,9 @@ var MessageSender = require("extension.js").MessageSender;
 var CallbackWrapper = require("extension.js").CallbackWrapper;
 var PortPair = require("extension.js").PortPair;
 var addPortPair = require("extension.js").addPortPair;
+
+var getAbsoluteUrlFromContext = require("utils.js").getAbsoluteUrlFromContext;
+
 //Used for gathering callbacks from removeTabs
 //singleTabRemoveCallback is called from even if the tab was already removed
 var removeCallbackWrapper = function(aTabs, aCallback) {
@@ -127,6 +130,9 @@ var Tabs = function(instanceID) {
   // chrome.tabs.create
   this.create = function(createProperties, callback) {
     var args = preprocessArguments('chrome.tabs.create', arguments);
+    if (args.createProperties.url) {
+      args.createProperties.url = getAbsoluteUrlFromContext(args.createProperties.url, _instanceID);
+    }
     serviceAPI.tabManager.createTab(args.createProperties, args.callback, addonAPI.id, _instanceID);
   };
 

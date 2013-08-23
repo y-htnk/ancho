@@ -140,6 +140,24 @@ exports.matchUrl = function(aUrl, aPattern) {
   return regexp.test(aUrl);
 }
 
+exports.urlHasScheme = function(aUrl) {
+  if (!exports.isString(aUrl)) {
+    return false;
+  }
+  return aUrl.match(/^.+:\/\/.*/);
+}
+
+exports.getAbsoluteUrlFromContext = function(aUrl, aContextId) {
+  if (aUrl && !exports.urlHasScheme(aUrl)) {
+    if (aContextId <= 0) {
+      return 'chrome-extension://' + addonAPI.id + '/' + aUrl;
+    }
+    var tab = serviceAPI.tabManager.getTabInfo(aContextId, addonAPI.id, aContextId);
+    return tab.url + "/" + aUrl;
+  }
+  return aUrl;
+}
+
 var JSON = require("JSON.js");
 
 //function which provides JSONable copy of the passed argument
