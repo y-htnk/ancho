@@ -18,10 +18,9 @@ public:
 
   /**
     \param aTask Callable object - defines parameter-less operator()
-    \result Future which will contain the result of passed function object (or exception)
    **/
   template<typename TTask>
-  boost::future<typename boost::result_of<TTask()>::type>
+  void
   addTask(TTask aTask);
 
   void finalize();
@@ -33,19 +32,12 @@ private:
   boost::scoped_ptr<Pimpl> mPimpl;
 };
 
-
 template<typename TTask>
-boost::future<typename boost::result_of<TTask()>::type>
+void
 AsynchronousTaskManager::addTask(TTask aTask)
 {
-  typedef typename boost::result_of<TTask()>::type ReturnType;
-  typedef boost::packaged_task<ReturnType> PackagedTask;
-
-  boost::shared_ptr<PackagedTask> packagedTask = boost::make_shared<PackagedTask>(aTask);
-  boost::future<typename boost::result_of<TTask()>::type> f = packagedTask->get_future();
-
-  addPackagedTask(boost::bind(&PackagedTask::operator(), packagedTask));
-  return boost::move(f);
+  boost::function<void()> task(aTask);
+  addPackagedTask(task);
 }
 
 } //namespace Utils
