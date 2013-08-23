@@ -13,7 +13,8 @@ module.exports = function(grunt) {
 
   function buildModuleList(pkg) {
     var moduleList = [];
-    for (var dependency in pkg.bundledDependencies) {
+    for (var index=0; index<pkg.bundledDependencies.length; index++) {
+      var dependency = pkg.bundledDependencies[index];
       moduleList.push(path.join(path.join('node_modules', dependency), 'package.json'));
     }
     return moduleList;
