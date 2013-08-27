@@ -109,7 +109,7 @@ HRESULT CAnchoRuntime::Cleanup()
     mWebBrowserEventsCookie = 0;
   }
 
-  // remove instance from tab map and -manager
+  // remove instance from tabmanager
   if(mTabManager) {
     mTabManager->unregisterRuntime(mTabId);
     mTabManager.Release();
@@ -665,6 +665,7 @@ void CAnchoRuntime::fireTabsOnUpdate()
     CComVariant result;
     IF_FAILED_THROW(mAnchoService->invokeEventObjectInAllExtensions(CComBSTR(L"tabs.onUpdated"), argArray.p, &result));
   } catch (std::exception &e) {
+    (e);
     ATLTRACE("FIRING tabs.onUpdatedEventFailed\n");
   }
 }
@@ -700,8 +701,8 @@ HRESULT CAnchoRuntime::fireOnBeforeSendHeaders(const std::wstring &aUrl, const s
         if (!requestHeaders.isNull()) {
           Ancho::Utils::JSArrayWrapperConst headersArray = requestHeaders.toArray();
           std::wostringstream oss;
-          int headerCount = headersArray.size();
-          for (int i = 0; i < headerCount; ++i) {
+          size_t headerCount = headersArray.size();
+          for (size_t i = 0; i < headerCount; ++i) {
             Ancho::Utils::JSValueWrapperConst headerRecord = headersArray[i];
             //TODO handle headerRecord[L"binaryValue"]
             if (headerRecord.isNull()) {
@@ -827,6 +828,7 @@ STDMETHODIMP CAnchoRuntime::SetSite(IUnknown *pUnkSite)
     hr = Init();
     if (SUCCEEDED(hr)) {
       hr = InitAddons();
+/*
       if (SUCCEEDED(hr)) {
         // in case IE has already a page loaded initialize scripting 
         READYSTATE readyState;
@@ -837,13 +839,14 @@ STDMETHODIMP CAnchoRuntime::SetSite(IUnknown *pUnkSite)
           if (!isExtensionPage(std::wstring(url))) {
             if (url != L"about:blank") {
               // give toolbar a chance to load
-              Sleep(200);
+              //Sleep(200);
               //InitializeContentScripting(mWebBrowser, url, TRUE, documentLoadEnd);
             }
           }
         }
       }
       //showBrowserActionBar(TRUE);
+*/
     }
   }
   else

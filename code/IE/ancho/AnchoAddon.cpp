@@ -53,7 +53,6 @@ static boost::filesystem::wpath processCRXFile(std::wstring aExtensionName, boos
       signatureFile.close();
     }
   }
-  CA2W("lkjl");
   return extractedExtensionPath;
 }
 

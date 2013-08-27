@@ -9,6 +9,8 @@
 #include <iterator>
 #include <windows.h>
 
+#pragma warning(disable:4267)
+
 namespace crx {
 
 std::string encodeToBase64(const char *aBuffer, size_t aLength)

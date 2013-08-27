@@ -394,7 +394,7 @@ public:
   }*/
 
   JSValueWrapperConst
-  operator[](int aIdx)const
+  operator[](size_t aIdx)const
   {
     return operator[](boost::lexical_cast<std::wstring>(aIdx));
   }

@@ -72,7 +72,7 @@ public:
       std::reverse(parameters.begin(), parameters.end());
 
       params.rgvarg = &(parameters[0]);
-      params.cArgs = parameters.size();
+      params.cArgs = (UINT)parameters.size();
     }
 
     variant_t vtResult;
