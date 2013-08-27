@@ -34,18 +34,6 @@ class ATL_NO_VTABLE CAnchoRuntime :
   public IAnchoRuntime,
   public IDeskBand
 {
-  struct FrameRecord
-  {
-    FrameRecord(CComPtr<IWebBrowser2> aBrowser = CComPtr<IWebBrowser2>(), bool aIsTopLevel = false, int aFrameId = -1)
-      : browser(aBrowser), frameId(aFrameId), isTopLevel(aIsTopLevel)
-    { }
-
-    CComPtr<IWebBrowser2> browser;
-    int frameId;
-    bool isTopLevel;
-  };
-
-  typedef std::map<std::wstring, FrameRecord> FrameMap;
 public:
   // -------------------------------------------------------------------------
   // ctor
@@ -85,13 +73,12 @@ public:
   BEGIN_SINK_MAP(CAnchoRuntime)
     SINK_ENTRY_EX(1, DIID_DWebBrowserEvents2, DISPID_BEFORENAVIGATE2, OnBrowserBeforeNavigate2)
     SINK_ENTRY_EX(1, DIID_DWebBrowserEvents2, DISPID_NAVIGATECOMPLETE2, OnNavigateComplete)
-    SINK_ENTRY_EX(1, DIID_DWebBrowserEvents2, DISPID_PROGRESSCHANGE, OnBrowserProgressChange)
     SINK_ENTRY_EX(1, DIID_DWebBrowserEvents2, DISPID_DOWNLOADBEGIN, OnBrowserDownloadBegin)
     SINK_ENTRY_EX(1, DIID_DWebBrowserEvents2, DISPID_WINDOWSTATECHANGED, OnWindowStateChanged)
+
     SINK_ENTRY_EX(2, IID_DAnchoBrowserEvents, 1, OnFrameStart)
     SINK_ENTRY_EX(2, IID_DAnchoBrowserEvents, 2, OnFrameEnd)
     SINK_ENTRY_EX(2, IID_DAnchoBrowserEvents, 3, OnFrameRedirect)
-
     SINK_ENTRY_EX(2, IID_DAnchoBrowserEvents, 4, OnBeforeRequest)
     SINK_ENTRY_EX(2, IID_DAnchoBrowserEvents, 5, OnBeforeSendHeaders)
   END_SINK_MAP()
@@ -145,19 +132,48 @@ public:
 
   STDMETHOD_(void, OnBrowserDownloadBegin)();
   STDMETHOD_(void, OnWindowStateChanged)(LONG dwFlags, LONG dwValidFlagsMask);
-  STDMETHOD_(void, OnBrowserProgressChange)(LONG Progress, LONG ProgressMax);
 
   // -------------------------------------------------------------------------
   // DAnchoBrowserEvents methods.
-  STDMETHOD(OnFrameStart)(BSTR bstrUrl, VARIANT_BOOL bIsMainFrame);
-  STDMETHOD(OnFrameEnd)(BSTR bstrUrl, VARIANT_BOOL bIsMainFrame);
-  STDMETHOD(OnFrameRedirect)(BSTR bstrOldUrl, BSTR bstrNewUrl);
+  STDMETHOD(OnFrameStart)(IWebBrowser2 * aBrowser, BSTR aUrl, VARIANT_BOOL aIsTopLevelRefresh);
+  STDMETHOD(OnFrameEnd)(IWebBrowser2 * aBrowser, BSTR aUrl, VARIANT_BOOL aIsTopLevelRefresh);
+  STDMETHOD(OnFrameRedirect)(IWebBrowser2 * aBrowser, BSTR bstrOldUrl, BSTR bstrNewUrl);
 
   STDMETHOD(OnBeforeRequest)(VARIANT aReporter);
   STDMETHOD(OnBeforeSendHeaders)(VARIANT aReporter);
 
 
 private:
+  /*==========================================================================
+   * class FrameRecord
+   * Stores infos about a current frame: Browser, id, isTopLevel and scripting
+   * init phase.
+   */
+  class FrameRecord
+  {
+  public:
+    FrameRecord(IDispatch * aWebBrowser = NULL, BOOL aIsTopLevel = false, int aFrameId = -1)
+      : mBrowser(aWebBrowser), frameId(aFrameId), isTopLevel(aIsTopLevel),
+      mNextScriptingInitializePhase(documentLoadStart)
+    { }
+
+    void set(IDispatch * aWebBrowser, BOOL aIsTopLevel, int aFrameId)
+    {
+      mBrowser = aWebBrowser;
+      isTopLevel = aIsTopLevel;
+      frameId = aFrameId;
+    }
+
+    CComQIPtr<IWebBrowser2>
+                      mBrowser;
+    int               frameId;
+    BOOL              isTopLevel;
+    documentLoadPhase mNextScriptingInitializePhase;
+  };
+
+  // FrameRecord Map type.
+  typedef Ancho::Utils::FrameMap<FrameRecord>::Type FrameMap;
+
   // -------------------------------------------------------------------------
   // Methods
   HRESULT initCookieManager(IAnchoServiceApi * aServiceAPI);
@@ -168,8 +184,7 @@ private:
   void DestroyAddons();
   HRESULT Init();
   HRESULT Cleanup();
-  HRESULT InitializeContentScripting(BSTR bstrUrl, VARIANT_BOOL bIsRefreshingMainFrame, documentLoadPhase aPhase);
-  HRESULT InitializeExtensionScripting(BSTR bstrUrl);
+  HRESULT InitializeExtensionScripting(BSTR aUrl);
 
   void fillRequestInfo(SimpleJSObject &aInfo, const std::wstring &aUrl, const std::wstring &aMethod, const CAnchoRuntime::FrameRecord *aFrameRecord);
   struct BeforeRequestInfo
@@ -179,7 +194,7 @@ private:
     bool redirect;
     std::wstring newUrl;
   };
-  HRESULT fireOnBeforeRequest(const std::wstring &aUrl, const std::wstring &aMethod, const FrameRecord *aType, /*out*/ BeforeRequestInfo &aOutInfo);
+  HRESULT fireOnBeforeRequest(const std::wstring &aUrl, const std::wstring &aMethod, const CAnchoRuntime::FrameRecord *aFrameRecord, /*out*/ BeforeRequestInfo &aOutInfo);
 
   struct BeforeSendHeadersInfo
   {
@@ -194,6 +209,9 @@ private:
   HWND getTabWindowClassWindow();
   bool isTabActive();
 private:
+
+  BOOL isBrowserDocumentURL(IWebBrowser2 * aBrowser, BSTR aURL);
+
   // -------------------------------------------------------------------------
   // Private members.
   typedef std::map<std::wstring, CComPtr<IAnchoAddon> > AddonMap;

@@ -34,12 +34,12 @@ library anchoLib
   interface IAnchoAddon : IUnknown
   {
     HRESULT Init([in] LPCOLESTR lpsExtensionID, [in] IAnchoAddonService * pService, [in] IWebBrowser2 * pWebBrowser);
-    HRESULT InitializeContentScripting([in] IWebBrowser2 * pWebBrowser, [in] BSTR bstrUrl, documentLoadPhase aPhase);
-    HRESULT InitializeExtensionScripting([in] BSTR bstrUrl);
-    HRESULT Shutdown();
+    HRESULT OnFrameStart([in] IWebBrowser2 * aBrowser, [in] BSTR aUrl, [in] VARIANT_BOOL aIsTopLevelFrame, [in] VARIANT_BOOL aIsTopLevelRefresh);
+    HRESULT OnFrameEnd([in] IWebBrowser2 * aBrowser, [in] BSTR aUrl, [in] VARIANT_BOOL aIsTopLevelFrame, [in] VARIANT_BOOL aIsTopLevelRefresh);
 
-    HRESULT executeScriptCode(BSTR aCode);
-    HRESULT executeScriptFile(BSTR aFile);
+    //HRESULT InitializeContentScripting([in] IWebBrowser2 * aWebBrowser, [in] BSTR aUrl, documentLoadPhase aPhase);
+    HRESULT InitializeExtensionScripting([in] BSTR aUrl);
+    HRESULT Shutdown();
   };
 
   [
@@ -51,11 +51,11 @@ library anchoLib
   ]
   interface IWebRequestReporter : IUnknown
   {
-    HRESULT init([in] BSTR aUrl, [in] BSTR aMethod);
     HRESULT setNewHeaders([in] BSTR aNewHeaders);
     HRESULT getNewHeaders([out] BSTR *aNewHeaders);
     HRESULT getHTTPMethod([out] BSTR *aMethod);
     HRESULT getUrl([out] BSTR *aUrl);
+    HRESULT getBrowser([out] IWebBrowser2 ** aBrowserPtr);
     HRESULT redirectRequest([in] BSTR aUrl);
     HRESULT cancelRequest();
     HRESULT shouldCancel([out] BOOL *aCancel);
@@ -71,9 +71,9 @@ library anchoLib
   ]
   interface DAnchoBrowserEvents : IDispatch
   {
-    [id(1)] HRESULT OnFrameStart([in] BSTR bstrUrl, [in] VARIANT_BOOL bIsMainFrame);
-    [id(2)] HRESULT OnFrameEnd([in] BSTR bstrUrl, [in] VARIANT_BOOL IsMainFrame);
-    [id(3)] HRESULT OnFrameRedirect([in] BSTR bstrOldUrl, [in] BSTR bstrNewUrl);
+    [id(1)] HRESULT OnFrameStart([in] IWebBrowser2 * aBrowser, [in] BSTR aUrl, [in] VARIANT_BOOL aIsTopLevelRefresh);
+    [id(2)] HRESULT OnFrameEnd([in] IWebBrowser2 * aBrowser, [in] BSTR aUrl, [in] VARIANT_BOOL aIsTopLevelRefresh);
+    [id(3)] HRESULT OnFrameRedirect([in] IWebBrowser2 * aBrowser, [in] BSTR bstrOldUrl, [in] BSTR bstrNewUrl);
     [id(4)] HRESULT OnBeforeRequest([in] VARIANT aReporter);
     [id(5)] HRESULT OnBeforeSendHeaders([in] VARIANT aReporter);
   };

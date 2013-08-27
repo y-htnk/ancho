@@ -61,25 +61,16 @@ using namespace LIB_BhoHelper;
 #define ASSERT_
 #endif
 
-/*
-#define WIDEN2(x) L ## x
-#define WIDEN(x) WIDEN2(x)
-#define __WFILE__ WIDEN(__FILE__)
-CString s; \
-s.Format(_T("ASSERTION FAILED: 0x%08x in file %s line %i"), _hr__, __WFILE__, __LINE__); \
-::MessageBox(NULL, s, _T("ancho debug"), MB_OK); \
-*/
-
 #define IF_FAILED_RET(_hr) \
   do \
   { \
     HRESULT _hr__ = _hr; \
-    ASSERT_(SUCCEEDED(_hr__)); \
     if (FAILED(_hr__)) \
     { \
       ATLTRACE(_T("ASSERTION FAILED: 0x%08x in "), _hr__); \
       ATLTRACE(__FILE__); \
       ATLTRACE(_T(" line %i\n"), __LINE__); \
+      ASSERT_(0); \
       return _hr__; \
     } \
   } while(0);
@@ -88,12 +79,12 @@ s.Format(_T("ASSERTION FAILED: 0x%08x in file %s line %i"), _hr__, __WFILE__, __
   do \
   { \
     HRESULT _hr__ = _hr; \
-    ASSERT_(SUCCEEDED(_hr__)); \
     if (FAILED(_hr__)) \
     { \
       ATLTRACE(_T("ASSERTION FAILED: 0x%08x in "), _hr__); \
       ATLTRACE(__FILE__); \
       ATLTRACE(_T(" line %i\n"), __LINE__); \
+      ASSERT_(0); \
       return _ret; \
     } \
   } while(0);

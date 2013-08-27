@@ -7,13 +7,14 @@
 #include "stdafx.h"
 #include <map>
 #include "anchocommons.h"
-#include "AnchoRuntime.h"
 #include "AnchoAddon.h"
+#include "AnchoRuntime.h"
 #include "AnchoBrowserEvents.h"
 #include "AnchoPassthruAPP.h"
 #include "dllmain.h"
 #include <AnchoCommons/JSValueWrapper.hpp>
 #include "ProtocolHandlerRegistrar.h"
+#include <boost/scope_exit.hpp>
 
 #include <string>
 #include <ctime>
@@ -21,8 +22,11 @@
 #include <Iepmapi.h>
 #pragma comment(lib, "Iepmapi.lib")
 
-#include "WindowDocumentMap.h"
-WindowDocumentMap gWindowDocumentMap;
+using namespace Ancho::Utils;
+
+//#define ARTTRACE
+#define ARTTRACE(...)   ATLTRACE(__FUNCTION__);ATLTRACE(_T(": "));ATLTRACE(__VA_ARGS__)
+
 /*============================================================================
  * class CAnchoRuntime
  */
@@ -76,7 +80,7 @@ void CAnchoRuntime::DestroyAddons()
   }
   mMapAddons.clear();
 
-  ATLTRACE(L"ANCHO: all addons destroyed for runtime %d\n", mTabId);
+  ARTTRACE(L"All addons destroyed for runtime %d\n", mTabId);
 }
 
 //----------------------------------------------------------------------------
@@ -106,7 +110,6 @@ HRESULT CAnchoRuntime::Cleanup()
   }
 
   // remove instance from tab map and -manager
-  gWindowDocumentMap.eraseTab(mTabId);
   if(mTabManager) {
     mTabManager->unregisterRuntime(mTabId);
     mTabManager.Release();
@@ -193,7 +196,7 @@ HRESULT CAnchoRuntime::Init()
   }
 
   //---------------------------------------------------------------------------
-  // get required window
+  // get required windows
 
   // get parent window for toolbar: ReBarWindow32
   CComQIPtr<IOleWindow> reBarWindow32(m_spUnkSite);
@@ -212,7 +215,7 @@ HRESULT CAnchoRuntime::Init()
 
   //---------------------------------------------------------------------------
   // create addon service object
-  ATLTRACE(L"ANCHO: runtime initialization - CoCreateInstance(CLSID_AnchoAddonService)\n");
+  ARTTRACE(L"Runtime initialization - CoCreateInstance(CLSID_AnchoAddonService)\n");
   IF_FAILED_RET(mAnchoService.CoCreateInstance(CLSID_AnchoAddonService));
 
   //---------------------------------------------------------------------------
@@ -276,7 +279,7 @@ HRESULT CAnchoRuntime::Init()
   // Set the sink as property of the browser so it can be retrieved if someone wants to send
   // us events.
   IF_FAILED_RET(mWebBrowser->PutProperty(L"_anchoBrowserEvents", CComVariant(mBrowserEventSource)));
-  ATLTRACE(L"ANCHO: runtime %d initialized\n", mTabId);
+  ARTTRACE(L"Runtime %d initialized\n", mTabId);
 
   // initialize page actions for this process/window/tab
   mAnchoService->initPageActions((OLE_HANDLE)hwndIEFrame, mTabId);
@@ -297,6 +300,7 @@ HRESULT CAnchoRuntime::get_cookieManager(LPDISPATCH* ppRet)
 //
 STDMETHODIMP_(void) CAnchoRuntime::OnBrowserDownloadBegin()
 {
+  ARTTRACE(_T(""));
   mExtensionPageAPIPrepared = false;
 }
 
@@ -312,27 +316,12 @@ STDMETHODIMP_(void) CAnchoRuntime::OnWindowStateChanged(LONG dwFlags, LONG dwVal
 }
 
 //----------------------------------------------------------------------------
-//
-STDMETHODIMP_(void) CAnchoRuntime::OnBrowserProgressChange(LONG Progress, LONG ProgressMax)
-{
-  if (mIsExtensionPage && !mExtensionPageAPIPrepared && mWebBrowser) {
-    READYSTATE readyState;
-    mWebBrowser->get_ReadyState(&readyState);
-    if (readyState == READYSTATE_INTERACTIVE) {
-      CComBSTR url;
-      mWebBrowser->get_LocationURL(&url);
-      if (S_OK == InitializeExtensionScripting(url)) {
-        mExtensionPageAPIPrepared = true;
-      }
-    }
-  }
-}
-
-//----------------------------------------------------------------------------
 //  OnNavigateComplete
 STDMETHODIMP_(void) CAnchoRuntime::OnNavigateComplete(LPDISPATCH pDispatch, VARIANT *URL)
 {
   CComBSTR url(URL->bstrVal);
+  ARTTRACE(_T("To %s browser 0x%08x\n"), url, (ULONG_PTR)pDispatch);
+
   mIsExtensionPage = isExtensionPage(std::wstring(url));
   if (mIsExtensionPage) {
     // Too early for api injections
@@ -347,21 +336,54 @@ STDMETHODIMP_(void) CAnchoRuntime::OnNavigateComplete(LPDISPATCH pDispatch, VARI
 STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VARIANT *pURL, VARIANT *Flags,
   VARIANT *TargetFrameName, VARIANT *PostData, VARIANT *Headers, BOOL *Cancel)
 {
-  static bool bFirstRun = true;
+  static BOOL bFirstRun = TRUE;
+  static BOOL bCancel = FALSE;
 
-  // Add the frame to the frames map so we can retrieve the IWebBrowser2 object using the URL.
+  // prepare URL, current browser
   ATLASSERT(pURL->vt == VT_BSTR && pURL->bstrVal != NULL);
-  CComQIPtr<IWebBrowser2> pWebBrowser(pDisp);
-  ATLASSERT(pWebBrowser != NULL);
+  CComBSTR currentURL(pURL->bstrVal);
+  BOOL isTopLevelBrowser = mWebBrowser.IsEqualObject(pDisp);
+  CComQIPtr<IWebBrowser2> currentFrameBrowser(pDisp);
+  ATLASSERT(currentFrameBrowser != NULL);
+
+  ARTTRACE(_T("To %s browser 0x%08x\n"), currentURL, (ULONG_PTR)pDisp);
+
+  // OnBrowserBeforeNavigate2 is called multiple times recursive because of
+  // the call to pWebBrowser->Stop() (goes to res://ieframe.dll/navcancl.htm)
+  // and the following Navigate2.
+  if (bCancel) {
+    // Cancel flag is set, the previous navigation was canceled,
+    // so this is - hopefully - a call to res://ieframe.dll/navcancl.htm
+    // Don't process.
+    ARTTRACE(_T("\t\t ***canceled\n"));
+    // But reset flag.
+    bCancel = FALSE;
+    return;
+  }
+
+  // Also we ignore certain pages, like about:*
+  CComPtr<IUri> currentURI;
+  IF_FAILED_RET2(::CreateUri(currentURL, Uri_CREATE_CANONICALIZE, 0, &currentURI), /*void*/);
+  CComBSTR scheme;
+  currentURI->GetSchemeName(&scheme);
+  if (scheme == L"about") {
+    ARTTRACE(_T("\t\t ABOUT URL, don't handle\n"));
+    return; // don't handle
+  }
 
   // Workaround to ensure that first request goes through PAPP
   if (bFirstRun) {
-    bFirstRun = false;
-    *Cancel = TRUE;
-    pWebBrowser->Stop();
-    pWebBrowser->Navigate2(pURL, Flags, TargetFrameName, PostData, Headers);
+    ARTTRACE(_T("\t\tFIRST RUN, cancel\n"));
+    bFirstRun = FALSE;
+    *Cancel = bCancel = TRUE;
+    currentFrameBrowser->Stop();
+    ARTTRACE(_T("\t\tFIRST RUN, go\n"));
+    bCancel = FALSE;
+    currentFrameBrowser->Navigate2(pURL, Flags, TargetFrameName, PostData, Headers);
     return;
   }
+
+  ARTTRACE(_T("\t\tPROCESS URL %s browser 0x%08x\n"), currentURL, currentFrameBrowser);
 
   // Check if this is a new tab we are creating programmatically.
   // If so redirect it to the correct URL.
@@ -375,85 +397,102 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
     url = boost::str(boost::wformat(L"%1%://%2%") % what[1] % what[3]);
 
     _variant_t vtUrl(url.c_str());
-    *Cancel = TRUE;
-    pWebBrowser->Stop();
-    pWebBrowser->Navigate2(&vtUrl.GetVARIANT(), Flags, TargetFrameName, PostData, Headers);
+    *Cancel = bCancel = TRUE;
+    currentFrameBrowser->Stop();
+    bCancel = FALSE;
+    currentFrameBrowser->Navigate2(&vtUrl.GetVARIANT(), Flags, TargetFrameName, PostData, Headers);
     mTabManager->createTabNotification(mTabId, requestId);
     return;
   }
 
-
-  VARIANT_BOOL isTop;
-  if (SUCCEEDED(pWebBrowser->get_TopLevelContainer(&isTop))) {
-    if (isTop) {
-      // Loading the main frame so reset the frame list.
-      mMapFrames.clear();
-      mNextFrameId = 0;
-    }
+  if (isTopLevelBrowser) {
+    // Loading the main frame so reset the frame list.
+    mMapFrames.clear();
+    mNextFrameId = 0;
   }
-  std::wstring frameUrl = stripTrailingSlash(stripFragmentFromUrl(pURL->bstrVal));
-  mMapFrames[frameUrl] = FrameRecord(pWebBrowser, isTop != VARIANT_FALSE, mNextFrameId++);
+  // Add the new frame to our map.
+  int frameID = mNextFrameId++;
+  mMapFrames[COMOBJECTID(pDisp)].set(pDisp, isTopLevelBrowser, frameID);
 
-  pWebBrowser->PutProperty(CComBSTR(L"_anchoNavigateURL"), CComVariant(*pURL));
+  // For checking if a OnFrameStart or OnFrameEnd relates to the actual HTML document or
+  // a resource we have to remember the URL this frame is navigating to.
+  currentFrameBrowser->PutProperty(CComBSTR(L"anchoCurrentURL"), CComVariant(currentURL));
 
-  SHANDLE_PTR hwndBrowser = NULL;
-  pWebBrowser->get_HWND(&hwndBrowser);
+  // Add the current browser as a property to the top level browser. By this we pass
+  // the current browser to the PAPP.
+  // NOTE: If pDisp is same object as mWebBrowser we set the property to NULL. So we avoid
+  // circular references on mWebBrowser and signalize that the request is for the top level frame.
+  mWebBrowser->PutProperty( CComBSTR(L"anchoCurrentBrowserForFrame"),
+    CComVariant(isTopLevelBrowser
+                  ? NULL
+                  : pDisp) );
 
-  if (isTop) {
-    //Fill information about current document
-    CComPtr<IDispatch> tmp;
-    pWebBrowser->get_Document(&tmp);
-    CComQIPtr<IHTMLDocument2> doc = tmp;
-    if (doc) {
-      CComQIPtr<IOleWindow> docWin = doc;
-      HWND docWinHWND = NULL;
-      if (docWin) {
-        docWin->GetWindow(&docWinHWND);
-      }
-      if (docWinHWND) {
-        gWindowDocumentMap.put(WindowDocumentRecord(docWinHWND, mTabId, mWebBrowser, pWebBrowser, doc));
-      }
-    }
-    HWND tabWindow = getTabWindowClassWindow();
-    if (tabWindow) {
-      gWindowDocumentMap.put(WindowDocumentRecord(tabWindow, mTabId, mWebBrowser, pWebBrowser, doc));
-    }
+  if (isTopLevelBrowser) {
     mAnchoService->onTabNavigate(mTabId);
   }
 }
 
 //----------------------------------------------------------------------------
 //  OnFrameStart
-STDMETHODIMP CAnchoRuntime::OnFrameStart(BSTR bstrUrl, VARIANT_BOOL bIsMainFrame)
+STDMETHODIMP CAnchoRuntime::OnFrameStart(IWebBrowser2 * aBrowser, BSTR aUrl, VARIANT_BOOL aIsTopLevelRefresh)
 {
-  //For extension pages we don't execute content scripts
-  if (isExtensionPage(std::wstring(bstrUrl))) {
+  // Only handle document URLs.
+  ATLASSERT(aBrowser);
+  if (!isBrowserDocumentURL(aBrowser, aUrl)) {
     return S_OK;
   }
-  return InitializeContentScripting(bstrUrl, bIsMainFrame, documentLoadStart);
+
+  ARTTRACE(_T("%s browser 0x%08x %s\n"), aUrl, aBrowser, (aIsTopLevelRefresh) ? _T(": REFRESH") : _T(""));
+  //For extension pages we don't execute content scripts.
+  if (isExtensionPage(std::wstring(aUrl))) {
+    return S_OK;
+  }
+
+  // Forward event to addons.
+  AddonMap::iterator it = mMapAddons.begin();
+  while(it != mMapAddons.end()) {
+    VARIANT_BOOL isTopLevelFrame = (mWebBrowser.IsEqualObject(aBrowser)) ? VARIANT_TRUE : VARIANT_FALSE;
+    it->second->OnFrameStart(aBrowser, aUrl, isTopLevelFrame, aIsTopLevelRefresh);
+    ++it;
+  }
+  return S_OK;
 }
 
 //----------------------------------------------------------------------------
 //  OnFrameEnd
-STDMETHODIMP CAnchoRuntime::OnFrameEnd(BSTR bstrUrl, VARIANT_BOOL bIsMainFrame)
+STDMETHODIMP CAnchoRuntime::OnFrameEnd(IWebBrowser2 * aBrowser, BSTR aUrl, VARIANT_BOOL aIsTopLevelRefresh)
 {
-  //For extension pages we don't execute content scripts
-  if (isExtensionPage(std::wstring(bstrUrl))) {
+  // Only handle document URLs.
+  ATLASSERT(aBrowser);
+  if (!isBrowserDocumentURL(aBrowser, aUrl)) {
     return S_OK;
   }
-  return InitializeContentScripting(bstrUrl, bIsMainFrame, documentLoadEnd);
+
+  ARTTRACE(_T("%s browser 0x%08x %s\n"), aUrl, aBrowser, (aIsTopLevelRefresh) ? _T(": REFRESH") : _T(""));
+  //For extension pages we don't execute content scripts.
+  if (isExtensionPage(std::wstring(aUrl))) {
+    return S_OK;
+  }
+
+  fireTabsOnUpdate();
+
+  // Forward event to addons.
+  AddonMap::iterator it = mMapAddons.begin();
+  while(it != mMapAddons.end()) {
+    VARIANT_BOOL isTopLevelFrame = (mWebBrowser.IsEqualObject(aBrowser)) ? VARIANT_TRUE : VARIANT_FALSE;
+    it->second->OnFrameEnd(aBrowser, aUrl, isTopLevelFrame, aIsTopLevelRefresh);
+    ++it;
+  }
+  return S_OK;
 }
 
 //----------------------------------------------------------------------------
 //  OnFrameRedirect
-STDMETHODIMP CAnchoRuntime::OnFrameRedirect(BSTR bstrOldUrl, BSTR bstrNewUrl)
+STDMETHODIMP CAnchoRuntime::OnFrameRedirect(IWebBrowser2 * aBrowser, BSTR bstrOldUrl, BSTR bstrNewUrl)
 {
-  std::wstring oldUrl = stripTrailingSlash(stripFragmentFromUrl(bstrOldUrl));
-  FrameMap::iterator it = mMapFrames.find(oldUrl);
-  if (it != mMapFrames.end()) {
-    std::wstring newUrl = stripTrailingSlash(stripFragmentFromUrl(bstrNewUrl));
-    mMapFrames[newUrl] = it->second;
-    mMapFrames.erase(it);
+  // Update current URL so that OnFrameEnd propertly triggers the content scripts.
+  if (aBrowser) {
+    aBrowser->PutProperty(CComBSTR(L"anchoCurrentURL"), CComVariant(bstrNewUrl));
   }
   return S_OK;
 }
@@ -473,12 +512,16 @@ STDMETHODIMP CAnchoRuntime::OnBeforeRequest(VARIANT aReporter)
   reporter->getUrl(&url);
   reporter->getHTTPMethod(&method);
 
-  FrameMap::const_iterator it = mMapFrames.find(url.m_str);
+  CComPtr<IWebBrowser2> currentFrameBrowser;
+  reporter->getBrowser(&currentFrameBrowser.p);
+  ARTTRACE(_T("%s browser 0x%08x\n"), url.m_str, currentFrameBrowser.p);
+
+  FrameMap::const_iterator it = mMapFrames.find(COMOBJECTID(currentFrameBrowser.p));
   const FrameRecord *frameRecord = NULL;
   if (it != mMapFrames.end()) {
     frameRecord = &(it->second);
   } else {
-    ATLTRACE(L"No frame record for %s\n", url.m_str);
+    ARTTRACE(L"\t\tNo frame record for %s\n", url.m_str);
   }
 
   fireOnBeforeRequest(url.m_str, method.m_str, frameRecord, outInfo);
@@ -506,12 +549,16 @@ STDMETHODIMP CAnchoRuntime::OnBeforeSendHeaders(VARIANT aReporter)
   reporter->getUrl(&url);
   reporter->getHTTPMethod(&method);
 
-  FrameMap::const_iterator it = mMapFrames.find(url.m_str);
+  CComPtr<IWebBrowser2> currentFrameBrowser;
+  reporter->getBrowser(&currentFrameBrowser.p);
+  ARTTRACE(_T("%s browser 0x%08x\n"), url.m_str, currentFrameBrowser.p);
+
+  FrameMap::const_iterator it = mMapFrames.find(COMOBJECTID(currentFrameBrowser.p));
   const FrameRecord *frameRecord = NULL;
   if (it != mMapFrames.end()) {
     frameRecord = &(it->second);
   } else {
-    ATLTRACE(L"No frame record for %s\n", url.m_str);
+    ARTTRACE(L"\t\tNo frame record for %s\n", url.m_str);
   }
 
   fireOnBeforeSendHeaders(url.m_str, method.m_str, frameRecord, outInfo);
@@ -584,6 +631,45 @@ HRESULT CAnchoRuntime::fireOnBeforeRequest(const std::wstring &aUrl, const std::
 }
 
 //----------------------------------------------------------------------------
+void CAnchoRuntime::fireTabsOnUpdate()
+{
+  try {
+    if (!mCurrentTabInfo) {
+      //We just created the tab - no updates
+      IF_FAILED_THROW(SimpleJSObject::createInstance(mCurrentTabInfo));
+      CComVariant vtTabInfo(mCurrentTabInfo.p);
+      IF_FAILED_THROW(fillTabInfo(&vtTabInfo));
+      return;
+    }
+    CComPtr<ComSimpleJSArray> argArray;
+    IF_FAILED_THROW(SimpleJSArray::createInstance(argArray));
+    argArray->push_back(CComVariant(mTabId));
+
+    CComPtr<ComSimpleJSObject> changeInfo;
+    IF_FAILED_THROW(SimpleJSObject::createInstance(changeInfo));
+    argArray->push_back(CComVariant(changeInfo.p));
+
+
+    CComPtr<ComSimpleJSObject> tabInfo;
+    IF_FAILED_THROW(SimpleJSObject::createInstance(tabInfo));
+    CComVariant vtTabInfo(tabInfo.p);
+    IF_FAILED_THROW(fillTabInfo(&vtTabInfo));
+    argArray->push_back(vtTabInfo);
+
+    //TODO - list all changed attributes when supported
+    CComVariant url;
+    tabInfo->getProperty(L"url", url);
+    changeInfo->setProperty(L"url", url);
+
+    mCurrentTabInfo = tabInfo;
+    CComVariant result;
+    IF_FAILED_THROW(mAnchoService->invokeEventObjectInAllExtensions(CComBSTR(L"tabs.onUpdated"), argArray.p, &result));
+  } catch (std::exception &e) {
+    ATLTRACE("FIRING tabs.onUpdatedEventFailed\n");
+  }
+}
+
+//----------------------------------------------------------------------------
 //
 HRESULT CAnchoRuntime::fireOnBeforeSendHeaders(const std::wstring &aUrl, const std::wstring &aMethod, const CAnchoRuntime::FrameRecord *aFrameRecord, /*out*/ BeforeSendHeadersInfo &aOutInfo)
 {
@@ -635,93 +721,18 @@ HRESULT CAnchoRuntime::fireOnBeforeSendHeaders(const std::wstring &aUrl, const s
   return S_OK;
 }
 
-//----------------------------------------------------------------------------
-void CAnchoRuntime::fireTabsOnUpdate()
+HRESULT CAnchoRuntime::InitializeExtensionScripting(BSTR aUrl)
 {
-  try {
-    if (!mCurrentTabInfo) {
-      //We just created the tab - no updates
-      IF_FAILED_THROW(SimpleJSObject::createInstance(mCurrentTabInfo));
-      CComVariant vtTabInfo(mCurrentTabInfo.p);
-      IF_FAILED_THROW(fillTabInfo(&vtTabInfo));
-      return;
-    }
-    CComPtr<ComSimpleJSArray> argArray;
-    IF_FAILED_THROW(SimpleJSArray::createInstance(argArray));
-    argArray->push_back(CComVariant(mTabId));
-
-    CComPtr<ComSimpleJSObject> changeInfo;
-    IF_FAILED_THROW(SimpleJSObject::createInstance(changeInfo));
-    argArray->push_back(CComVariant(changeInfo.p));
-
-
-    CComPtr<ComSimpleJSObject> tabInfo;
-    IF_FAILED_THROW(SimpleJSObject::createInstance(tabInfo));
-    CComVariant vtTabInfo(tabInfo.p);
-    IF_FAILED_THROW(fillTabInfo(&vtTabInfo));
-    argArray->push_back(vtTabInfo);
-
-    //TODO - list all changed attributes when supported
-    CComVariant url;
-    tabInfo->getProperty(L"url", url);
-    changeInfo->setProperty(L"url", url);
-
-    mCurrentTabInfo = tabInfo;
-    CComVariant result;
-    IF_FAILED_THROW(mAnchoService->invokeEventObjectInAllExtensions(CComBSTR(L"tabs.onUpdated"), argArray.p, &result));
-  } catch (std::exception &e) {
-    ATLTRACE("FIRING tabs.onUpdatedEventFailed\n");
-  }
-}
-
-//----------------------------------------------------------------------------
-//  InitializeContentScripting
-HRESULT CAnchoRuntime::InitializeContentScripting(BSTR bstrUrl, VARIANT_BOOL isRefreshingMainFrame, documentLoadPhase aPhase)
-{
-  if (aPhase == documentLoadEnd) {
-    fireTabsOnUpdate();
-  }
-
-  CComPtr<IWebBrowser2> webBrowser;
-  if (isRefreshingMainFrame) {
-    webBrowser = mWebBrowser;
-  }
-  else {
-    std::wstring url = stripTrailingSlash(stripFragmentFromUrl(bstrUrl));
-    FrameMap::iterator it = mMapFrames.find(url);
-    if (it == mMapFrames.end()) {
-      // Either this frame has already been removed, or the request isn't for a frame after all (e.g. an htc).
-      return S_FALSE;
-    }
-    webBrowser = it->second.browser;
-  }
-  // Normally the frame map is cleared in the BeforeNavigate2 handler, but it isn't triggered when the
-  // page is refreshed, so we need this workaround as well.
-  if (isRefreshingMainFrame && (documentLoadStart == aPhase)) {
-    mMapFrames.clear();
-    mNextFrameId = 0;
-  }
-  AddonMap::iterator it = mMapAddons.begin();
-  while(it != mMapAddons.end()) {
-    it->second->InitializeContentScripting(webBrowser, bstrUrl, aPhase);
-    ++it;
-  }
-
-  return S_OK;
-}
-
-//----------------------------------------------------------------------------
-//
-HRESULT CAnchoRuntime::InitializeExtensionScripting(BSTR bstrUrl)
-{
-  std::wstring domain = getDomainName(bstrUrl);
+  std::wstring domain = getDomainName(aUrl);
   AddonMap::iterator it = mMapAddons.find(domain);
   if (it != mMapAddons.end()) {
-    return it->second->InitializeExtensionScripting(bstrUrl);
+    return it->second->InitializeExtensionScripting(aUrl);
   }
   return S_FALSE;
 }
 
+//----------------------------------------------------------------------------
+// GetBandInfo
 STDMETHODIMP CAnchoRuntime::GetBandInfo(DWORD dwBandID, DWORD dwViewMode, DESKBANDINFO* pdbi)
 {
   if (pdbi) {
@@ -764,7 +775,8 @@ STDMETHODIMP CAnchoRuntime::GetBandInfo(DWORD dwBandID, DWORD dwViewMode, DESKBA
   return E_INVALIDARG;
 }
 
-
+//----------------------------------------------------------------------------
+// GetWindow
 STDMETHODIMP CAnchoRuntime::GetWindow(HWND* phwnd)
 {
   if (!phwnd) {
@@ -774,26 +786,30 @@ STDMETHODIMP CAnchoRuntime::GetWindow(HWND* phwnd)
   return S_OK;
 }
 
-
+//----------------------------------------------------------------------------
+// ContextSensitiveHelp
 STDMETHODIMP CAnchoRuntime::ContextSensitiveHelp(BOOL fEnterMode)
 {
   return S_OK;
 }
 
-
+//----------------------------------------------------------------------------
+// CloseDW
 STDMETHODIMP CAnchoRuntime::CloseDW(unsigned long dwReserved)
 {
   mToolbarWindow.DestroyWindow();
   return S_OK;
 }
 
-
+//----------------------------------------------------------------------------
+// ResizeBorderDW
 STDMETHODIMP CAnchoRuntime::ResizeBorderDW(const RECT* prcBorder, IUnknown* punkToolbarSite, BOOL fReserved)
 {
   return E_NOTIMPL;
 }
 
-
+//----------------------------------------------------------------------------
+// ShowDW
 STDMETHODIMP CAnchoRuntime::ShowDW(BOOL fShow)
 {
   mToolbarWindow.ShowWindow(fShow ? SW_SHOW : SW_HIDE);
@@ -812,7 +828,7 @@ STDMETHODIMP CAnchoRuntime::SetSite(IUnknown *pUnkSite)
     if (SUCCEEDED(hr)) {
       hr = InitAddons();
       if (SUCCEEDED(hr)) {
-        // in case IE has already a page loaded initialize scripting
+        // in case IE has already a page loaded initialize scripting 
         READYSTATE readyState;
         mWebBrowser->get_ReadyState(&readyState);
         if (readyState >= READYSTATE_INTERACTIVE) {
@@ -822,7 +838,7 @@ STDMETHODIMP CAnchoRuntime::SetSite(IUnknown *pUnkSite)
             if (url != L"about:blank") {
               // give toolbar a chance to load
               Sleep(200);
-              InitializeContentScripting(url, TRUE, documentLoadEnd);
+              //InitializeContentScripting(mWebBrowser, url, TRUE, documentLoadEnd);
             }
           }
         }
@@ -859,6 +875,7 @@ STDMETHODIMP CAnchoRuntime::closeTab()
 STDMETHODIMP CAnchoRuntime::executeScript(BSTR aExtensionId, BSTR aCode, INT aFileSpecified)
 {
   //TODO: check permissions from manifest
+  ATLASSERT(0 && "not implemented");
   return S_OK;
 }
 //----------------------------------------------------------------------------
@@ -895,7 +912,6 @@ STDMETHODIMP CAnchoRuntime::updateTab(LPDISPATCH aProperties)
       acc->accDoDefaultAction(var);
     }
   }
-  fireTabsOnUpdate();
   return S_OK;
 }
 
@@ -952,4 +968,17 @@ bool CAnchoRuntime::isTabActive()
 {
   HWND hwndBrowser = getTabWindowClassWindow();
   return hwndBrowser && ::IsWindowVisible(hwndBrowser);
+}
+
+//----------------------------------------------------------------------------
+//
+BOOL CAnchoRuntime::isBrowserDocumentURL(IWebBrowser2 * aBrowser, BSTR aURL)
+{
+  ATLASSERT(aBrowser);
+  CComVariant currentURL;
+  aBrowser->GetProperty(CComBSTR(L"anchoCurrentURL"), &currentURL);
+  if (VT_BSTR == currentURL.vt && currentURL.bstrVal) {
+    return 0 == _wcsicmp(aURL, currentURL.bstrVal);
+  }
+  return TRUE;
 }

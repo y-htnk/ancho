@@ -28,7 +28,6 @@ set(${PROJECT_NAME}_HEADERS
   "${${PROJECT_NAME}_INC_DIR}/resource.h"
   "${${PROJECT_NAME}_INC_DIR}/stdafx.h"
   "${${PROJECT_NAME}_INC_DIR}/targetver.h"
-  "${${PROJECT_NAME}_INC_DIR}/WindowDocumentMap.h"
   )
 
 set(${PROJECT_NAME}_SOURCES
