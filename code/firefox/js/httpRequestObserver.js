@@ -728,46 +728,38 @@
   };
 
   // nsIStreamListener::onDataAvailable
-  StreamListener.prototype.onDataAvailable = function(request,
-        context, stream, offset, count) {
-
-    var binaryInputStream = new BinaryInputStream();
-    var storageStream = new StorageStream();
-    var binaryOutputStream = BinaryOutputStream();
-
-    binaryInputStream.setInputStream(stream);
-    storageStream.init(8192, count, null);
-    binaryOutputStream.setOutputStream(storageStream.getOutputStream(0));
-
-    var data = binaryInputStream.readBytes(count);
-    binaryOutputStream.writeBytes(data, count);
-
-    this.receivedData.push(data);
-
+  StreamListener.prototype.onDataAvailable = function(request, context, stream, offset, count) {
     // report count
-    var data = this.requestData.monitor._getRequest(
-        this.requestData.id,
-        this.requestData.uri
-      );
-    if (data) {
+    var data = this.requestData.monitor._getRequest(this.requestData.id, this.requestData.uri);
+    if (data && DebugData.getProperty(data.tabId, 'networkMonitor')) {
       data.timeStamp = (new Date()).getTime();
-      if (DebugData.getProperty(data.tabId, 'networkMonitor')) {
-        var debuggerData = {
-          timestamp: data.timeStamp / 1000,
-          requestId: data.requestId,
-          dataLength: count
-        };
-        this.requestData.monitor.onEvent.fire(
-          { tabId: data.tabId },
-          'Network.dataReceived',
-          debuggerData
-        );
-      }
+      var binaryInputStream = new BinaryInputStream();
+      var storageStream = new StorageStream();
+      var binaryOutputStream = BinaryOutputStream();
+
+      binaryInputStream.setInputStream(stream);
+      storageStream.init(8192, count, null);
+      binaryOutputStream.setOutputStream(storageStream.getOutputStream(0));
+
+      var responseData = binaryInputStream.readBytes(count);
+      binaryOutputStream.writeBytes(responseData, count);
+
+      this.receivedData.push(responseData);
+
+      var debuggerData = {
+        timestamp: data.timeStamp / 1000,
+        requestId: data.requestId,
+        dataLength: count
+      };
+      this.requestData.monitor.onEvent.fire(
+        { tabId: data.tabId },
+        'Network.dataReceived',
+        debuggerData
+      );
+      stream = storageStream.newInputStream(0);
     }
 
     // let other listeners use the stream
-    var stream = storageStream.newInputStream(0);
-
     return this.originalListener.onDataAvailable(request, context, stream, offset, count);
   }
 

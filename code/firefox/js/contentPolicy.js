@@ -35,7 +35,9 @@
   AnchoContentPolicy.prototype = {
     shouldLoad: function(aContentType, aContentLocation, aRequestOrigin, aContext, aMimeTypeGuess, aExtra, aRequestPrincipal) {
       if (aRequestPrincipal && aRequestPrincipal !== this.systemPrincipal && aContentLocation.schemeIs('ancho-extension')) {
-        if (!isWebAccessible(aContentLocation.host, aContentLocation.path)) {
+        var url = Cc['@mozilla.org/network/standard-url;1'].createInstance(Ci.nsIStandardURL);
+        url.init(Ci.nsIStandardURL.URLTYPE_STANDARD, null, aContentLocation.spec, null, null);
+        if (!isWebAccessible(url.host, url.path)) {
           return Ci.nsIContentPolicy.REJECT_REQUEST;
         }
       }
