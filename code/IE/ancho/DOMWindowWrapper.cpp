@@ -136,6 +136,10 @@ HRESULT DOMWindowWrapper::init(IWebBrowser2 * aWebBrowser)
   mDOMEventProperties[DISPID_ONBEFOREPRINT].vt = VT_NULL;
   mDOMEventProperties[DISPID_ONFOCUS].vt = VT_NULL;
 
+  // all frame related properties (like parent, top etc) create already and put
+  // the wrapped window objects there
+  //mDOMWindowProperties[] = ;
+
   return S_OK;
 }
 

@@ -248,7 +248,13 @@ private:
     DISPID_ONBEFOREPRINT  = -2147412046,
     DISPID_ONFOCUS        = -2147412098,
     // also there is the DISPID for window.location
-    DISPID_LOCATION       = 14
+    DISPID_LOCATION       = 14,
+    // and there are properties for frames:
+    DISPID_PARENT         = 12,
+    DISPID_FRAMES         = 3000700,
+    DISPID_OPENER         = 3000701,
+    DISPID_SELF           = 3000703,
+    DISPID_TOP            = 3000704
   };
 
   // the original DOM window
