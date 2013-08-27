@@ -15,8 +15,8 @@
   const PANEL_ID = '__ANCHO_BROWSER_ACTION_PANEL__';
   const NAVIGATOR_TOOLBOX = 'navigator-toolbox';
   const TOOLBAR_ID = 'nav-bar';
-  const BROWSER_ACTION_ICON_WIDTH = 19;
-  const BROWSER_ACTION_ICON_HEIGHT = 19;
+  const BROWSER_ACTION_DEFAULT_SIZE = 19;
+  const BROWSER_ACTION_OPTIMAL_SIZE = 16;
 
   var extensionIconMap = {};
 
@@ -25,6 +25,8 @@
     this._manifest = extension.manifest;
 
     this._iconType = null;
+    this._filename = null;
+    this._size = null;
     this._badgeText = null;
     this._badgeBackgroundColor = '#f00';
     this._tabBadgeText = {};
@@ -36,9 +38,11 @@
       // TODO: this.onClicked = new Event();
       if (this._manifest.browser_action && this._manifest.browser_action.default_icon) {
         this._iconType = 'browser_action';
+        this._getBestIcon(this._manifest.browser_action.default_icon);
       }
       else if (this._manifest.page_action && this._manifest.page_action.default_icon) {
         this._iconType = 'page_action';
+        this._getBestIcon(this._manifest.page_action.default_icon);
       }
 
       if (this._iconType) {
@@ -61,6 +65,39 @@
 
     _getElementId: function(id) {
       return id + this._extension.id;
+    },
+
+    _getBestIcon: function(iconData) {
+      // TODO: Scale the icon if necessary.
+      if ('string' === typeof(iconData)) {
+        // Just one icon available.
+        this._size = BROWSER_ACTION_DEFAULT_SIZE;
+        this._filename = iconData;
+      }
+      else {
+        var bestIcon = null;
+        var bestSize = null;
+        var currentDelta = null;
+        for (var iconSize in iconData) {
+          var size = parseInt(iconSize, 10);
+          var newDelta = Math.abs(size - BROWSER_ACTION_OPTIMAL_SIZE);
+          // If we're closer to the optimal size or the same distance but bigger
+          // than the current icon, then use the new icon.
+          if (!bestSize ||
+            (newDelta < currentDelta) ||
+            (newDelta === currentData && size > bestSize)) {
+            bestSize = size;
+            bestIcon = iconData[iconSize];
+            currentDelta = Math.abs(size - BROWSER_ACTION_OPTIMAL_SIZE);
+          }
+          // We already found the optimal size so we're done.
+          if (bestSize === BROWSER_ACTION_OPTIMAL_SIZE) {
+            break;
+          }
+        }
+        this._size = bestSize;
+        this._filename = bestIcon;
+      }
     },
 
     _installAction: function(window, button, iconPath) {
@@ -112,7 +149,7 @@
       toolbarButton.setAttribute('label', buttonText);
       toolbarButton.setAttribute('tooltiptext', buttonText);
 
-      var iconPath = this._extension.getURL(this._manifest.browser_action.default_icon);
+      var iconPath = this._extension.getURL(this._filename);
       toolbarButton.style.listStyleImage = 'url(' + iconPath + ')';
       var palette = document.getElementById(NAVIGATOR_TOOLBOX).palette;
       palette.appendChild(toolbarButton);
@@ -155,7 +192,7 @@
       image.setAttribute('id', id);
       image.setAttribute('class', 'urlbar-icon');
 
-      var iconPath = this._extension.getURL(this._manifest.page_action.default_icon);
+      var iconPath = this._extension.getURL(this._filename);
       image.style.listStyleImage = 'url(' + iconPath + ')';
 
       var icons = document.getElementById('urlbar-icons');
@@ -289,8 +326,8 @@
         hbox.appendChild(img);
       }
 
-      canvas.setAttribute('width', BROWSER_ACTION_ICON_WIDTH);
-      canvas.setAttribute('height', BROWSER_ACTION_ICON_HEIGHT);
+      canvas.setAttribute('width', this._size);
+      canvas.setAttribute('height', this._size);
       var ctx = canvas.getContext('2d');
       var button = document.getElementById(this._getElementId(BUTTON_ID));
       var tabId = this._getTabIdForWindow(window);
@@ -455,6 +492,11 @@
     this._icon.updateIcon(details);
   };
 
+  // Proprietary extension for Firefox. Hopefully one day they'll make this
+  // possible in Chrome. See http://code.google.com/p/chromium/issues/detail?id=166904.
+  BrowserActionAPI.prototype.getIconData = function() {
+    return { icon: this._icon._filename, size: this._icon._size };
+  };
 
   module.exports = BrowserActionAPI;
 
