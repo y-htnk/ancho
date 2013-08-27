@@ -13,29 +13,29 @@
 
 //----------------------------------------------------------------------------
 //  OnFrameStart
-STDMETHODIMP CAnchoBrowserEvents::OnFrameStart(BSTR bstrUrl, VARIANT_BOOL bIsMainFrame)
+STDMETHODIMP CAnchoBrowserEvents::OnFrameStart(IWebBrowser2 * aBrowser, BSTR bstrUrl, VARIANT_BOOL bIsMainFrame)
 {
-  CComVariant vt[] = { (VARIANT_BOOL) (bIsMainFrame ? VARIANT_TRUE : VARIANT_FALSE), bstrUrl };
-  DISPPARAMS disp = { vt, NULL, 2, 0 };
-  return FireEvent(EID_ONFRAMESTART, &disp, 2);
+  CComVariant vt[] = { (VARIANT_BOOL) (bIsMainFrame ? VARIANT_TRUE : VARIANT_FALSE), bstrUrl, aBrowser };
+  DISPPARAMS disp = { vt, NULL, 3, 0 };
+  return FireEvent(EID_ONFRAMESTART, &disp, 3);
 }
 
 //----------------------------------------------------------------------------
 //  OnFrameEnd
-STDMETHODIMP CAnchoBrowserEvents::OnFrameEnd(BSTR bstrUrl, VARIANT_BOOL bIsMainFrame)
+STDMETHODIMP CAnchoBrowserEvents::OnFrameEnd(IWebBrowser2 * aBrowser, BSTR bstrUrl, VARIANT_BOOL bIsMainFrame)
 {
-  CComVariant vt[] = { (VARIANT_BOOL) (bIsMainFrame ? VARIANT_TRUE : VARIANT_FALSE), bstrUrl };
-  DISPPARAMS disp = { vt, NULL, 2, 0 };
-  return FireEvent(EID_ONFRAMEEND, &disp, 2);
+  CComVariant vt[] = { (VARIANT_BOOL) (bIsMainFrame ? VARIANT_TRUE : VARIANT_FALSE), bstrUrl, aBrowser };
+  DISPPARAMS disp = { vt, NULL, 3, 0 };
+  return FireEvent(EID_ONFRAMEEND, &disp, 3);
 }
 
 //----------------------------------------------------------------------------
 //  OnFrameRedirect
-STDMETHODIMP CAnchoBrowserEvents::OnFrameRedirect(BSTR bstrOldUrl, BSTR bstrNewUrl)
+STDMETHODIMP CAnchoBrowserEvents::OnFrameRedirect(IWebBrowser2 * aBrowser, BSTR bstrOldUrl, BSTR bstrNewUrl)
 {
-  CComVariant vt[] = { bstrNewUrl, bstrOldUrl };
-  DISPPARAMS disp = { vt, NULL, 2, 0 };
-  return FireEvent(EID_ONFRAMEREDIRECT, &disp, 2);
+  CComVariant vt[] = { bstrNewUrl, bstrOldUrl, aBrowser };
+  DISPPARAMS disp = { vt, NULL, 3, 0 };
+  return FireEvent(EID_ONFRAMEREDIRECT, &disp, 3);
 }
 
 //----------------------------------------------------------------------------
@@ -74,4 +74,20 @@ HRESULT CAnchoBrowserEvents::FireEvent(DISPID dispid, DISPPARAMS* disp, unsigned
   }
   Unlock();
   return hr;
+}
+
+HRESULT WebRequestReporter::createReporter(LPCWSTR aUrl, LPCWSTR aMethod, LPDISPATCH aBrowser, IWebRequestReporter ** aReporterRetVal)
+{
+  ENSURE_RETVAL(aReporterRetVal);
+  (*aReporterRetVal) = NULL;
+  WebRequestReporterComObject * reporter = NULL;
+  IF_FAILED_RET(WebRequestReporterComObject::CreateInstance(&reporter));
+
+  CComQIPtr<IWebRequestReporter> owner(reporter);
+  reporter->mUrl = aUrl;
+  reporter->mHTTPMethod = aMethod;
+  reporter->mCurrentBrowser = aBrowser;
+
+  (*aReporterRetVal) = owner.Detach();
+  return S_OK;
 }

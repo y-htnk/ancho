@@ -2,6 +2,7 @@
  * AnchoPassthruAPP.cpp : Implementation of CAnchoPassthruAPP
  * Copyright 2012 Salsita (http://www.salsitasoft.com).
  * Author: Matthew Gertner <matthew@salsitasoft.com>
+ * Author: Arne Seib <arne@salsitasoft.com>
  ****************************************************************************/
 
 #include "stdafx.h"
@@ -13,6 +14,11 @@
 #include <WinInet.h>
 #include <htiframe.h>
 
+//#define PAPPTRACE
+#define PAPPTRACE(...)   ATLTRACE(__FUNCTION__);ATLTRACE(_T(": "));ATLTRACE(__VA_ARGS__)
+
+//----------------------------------------------------------------------------
+// Ancho related protocol states
 enum {
   ANCHO_SWITCH_BASE = 50000,
   ANCHO_SWITCH_REPORT_DATA,
@@ -22,25 +28,42 @@ enum {
   ANCHO_SWITCH_MAX
 };
 
+//----------------------------------------------------------------------------
+// Translate a DWORD bindVerb value to a string
 static CComBSTR
 getMethodNameFromBindVerb(DWORD bindVerb)
 {
-  CComBSTR method;
   switch (bindVerb) {
-  case BINDVERB_GET:
-    method = L"GET";
-    break;
-  case BINDVERB_POST:
-    method = L"POST";
-    break;
-  case BINDVERB_PUT:
-    method = L"PUT";
-    break;
-  default:
-    method = L"";
-    break;
+    case BINDVERB_GET:
+      return L"GET";
+    case BINDVERB_POST:
+      return L"POST";
+    case BINDVERB_PUT:
+      return L"PUT";
   };
-  return method;
+  return L"";
+}
+
+//----------------------------------------------------------------------------
+// Compare two URLs without the fragment part.
+static BOOL isEqualURLNoFragment(LPCWSTR aUrl1, LPCWSTR aUrl2)
+{
+  CComPtr<IUri> uris[2];
+  LPCWSTR args[2] = {aUrl1, aUrl2};
+  for (int n = 0; n < 2; n++) {
+    IF_FAILED_RET2(
+        CreateUri(args[n], Uri_CREATE_CANONICALIZE, 0, &uris[n].p), FALSE);
+    CComPtr<IUriBuilder> uriBuilder;
+    IF_FAILED_RET2(
+        CreateIUriBuilder(uris[n], 0, 0, &uriBuilder.p), FALSE);
+    uriBuilder->SetFragment(NULL);
+    uris[n].Release();
+    IF_FAILED_RET2(
+        uriBuilder->CreateUri(Uri_CREATE_CANONICALIZE, 0, 0, &uris[n].p), FALSE);
+  }
+  BOOL b;
+  IF_FAILED_RET2(uris[0]->IsEqual(uris[1], &b), FALSE);
+  return b;
 }
 
 /*============================================================================
@@ -77,59 +100,87 @@ HRESULT CAnchoStartPolicy::OnStartEx(
  */
 
 //----------------------------------------------------------------------------
+// SwitchParams::create
+//  Creates SwitchParams and sets the params.
+void CAnchoProtocolSink::SwitchParams::create(
+    PROTOCOLDATA & aProtocolData,
+    LPCWSTR aParam1,
+    LPCWSTR aParam2)
+{
+  aProtocolData.cbData = sizeof(SwitchParams);
+  aProtocolData.pData = new SwitchParams(aParam1, aParam2);
+}
+
+//----------------------------------------------------------------------------
+// SwitchParams::extractAndDestroy
+//  Extract SwitchParams and frees the memory allocated for it.
+void CAnchoProtocolSink::SwitchParams::extractAndDestroy(
+    PROTOCOLDATA & aProtocolData,
+    CComBSTR & aParam1,
+    CComBSTR & aParam2)
+{
+  ATLASSERT(aProtocolData.cbData == sizeof(SwitchParams));
+  SwitchParams * switchParams = (SwitchParams*)aProtocolData.pData;
+  ATLASSERT(switchParams);
+  aParam1 = switchParams->param1;
+  aParam2 = switchParams->param2;
+  delete switchParams;
+  aProtocolData.cbData = 0;
+}
+
+//----------------------------------------------------------------------------
 //  BeginningTransaction
 STDMETHODIMP CAnchoProtocolSink::BeginningTransaction(
-  /* [in] */ LPCWSTR szURL,
-  /* [in] */ LPCWSTR szHeaders,
-  /* [in] */ DWORD dwReserved,
-  /* [out] */ LPWSTR *pszAdditionalHeaders)
+  /* [in] */  LPCWSTR   szURL,
+  /* [in] */  LPCWSTR   szHeaders,
+  /* [in] */  DWORD     dwReserved,
+  /* [out] */ LPWSTR  * pszAdditionalHeaders)
 {
-  // If we have a bind context then we know that this request is for a document loading into a frame.
-  LPOLESTR bind_ctx_string = NULL;
-  CComPtr<IBindCtx> bind_ctx;
-  ULONG count;
-  GetBindString(BINDSTRING_PTR_BIND_CONTEXT, &bind_ctx_string, 1, &count);
-  m_IsFrame = (bind_ctx_string != NULL);
-  ::CoTaskMemFree(bind_ctx_string);
-
-  if (pszAdditionalHeaders)
-  {
-    *pszAdditionalHeaders = 0;
+  if (pszAdditionalHeaders) {
+    (*pszAdditionalHeaders) = 0;  // By default we will not add any headers.
   }
 
-  std::wstring additionalHeaders;
-  {
-    // event firing
-    CAnchoPassthruAPP *protocol = CAnchoPassthruAPP::GetProtocol(this);
+  // Get browsers for this request.
+  queryCurrentBrowser();
 
-    CComBSTR method = getMethodNameFromBindVerb(m_bindVerb);
+  m_IsFrame = (mTopLevelBrowser && !mTopLevelBrowser.IsEqualObject(mCurrentFrameBrowser));
+  mIsTopLevelRefresh = FALSE;
 
-    WebRequestReporterComObject * pNewObject = NULL;
-    if (SUCCEEDED(WebRequestReporterComObject::CreateInstance(&pNewObject))) {
-      CComPtr<IWebRequestReporter> reporter(pNewObject);
-      if (reporter && SUCCEEDED(reporter->init(CComBSTR(szURL), method))) {
-        if(SUCCEEDED(protocol->fireOnBeforeHeaders(CComPtr<CAnchoProtocolSink>(this), CComBSTR(szURL), reporter))) {
-          if (pNewObject->mNewHeadersAdded) {
-            additionalHeaders = pNewObject->mNewHeaders.m_str;
-          }
-        }
-      }
-    }
+  // If the current URL is the same as the top level browser's current location
+  // (without fragment) this should be a global refresh (on the top level browser).
+  if (mTopLevelBrowser) {
+    CComBSTR currentTopLevelUrl;
+    mTopLevelBrowser->get_LocationURL(&currentTopLevelUrl);
+    mIsTopLevelRefresh = isEqualURLNoFragment(currentTopLevelUrl, szURL);
   }
+
+  PAPPTRACE(_T("%s browser 0x%08x, refresh: %i\n"), szURL, mCurrentFrameBrowser.p, mIsTopLevelRefresh);
+
+  // Init frame info in CAnchoPassthruAPP for new request. The protocol will query the
+  // browsers and other things from us, so we have to have that data at
+  // this point - from queryCurrentBrowser()
+  CAnchoPassthruAPP *protocol = CAnchoPassthruAPP::GetProtocol(this);
+  protocol->initFromSink(this);
+
+  // get additional headers for request
+  CComBSTR method = getMethodNameFromBindVerb(m_bindVerb);
+  CComPtr<IWebRequestReporter> reporter;
+  IF_FAILED_RET(WebRequestReporter::createReporter(szURL, method, mCurrentFrameBrowser, &reporter.p));
+  protocol->fireOnBeforeHeaders(reporter);
 
   CComPtr<IHttpNegotiate> spHttpNegotiate;
-  IF_FAILED_RET(QueryServiceFromClient(&spHttpNegotiate));
+  QueryServiceFromClient(&spHttpNegotiate);
 
-  HRESULT hr = spHttpNegotiate ?
-    spHttpNegotiate->BeginningTransaction(szURL, szHeaders,
-      dwReserved, pszAdditionalHeaders) :
-    S_OK;
-  IF_FAILED_RET(hr);
+  IF_FAILED_RET((spHttpNegotiate)
+      ? spHttpNegotiate->BeginningTransaction(szURL, szHeaders, dwReserved, pszAdditionalHeaders)
+      : S_OK);
 
   //Adding headers
-  if (!additionalHeaders.empty()) {
-    ATLASSERT(pszAdditionalHeaders);
-    std::wstring tmp = std::wstring(*pszAdditionalHeaders) + additionalHeaders;
+  if ( pszAdditionalHeaders && ((WebRequestReporter*)reporter.p)->mNewHeadersAdded) {
+    CComBSTR headersFromReporter;
+    reporter->getNewHeaders(&headersFromReporter);
+
+    std::wstring tmp = std::wstring(*pszAdditionalHeaders) + (LPCWSTR)headersFromReporter;
     if (*pszAdditionalHeaders) {
       CoTaskMemFree(*pszAdditionalHeaders);
     }
@@ -139,8 +190,7 @@ STDMETHODIMP CAnchoProtocolSink::BeginningTransaction(
       return E_OUTOFMEMORY;
     }
     wcscpy_s(wszAdditionalHeaders, tmp.size()+1, tmp.c_str());
-    //wszAdditionalHeaders[pNewObject->mNewHeaders.Length()] = 0;
-    *pszAdditionalHeaders = wszAdditionalHeaders;
+    (*pszAdditionalHeaders) = wszAdditionalHeaders;
   }
 
   return S_OK;
@@ -154,21 +204,16 @@ STDMETHODIMP CAnchoProtocolSink::OnResponse(
   /* [in] */ LPCWSTR szRequestHeaders,
   /* [out] */ LPWSTR *pszAdditionalRequestHeaders)
 {
-  HRESULT hr;
+  if (pszAdditionalRequestHeaders) {
+    (*pszAdditionalRequestHeaders) = 0;
+  }
+
   CComPtr<IHttpNegotiate> spHttpNegotiate;
   QueryServiceFromClient(&spHttpNegotiate);
 
-  if (pszAdditionalRequestHeaders)
-  {
-    *pszAdditionalRequestHeaders = 0;
-  }
-
-  hr = spHttpNegotiate ?
-    spHttpNegotiate->OnResponse(dwResponseCode, szResponseHeaders,
-      szRequestHeaders, pszAdditionalRequestHeaders) :
-    S_OK;
-
-  return hr;
+  return (spHttpNegotiate)
+      ? spHttpNegotiate->OnResponse(dwResponseCode, szResponseHeaders, szRequestHeaders, pszAdditionalRequestHeaders)
+      : S_OK;
 }
 
 //----------------------------------------------------------------------------
@@ -181,8 +226,7 @@ STDMETHODIMP CAnchoProtocolSink::ReportProgress(
     PROTOCOLDATA data;
     data.grfFlags = PD_FORCE_SWITCH;
     data.dwState = ANCHO_SWITCH_REDIRECT;
-    data.pData = InitSwitchParams((BSTR) m_Url.c_str(), (BSTR) szStatusText);
-    data.cbData = sizeof(BSTR*);
+    SwitchParams::create(data, m_Url.c_str(), szStatusText);
     AddRef();
     Switch(&data);
 
@@ -190,11 +234,9 @@ STDMETHODIMP CAnchoProtocolSink::ReportProgress(
   }
 
   ATLASSERT(m_spInternetProtocolSink != 0);
-  HRESULT hr = m_spInternetProtocolSink ?
-    m_spInternetProtocolSink->ReportProgress(ulStatusCode, szStatusText) :
-    S_OK;
-
-  return hr;
+  return (m_spInternetProtocolSink)
+      ? m_spInternetProtocolSink->ReportProgress(ulStatusCode, szStatusText)
+      : S_OK;
 }
 
 //----------------------------------------------------------------------------
@@ -207,12 +249,14 @@ STDMETHODIMP CAnchoProtocolSink::ReportData(
   PROTOCOLDATA data;
   data.grfFlags = PD_FORCE_SWITCH;
   data.dwState = ANCHO_SWITCH_REPORT_DATA;
-  data.pData = InitSwitchParams((BSTR) m_Url.c_str());
-  data.cbData = sizeof(BSTR*);
+  SwitchParams::create(data, m_Url.c_str(), NULL);
   AddRef();
   Switch(&data);
 
-  return m_spInternetProtocolSink->ReportData(grfBSCF, ulProgress, ulProgressMax);
+  ATLASSERT(m_spInternetProtocolSink != 0);
+  return (m_spInternetProtocolSink)
+      ? m_spInternetProtocolSink->ReportData(grfBSCF, ulProgress, ulProgressMax)
+      : S_OK;
 }
 
 //----------------------------------------------------------------------------
@@ -226,13 +270,15 @@ STDMETHODIMP CAnchoProtocolSink::ReportResult(
     PROTOCOLDATA data;
     data.grfFlags = PD_FORCE_SWITCH;
     data.dwState = ANCHO_SWITCH_REPORT_RESULT;
-    data.pData = InitSwitchParams((BSTR) m_Url.c_str());
-    data.cbData = sizeof(BSTR*);
+    SwitchParams::create(data, m_Url.c_str(), NULL);
     AddRef();
     Switch(&data);
   }
 
-  return m_spInternetProtocolSink->ReportResult(hrResult, dwError, szResult);
+  ATLASSERT(m_spInternetProtocolSink != 0);
+  return (m_spInternetProtocolSink)
+      ? m_spInternetProtocolSink->ReportResult(hrResult, dwError, szResult)
+      : S_OK;
 }
 
 //----------------------------------------------------------------------------
@@ -252,125 +298,107 @@ STDMETHODIMP CAnchoProtocolSink::GetBindInfoEx(
 }
 
 //----------------------------------------------------------------------------
-//  InitSwitchParams
-LPVOID CAnchoProtocolSink::InitSwitchParams(const BSTR param1, const BSTR param2)
+// getCurrentBrowser
+//  public version, returns stored browsers
+//  Get browser for current frame if any, otherwise root browser.
+HRESULT CAnchoProtocolSink::getCurrentBrowser(IWebBrowser2 ** aCurrentFrameBrowser, IWebBrowser2 ** aTopLevelBrowserPtr)
 {
-  BSTR* params = new BSTR[2];
-  params[0] = ::SysAllocString(param1);
-  params[1] = ::SysAllocString(param2);
-  return (LPVOID) params;
-}
-
-//----------------------------------------------------------------------------
-//  FreeSwitchParams
-void CAnchoProtocolSink::FreeSwitchParams(BSTR* params)
-{
-  ::SysFreeString(params[0]);
-  ::SysFreeString(params[1]);
-  delete [] params;
-}
-
-/*============================================================================
- * class CAnchoPassthruAPP::DocumentSink
- */
-
-//----------------------------------------------------------------------------
-//  Destructor
-CAnchoPassthruAPP::DocumentSink::~DocumentSink()
-{
-  if (m_Doc) {
-    DispEventUnadvise(m_Doc);
+  ENSURE_RETVAL(aCurrentFrameBrowser)
+  ENSURE_RETVAL(aTopLevelBrowserPtr)
+  if (!mTopLevelBrowser || !mCurrentFrameBrowser) {
+    return E_FAIL;
   }
+  mTopLevelBrowser.CopyTo(aTopLevelBrowserPtr);
+  mCurrentFrameBrowser.CopyTo(aCurrentFrameBrowser);
+  return S_OK;
 }
 
 //----------------------------------------------------------------------------
-//  CAnchoPassthruAPP::OnReadyStateChange
-STDMETHODIMP_(void) CAnchoPassthruAPP::DocumentSink::OnReadyStateChange(IHTMLEventObj* ev)
+// queryCurrentBrowser
+//  private version, sets internal members
+//  Get browser for current frame if any, otherwise root browser.
+HRESULT CAnchoProtocolSink::queryCurrentBrowser()
 {
-  ATLASSERT(m_Doc != NULL);
-  CComBSTR readyState;
-  m_Doc->get_readyState(&readyState);
+  mTopLevelBrowser.Release();
+  mCurrentFrameBrowser.Release();
 
-  if (readyState == L"complete") {
-    CComBSTR loc;
-    DispEventUnadvise(m_Doc);
-    m_Doc = NULL;
-    m_Events->OnFrameEnd(m_Url, m_IsRefreshingMainFrame ? VARIANT_TRUE : VARIANT_FALSE);
+  // Use different approaches to get the current webbrowser:
 
-    // Release the pointer to the APP so we can be freed.
-    m_APP = NULL;
+  // 1) Query directly from client
+  HRESULT hr = QueryServiceFromClient(SID_SWebBrowserApp, &mTopLevelBrowser.p);
+  if (FAILED(hr)) {
+
+    // 2) If this failed, try getting the IWindowForBindingUI ...
+    CComPtr<IWindowForBindingUI> windowForBindingUI;
+    hr = QueryServiceFromClient(IID_IWindowForBindingUI, &windowForBindingUI);
+    if (!windowForBindingUI) {
+      return hr;
+    }
+
+    // ... and from there a HWND for "Internet Explorer_Server" ...
+    HWND hwnd = NULL;
+    hr = windowForBindingUI->GetWindow(IID_IAuthenticate, &hwnd);
+    if (FAILED(hr)) {
+      hr = windowForBindingUI->GetWindow(IID_IHttpSecurity, &hwnd);
+    }
+    if(FAILED(hr)) {
+      return hr;
+    }
+    ATLASSERT(hwnd);
+
+    // ... from there the IAccessible ...
+    CComPtr<IAccessible> accessible;
+    hr = AccessibleObjectFromWindow(hwnd, OBJID_WINDOW, IID_IAccessible, (void**)&accessible);
+    ATLASSERT(SUCCEEDED(hr));
+    if(FAILED(hr)) {
+      return hr;
+    }
+
+    // ... that should be a IServiceProvider ...
+    CComQIPtr<IServiceProvider> serviceProvider = accessible;
+    ATLASSERT(serviceProvider);
+
+    // ... that delivers us a IHTMLWindow2 ...
+    CComPtr<IHTMLWindow2> window;
+    hr = serviceProvider->QueryService(IID_IHTMLWindow2, IID_IHTMLWindow2, (void**)&window.p);
+    if(FAILED(hr)) {
+      return hr;
+    }
+
+    // ... which in turn is again a IServiceProvider ...
+    serviceProvider = window;
+
+    // ... giving us the IWebBrowser2 we are looking for.
+    hr = serviceProvider->QueryService(SID_SWebBrowserApp, IID_IWebBrowser2, (void**)&mTopLevelBrowser.p);
+    if(FAILED(hr)) {
+      return hr;
+    }
   }
+
+  // Now get the browser for the current frame (if any).
+  CComVariant currentFrameBrowser;
+  hr = mTopLevelBrowser->GetProperty(CComBSTR(L"anchoCurrentBrowserForFrame"), &currentFrameBrowser);
+  if (FAILED(hr)) {
+    // failed means, we didn't get any value at all, even not NULL.
+    return hr;
+  }
+  // Clear the property now that we have it so other requests don't get confused.
+  mTopLevelBrowser->PutProperty(CComBSTR(L"anchoCurrentBrowserForFrame"), CComVariant(NULL));
+
+  if (VT_DISPATCH == currentFrameBrowser.vt && currentFrameBrowser.pdispVal) {
+    mCurrentFrameBrowser = currentFrameBrowser.pdispVal;
+  }
+
+  // if we don't have a framebrowser, set top level browser
+  if (!mCurrentFrameBrowser) {
+    mCurrentFrameBrowser = mTopLevelBrowser;
+  }
+  return S_OK;
 }
 
 /*============================================================================
  * class CAnchoPassthruAPP
  */
-
-//----------------------------------------------------------------------------
-//  Destructor
-CAnchoPassthruAPP::~CAnchoPassthruAPP()
-{
-  if (m_DocSink) {
-    delete m_DocSink;
-  }
-}
-
-STDMETHODIMP CAnchoPassthruAPP::fireOnBeforeHeaders(CComPtr<CAnchoProtocolSink> aSink, const CComBSTR &aUrl, CComPtr<IWebRequestReporter> aReporter)
-{
-  if (!m_BrowserEvents) {
-    if (!m_DocumentRecord.window) {
-      HWND hwnd = NULL;
-      HRESULT hr = getWindowFromSink(aSink, hwnd);
-      if (FAILED(hr)) {
-        return hr;
-      }
-      tryToFillDocumentRecord(hwnd);
-    }
-
-    if (m_DocumentRecord.window) {
-      IF_FAILED_RET(getEventsFromBrowser(m_DocumentRecord.topLevelBrowser, m_BrowserEvents));
-    }
-  }
-
-  if (m_BrowserEvents) {
-    IF_FAILED_RET(m_BrowserEvents->OnBeforeSendHeaders(CComVariant(aReporter.p)));
-    return S_OK;
-  }
-  return E_FAIL;
-}
-
-STDMETHODIMP CAnchoPassthruAPP::getWindowFromSink(CComPtr<CAnchoProtocolSink> aSink, HWND &aWinHWND)
-{
-  CComPtr<IWindowForBindingUI> windowForBindingUI;
-
-  aSink->QueryServiceFromClient(IID_IWindowForBindingUI, &windowForBindingUI);
-  if (!windowForBindingUI) {
-    return E_FAIL;
-  }
-  aWinHWND = NULL;
-  if (FAILED(windowForBindingUI->GetWindow(IID_IAuthenticate, &aWinHWND))) {
-    HRESULT hr = windowForBindingUI->GetWindow(IID_IHttpSecurity, &aWinHWND);
-    if (FAILED(hr)) {
-      ATLTRACE(L"CAnchoPassthruAPP - failed to obtain window handle, url = %s\n", aSink->getUrl().c_str());
-      return hr;
-    }
-  }
-  return S_OK;
-}
-
-STDMETHODIMP CAnchoPassthruAPP::getEventsFromBrowser(CComPtr<IWebBrowser2> aBrowser, CComPtr<DAnchoBrowserEvents> &aEvents)
-{
-  CComVariant var;
-  IF_FAILED_RET(aBrowser->GetProperty(L"_anchoBrowserEvents", &var));
-
-  CComQIPtr<DAnchoBrowserEvents> events = var.pdispVal;
-  aEvents = events;
-  if (!aEvents) {
-    ATLTRACE(L"CAnchoPassthruAPP - failed to obtain browser events object\n");
-    return E_FAIL;
-  }
-  return S_OK;
-}
 
 //----------------------------------------------------------------------------
 //  StartEx
@@ -383,186 +411,270 @@ STDMETHODIMP CAnchoPassthruAPP::StartEx(
 {
   CComBSTR rawUri;
   IF_FAILED_RET(pUri->GetRawUri(&rawUri));
-  CComPtr<CAnchoProtocolSink> pSink = GetSink();
 
-  ATLTRACE(L"CAnchoPassthruAPP - processing %s\n", rawUri);
   if (std::wstring(L"http:///") == std::wstring(rawUri.m_str)) {
+    // IS THIS STILL REQUIRED?
     //Hack used for connecting browser navigate call and actual tab (request ID passed in url)
     //creation causes "http:///" being passed to PAPP - we can ignore it
     //TODO - remove after we also remove the hack (if even possible)
     return S_FALSE;
   }
   IF_FAILED_RET(__super::StartEx(pUri, pOIProtSink, pOIBindInfo, grfPI, dwReserved));
+  CComPtr<CAnchoProtocolSink> pSink = GetSink();
 
   CComBSTR method;
   DWORD bindVerb = GetSink()->GetBindVerb();
   method = getMethodNameFromBindVerb(bindVerb);
 
-  if (!m_BrowserEvents) {
-    if (!m_DocumentRecord.window) {
-      HWND hwnd = NULL;
-      if FAILED(getWindowFromSink(pSink, hwnd)) {
-        return S_OK;
-      }
-      tryToFillDocumentRecord(hwnd);
-    }
+  // sink set us up at this point already via initFromSink()
+  if (mAnchoEvents) {
+    // do we have a frame browser?
+    PAPPTRACE(_T("%s browser 0x%08x\n"), rawUri, mCurrentFrameBrowser);
 
-    if (m_DocumentRecord.window) {
-      IF_FAILED_RET(getEventsFromBrowser(m_DocumentRecord.topLevelBrowser, m_BrowserEvents));
-    }
-  }
-
-  if (m_BrowserEvents) {
-    WebRequestReporterComObject * pNewObject = NULL;
-    if (SUCCEEDED(WebRequestReporterComObject::CreateInstance(&pNewObject))) {
-      CComPtr<IWebRequestReporter> reporter(pNewObject);
-      if (reporter) {
-        IF_FAILED_RET(reporter->init(rawUri, method));
-        IF_FAILED_RET(m_BrowserEvents->OnBeforeRequest(CComVariant(reporter.p)));
-        BOOL cancel = FALSE;
-        if (SUCCEEDED(reporter->shouldCancel(&cancel)) && cancel) {
-          Abort(INET_E_TERMINATED_BIND, 0);
-        }
+    CComPtr<IWebRequestReporter> reporter;
+    if (SUCCEEDED(WebRequestReporter::createReporter(rawUri, method, mCurrentFrameBrowser, &reporter.p))) {
+      IF_FAILED_RET(mAnchoEvents->OnBeforeRequest(CComVariant(reporter.p)));
+      BOOL cancel = FALSE;
+      if (SUCCEEDED(reporter->shouldCancel(&cancel)) && cancel) {
+        Abort(INET_E_TERMINATED_BIND, 0);
       }
     }
   }
 
   return S_OK;
-}
-
-void CAnchoPassthruAPP::tryToFillDocumentRecord(HWND aDocWindow)
-{
-  if (!aDocWindow) return;
-
-  m_DocumentRecord = gWindowDocumentMap.get(aDocWindow);
-  if (!m_DocumentRecord.window) {
-    aDocWindow = findParentWindowByClass(aDocWindow, L"TabWindowClass");
-    if (aDocWindow) {
-      m_DocumentRecord = gWindowDocumentMap.get(aDocWindow);
-    }
-  }
-  m_Doc = m_DocumentRecord.getDocument();
 }
 
 //----------------------------------------------------------------------------
 //  Continue
 STDMETHODIMP CAnchoPassthruAPP::Continue(PROTOCOLDATA* data)
 {
-  if (data->dwState >= ANCHO_SWITCH_BASE && data->dwState < ANCHO_SWITCH_MAX) {
-    if (data->dwState == ANCHO_SWITCH_REPORT_DATA && m_ProcessedReportData) {
-      // We already handled this;
-      return S_OK;
-    }
+  // If this is not an ancho related state...
+  if (data->dwState < ANCHO_SWITCH_BASE || data->dwState >= ANCHO_SWITCH_MAX) {
+    // ... just call super
+    return __super::Continue(data);
+  }
 
-    CComPtr<CAnchoProtocolSink> pSink = GetSink();
-    // Release the reference we added when calling Switch().
-    pSink->InternalRelease();
+  CComPtr<CAnchoProtocolSink> pSink = GetSink();
+  // Release the reference we added when calling Switch().
+  pSink->InternalRelease();
 
-    BSTR* params = (BSTR*) data->pData;
-    ATLASSERT(data->cbData);
-    ATLASSERT(params);
-    CComBSTR bstrUrl = params[0];
-    CComBSTR bstrAdditional = params[1];
-    pSink->FreeSwitchParams(params);
-    ATLTRACE(L"CAnchoPassthruAPP - Continue, url = %s\n", bstrUrl);
+  CComBSTR currentURL, bstrAdditional;
+  ATLASSERT(data);
+  CAnchoProtocolSink::SwitchParams::extractAndDestroy(*data, currentURL, bstrAdditional);
 
-    if (!m_BrowserEvents) {
-      if (!m_DocumentRecord.window) {
-        HWND hwnd = NULL;
-        HRESULT hr = getWindowFromSink(pSink, hwnd);
-        if (S_FALSE == hr) {
-          // Not ready to get the window yet so we'll try again with the next notification.
-          if (data->dwState == ANCHO_SWITCH_REDIRECT) {
-            // Remember the redirect so we can trigger the corresponding event later.
-            m_Redirects.push_back(std::make_pair(bstrUrl, bstrAdditional));
-          }
-          return S_FALSE;
-        }
-        tryToFillDocumentRecord(hwnd);
-      }
-
-      if (m_DocumentRecord.window) {
-        IF_FAILED_RET(getEventsFromBrowser(m_DocumentRecord.topLevelBrowser, m_BrowserEvents));
-      }
-    }
-    if (!m_BrowserEvents) {
-        return S_OK;
-    }
-
-    {
-      CComVariant tmp;
-      IF_FAILED_RET(m_DocumentRecord.topLevelBrowser->GetProperty(CComBSTR(L"_anchoNavigateURL"), &tmp));
-      if (tmp.vt != VT_BSTR) {
-        ATLTRACE(L"PAPP couldn't get _anchoNavigateURL property from browser.\n");
-        return E_FAIL;
-      }
-      std::wstring navigateUrl = tmp.bstrVal;
-
-      CComBSTR topLevelUrl; // = var.bstrVal;
-      IF_FAILED_RET(m_DocumentRecord.topLevelBrowser->get_LocationURL(&topLevelUrl));
-      // If we're refreshing then the sink won't know it is a frame, and the URL
-      // will match the one already loaded into the browser.
-      std::wstring strippedTopLevelUrl = stripFragmentFromUrl(std::wstring(topLevelUrl.m_str));
-      m_IsRefreshingMainFrame = !(pSink->IsFrame())
-              && (strippedTopLevelUrl == std::wstring(bstrUrl.m_str) || stripFragmentFromUrl(navigateUrl) == std::wstring(bstrUrl.m_str));
-
-      // We only want to handle the top-level request and any frames, not subordinate
-      // requests like images. Usually the desired requests will have a bind context,
-      // but in the case of a page refresh, the top-level request annoyingly doesn't,
-      // so we check if the URL of the request matches the URL of the browser to handle
-      // that case.
-      if (!(pSink->IsFrame()) && !m_IsRefreshingMainFrame) {
-        //ATLTRACE(L"CAnchoPassthruAPP - %s is not a frame.\n", bstrUrl);
-        return S_OK;
-      }
-    }
-    ATLTRACE(L"CAnchoPassthruAPP - %s is frame.\n", bstrUrl);
-
-    // Send the event for any redirects that occurred before we had access to the event sink.
-    RedirectList::iterator it = m_Redirects.begin();
-    while(it != m_Redirects.end()) {
-      IF_FAILED_RET(m_BrowserEvents->OnFrameRedirect(CComBSTR(it->first.c_str()),
-        CComBSTR(it->second.c_str())));
+/***************************
+TODO: Check if this is still reqired
+  // Send the event for any redirects that occurred before we had access to the event sink.
+  if (mAnchoEvents) {
+    RedirectList::iterator it = mRedirects.begin();
+    while(it != mRedirects.end()) {
+      fireOnFrameRedirect(CComBSTR(it->first.c_str()), CComBSTR(it->second.c_str()));
       ++it;
     }
-    m_Redirects.clear();
+  }
+  mRedirects.clear();
+***************************/
 
-    if (data->dwState == ANCHO_SWITCH_REPORT_DATA) {
-      m_ProcessedReportData = true;
-
-      IF_FAILED_RET(m_BrowserEvents->OnFrameStart(bstrUrl, m_IsRefreshingMainFrame ? VARIANT_TRUE : VARIANT_FALSE));
-
-      tryToNotifyAboutFrameEnd(bstrUrl, m_IsRefreshingMainFrame);
-    }
-    else {
-      if (data->dwState == ANCHO_SWITCH_REDIRECT) {
-        IF_FAILED_RET(m_BrowserEvents->OnFrameRedirect(bstrUrl, bstrAdditional));
-      } else if (data->dwState == ANCHO_SWITCH_REPORT_RESULT && !m_Doc) {
-        tryToNotifyAboutFrameEnd(bstrUrl, m_IsRefreshingMainFrame);
+  switch(data->dwState) {
+    case ANCHO_SWITCH_REPORT_DATA:
+      if (data->dwState > mLastRequestState && mCurrentFrameBrowser) {
+        // S_OK and ONLY S_OK means it was handled and should not be called again
+        if (S_OK == fireOnFrameStart(currentURL)) {
+          mLastRequestState = data->dwState;
+        }
       }
-    }
-  }
-
-  return __super::Continue(data);
-}
-
-STDMETHODIMP CAnchoPassthruAPP::tryToNotifyAboutFrameEnd(CComBSTR aUrl, bool aIsRefreshingMainFrame)
-{
-  if (!m_Doc) {
-    m_Doc = m_DocumentRecord.getDocument();
-  }
-  if (m_Doc) {
-    CComBSTR readyState;
-    m_Doc->get_readyState(&readyState);
-    if (wcscmp(readyState, L"complete") == 0) {
-      IF_FAILED_RET(m_BrowserEvents->OnFrameEnd(aUrl, aIsRefreshingMainFrame ? VARIANT_TRUE : VARIANT_FALSE));
-    }
-    else {
-      m_DocSink = new DocumentSink(this, m_Doc, m_BrowserEvents, aUrl, aIsRefreshingMainFrame);
-      m_DocSink->DispEventAdvise(m_Doc);
-    }
-  } else {
-    return S_FALSE;
+      break;
+    case ANCHO_SWITCH_REDIRECT:
+      fireOnFrameRedirect(currentURL, bstrAdditional);
+      break;
+    case ANCHO_SWITCH_REPORT_RESULT:
+      if (data->dwState > mLastRequestState && mCurrentFrameBrowser) {
+        // S_OK and ONLY S_OK means it was handled and should not be called again
+        if (S_OK == fireOnFrameEnd(currentURL)) {
+          mLastRequestState = data->dwState;
+        }
+      }
+      break;
   }
   return S_OK;
 }
+
+//----------------------------------------------------------------------------
+// initFromSink
+// Called from sink after sink can provide the two browser objects.
+HRESULT CAnchoPassthruAPP::initFromSink(CAnchoProtocolSink * aProtocolSink)
+{
+  ATLASSERT(aProtocolSink);
+  reset();
+
+  mIsTopLevelRefresh = aProtocolSink->isTopLevelRefresh();
+
+  // get current frame browser and top level browser from sink
+  aProtocolSink->getCurrentBrowser(&mCurrentFrameBrowser.p, &mTopLevelBrowser.p);
+
+  if (mTopLevelBrowser) {
+    // get ancho browser events callback
+    CComVariant vt;
+    mTopLevelBrowser->GetProperty(L"_anchoBrowserEvents", &vt);
+    if (VT_DISPATCH == vt.vt) {
+      mAnchoEvents = vt.pdispVal;
+    }
+  }
+  // need all these three to be valid
+  return (mCurrentFrameBrowser && mTopLevelBrowser && mAnchoEvents)
+      ? S_OK
+      : E_FAIL;
+}
+
+//----------------------------------------------------------------------------
+//  reset
+void CAnchoPassthruAPP::reset()
+{
+  mTopLevelBrowser.Release();
+  mCurrentFrameBrowser.Release();
+  mAnchoEvents.Release();
+  mRedirects.clear();
+  mIsTopLevelRefresh = FALSE;
+  mLastRequestState = 0;
+}
+
+//----------------------------------------------------------------------------
+//  fireOnFrameStart
+HRESULT CAnchoPassthruAPP::fireOnFrameStart(CComBSTR & aCurrentURL)
+{
+  return (mAnchoEvents)
+      ? mAnchoEvents->OnFrameStart(mCurrentFrameBrowser, aCurrentURL, mIsTopLevelRefresh ? VARIANT_TRUE : VARIANT_FALSE)
+      : S_OK; // for resources we might not have events
+}
+
+//----------------------------------------------------------------------------
+//  fireOnFrameRedirect
+HRESULT CAnchoPassthruAPP::fireOnFrameRedirect(CComBSTR & aCurrentURL, CComBSTR & aAdditionalData)
+{
+  return (mAnchoEvents)
+      ? mAnchoEvents->OnFrameRedirect(mCurrentFrameBrowser, aCurrentURL, aAdditionalData)
+      : S_OK; // for resources we might not have events
+}
+
+//----------------------------------------------------------------------------
+//  fireOnBeforeHeaders
+HRESULT CAnchoPassthruAPP::fireOnBeforeHeaders(IWebRequestReporter * aReporter)
+{
+  return (mAnchoEvents)
+    ? mAnchoEvents->OnBeforeSendHeaders(CComVariant(aReporter))
+    : S_OK; // for resources we might not have events
+}
+
+//----------------------------------------------------------------------------
+//  fireOnFrameEnd
+HRESULT CAnchoPassthruAPP::fireOnFrameEnd(CComBSTR aUrl)
+{
+  // do we have a frame browser?
+  CComPtr<IWebBrowser2> currentFrameBrowser((mCurrentFrameBrowser)
+      ? mCurrentFrameBrowser
+      : mTopLevelBrowser);
+  PAPPTRACE(_T("%s browser 0x%08x %i\n"), aUrl, currentFrameBrowser, mIsTopLevelRefresh);
+
+  if (!currentFrameBrowser) {
+    return E_UNEXPECTED;
+  }
+
+  CComPtr<IDispatch> tmp;
+  currentFrameBrowser->get_Document(&tmp);
+
+  CComQIPtr<IHTMLDocument2> htmlDocument(tmp);
+  if(htmlDocument && mAnchoEvents) {
+    return DocumentSink::notifyEndFrame(currentFrameBrowser, htmlDocument, mAnchoEvents, aUrl, mIsTopLevelRefresh);
+  }
+  return S_FALSE;
+}
+
+/*============================================================================
+ * class CAnchoPassthruAPP::DocumentSink
+ */
+
+//----------------------------------------------------------------------------
+//  notifyEndFrame
+HRESULT CAnchoPassthruAPP::DocumentSink::notifyEndFrame(
+    IWebBrowser2 * aWebBrowser,
+    IHTMLDocument2 *aHTMLDoc,
+    DAnchoBrowserEvents* aBrowserEvents,
+    BSTR aURL,
+    BOOL aIsTopLevelRefresh)
+{
+  ATLASSERT(aHTMLDoc);
+  ATLASSERT(aBrowserEvents);
+  CComBSTR readyState;
+  aHTMLDoc->get_readyState(&readyState);
+
+  // complete state already reached, process immediately
+  if (readyState == L"complete") {
+    return aBrowserEvents->OnFrameEnd(aWebBrowser, aURL, aIsTopLevelRefresh ? VARIANT_TRUE : VARIANT_FALSE);
+  }
+
+  // Document not ready yet: Create instance and let it do the job when ready
+  CComObject<DocumentSink> * sinkObject = NULL;
+  HRESULT hr = CComObject<DocumentSink>::CreateInstance(&sinkObject);
+  if (FAILED(hr)) {
+    return hr;
+  }
+  CComPtr<IUnknown> tmp(sinkObject);
+  // init will AddRef the object, it will stay alive until the job is done
+  return sinkObject->init(aWebBrowser, aHTMLDoc, aBrowserEvents, aURL, aIsTopLevelRefresh);
+}
+
+//----------------------------------------------------------------------------
+//  CTOR
+CAnchoPassthruAPP::DocumentSink::DocumentSink() :
+  mIsTopLevelRefresh(FALSE)
+{
+}
+
+//----------------------------------------------------------------------------
+//  DTOR
+CAnchoPassthruAPP::DocumentSink::~DocumentSink()
+{
+  if (mHTMLDocument) {
+    DispEventUnadvise(mHTMLDocument);
+    mHTMLDocument.Release();
+  }
+}
+
+//----------------------------------------------------------------------------
+//  init
+HRESULT CAnchoPassthruAPP::DocumentSink::init(IWebBrowser2 * aWebBrowser, IHTMLDocument2 *aHTMLDoc, DAnchoBrowserEvents* aBrowserEvents,
+  BSTR aURL, BOOL aIsTopLevelRefresh)
+{
+  mBrowser = aWebBrowser;
+  mHTMLDocument = aHTMLDoc;
+  mEvents = aBrowserEvents;
+  mURL = aURL;
+  mIsTopLevelRefresh = aIsTopLevelRefresh;
+  HRESULT hr = (mEvents && mHTMLDocument) ? S_OK : E_INVALIDARG;
+  if (FAILED(hr)) {
+    return hr;
+  }
+  // this will AddRef and keeps us alive
+  return DispEventAdvise(mHTMLDocument);
+}
+
+//----------------------------------------------------------------------------
+//  OnReadyStateChange
+STDMETHODIMP_(void) CAnchoPassthruAPP::DocumentSink::OnReadyStateChange(IHTMLEventObj* ev)
+{
+  ATLASSERT(mHTMLDocument);
+  ATLASSERT(mEvents);
+  CComBSTR readyState;
+  mHTMLDocument->get_readyState(&readyState);
+
+  if (readyState == L"complete") {
+    mEvents->OnFrameEnd(mBrowser, mURL, mIsTopLevelRefresh ? VARIANT_TRUE : VARIANT_FALSE);
+    // tmp for DispEventUnadvise
+    CComPtr<IHTMLDocument2> tmp(mHTMLDocument);
+    mHTMLDocument.Release();
+
+    // NOTE: this might destroy us, so no more member access beyond this point!
+    DispEventUnadvise(tmp);
+  }
+}
+

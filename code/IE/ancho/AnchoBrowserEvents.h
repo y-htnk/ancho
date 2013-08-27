@@ -63,9 +63,9 @@ public:
 
   // -------------------------------------------------------------------------
   // CAnchoBrowserEvents methods
-  STDMETHOD(OnFrameStart)(BSTR bstrUrl, VARIANT_BOOL bIsMainFrame);
-  STDMETHOD(OnFrameEnd)(BSTR bstrUrl, VARIANT_BOOL bIsMainFrame);
-  STDMETHOD(OnFrameRedirect)(BSTR bstrOldUrl, BSTR bstrNewUrl);
+  STDMETHOD(OnFrameStart)(IWebBrowser2 * aBrowser, BSTR bstrUrl, VARIANT_BOOL bIsMainFrame);
+  STDMETHOD(OnFrameEnd)(IWebBrowser2 * aBrowser, BSTR bstrUrl, VARIANT_BOOL bIsMainFrame);
+  STDMETHOD(OnFrameRedirect)(IWebBrowser2 * aBrowser, BSTR bstrOldUrl, BSTR bstrNewUrl);
 
   STDMETHOD(OnBeforeRequest)(VARIANT aReporter);
   STDMETHOD(OnBeforeSendHeaders)(VARIANT aReporter);
@@ -79,12 +79,17 @@ private:
   // Private members.
 };
 
+ /*============================================================================
+ * class WebRequestReporter
+ */
+
 // -------------------------------------------------------------------------
 class ATL_NO_VTABLE WebRequestReporter :
   public CComObjectRootEx<CComSingleThreadModel>,
   public IWebRequestReporter
 {
 public:
+  static HRESULT createReporter(LPCWSTR aUrl, LPCWSTR aMethod, LPDISPATCH aBrowser, IWebRequestReporter ** aReporterRetVal);
   // -------------------------------------------------------------------------
   // ctor
   WebRequestReporter(): mCancel(false), mRedirect(false), mNewHeadersAdded(false)
@@ -112,13 +117,6 @@ public:
 
   void FinalRelease()
   {
-  }
-
-  STDMETHOD(init)(BSTR aUrl, BSTR aMethod)
-  {
-    mUrl = aUrl;
-    mHTTPMethod = aMethod;
-    return S_OK;
   }
 
   STDMETHOD(setNewHeaders)(BSTR aNewHeaders)
@@ -149,6 +147,11 @@ public:
     return S_OK;
   }
 
+  STDMETHOD(getBrowser)(IWebBrowser2 ** aBrowserPtr)
+  {
+    return mCurrentBrowser.CopyTo(aBrowserPtr);
+  }
+
   STDMETHOD(redirectRequest)(BSTR aUrl)
   {
     mNewUrl = aUrl;
@@ -177,4 +180,7 @@ public:
   CComBSTR mUrl;
   CComBSTR mHTTPMethod;
   CComBSTR mNewHeaders;
+
+  // can be null for a toplevel frame or resources
+  CComQIPtr<IWebBrowser2> mCurrentBrowser;
 };

@@ -2,6 +2,7 @@
  * AnchoPassthruAPP.h : Declaration of the CAnchoPassthruAPP
  * Copyright 2012 Salsita (http://www.salsitasoft.com).
  * Author: Matthew Gertner <matthew@salsitasoft.com>
+ * Author: Arne Seib <arne@salsitasoft.com>
  ****************************************************************************/
 
 #pragma once
@@ -9,28 +10,65 @@
 #include "ProtocolImpl.h"
 #include "AnchoBrowserEvents.h"
 
-#include "WindowDocumentMap.h"
-
 #include <string>
 typedef std::basic_string<TCHAR> tstring;
 #include <set>
 
+class CAnchoPassthruAPP;
+class CAnchoProtocolSink;
+class CAnchoStartPolicy;
 
 /*============================================================================
  * class CAnchoProtocolSink
+ * TODO: what is the purpose of this class?
  */
 class CAnchoProtocolSink :
   public PassthroughAPP::CInternetProtocolSinkWithSP<CAnchoProtocolSink>,
   public IHttpNegotiate
 {
+// ---------------------------------------------------------------------------
+public:  // types
+  /*==========================================================================
+   * class SwitchParams
+   * Used to pass two BSTR values via Switch()
+   */
+  class SwitchParams
+  {
+  public:
+    static void create(
+        PROTOCOLDATA & aProtocolData,
+        LPCWSTR aParam1,
+        LPCWSTR aParam2);
+
+    static void extractAndDestroy(
+        PROTOCOLDATA & aProtocolData,
+        CComBSTR & aParam1,
+        CComBSTR & aParam2);
+
+    CComBSTR param1;
+    CComBSTR param2;
+
+  private:
+    SwitchParams(LPCWSTR aParam1, LPCWSTR aParam2)
+      : param1(aParam1), param2(aParam2)
+    {}
+  };
+  //==========================================================================
+
+// ---------------------------------------------------------------------------
+private:  // types
   friend class CAnchoStartPolicy;
   typedef PassthroughAPP::CInternetProtocolSinkWithSP<CAnchoProtocolSink> BaseClass;
 
-public:
-
+// ---------------------------------------------------------------------------
+public: // methods
   // -------------------------------------------------------------------------
   // Constructor
-  CAnchoProtocolSink() : m_IsFrame(false), m_bindVerb(-1) {}
+  CAnchoProtocolSink() :
+      m_bindVerb(-1),
+      m_IsFrame(FALSE),
+      mIsTopLevelRefresh(FALSE)
+  {}
 
   // -------------------------------------------------------------------------
   // COM interface map
@@ -46,162 +84,222 @@ public:
   // -------------------------------------------------------------------------
   // IHttpNegotiate
   STDMETHOD(BeginningTransaction)(
-    /* [in] */ LPCWSTR szURL,
-    /* [in] */ LPCWSTR szHeaders,
-    /* [in] */ DWORD dwReserved,
-    /* [out] */ LPWSTR *pszAdditionalHeaders);
+    /* [in] */  LPCWSTR   szURL,
+    /* [in] */  LPCWSTR   szHeaders,
+    /* [in] */  DWORD     dwReserved,
+    /* [out] */ LPWSTR  * pszAdditionalHeaders);
 
   STDMETHOD(OnResponse)(
-    /* [in] */ DWORD dwResponseCode,
-    /* [in] */ LPCWSTR szResponseHeaders,
-    /* [in] */ LPCWSTR szRequestHeaders,
-    /* [out] */ LPWSTR *pszAdditionalRequestHeaders);
+    /* [in] */  DWORD     dwResponseCode,
+    /* [in] */  LPCWSTR   szResponseHeaders,
+    /* [in] */  LPCWSTR   szRequestHeaders,
+    /* [out] */ LPWSTR  * pszAdditionalRequestHeaders);
 
   STDMETHOD(ReportProgress)(
-    /* [in] */ ULONG ulStatusCode,
-    /* [in] */ LPCWSTR szStatusText);
+    /* [in] */ ULONG    ulStatusCode,
+    /* [in] */ LPCWSTR  szStatusText);
 
   STDMETHOD(ReportData)(
-    /* [in] */ DWORD grfBSCF,
-    /* [in] */ ULONG ulProgress,
-    /* [in] */ ULONG ulProgressMax);
+    /* [in] */ DWORD  grfBSCF,
+    /* [in] */ ULONG  ulProgress,
+    /* [in] */ ULONG  ulProgressMax);
 
   STDMETHOD(ReportResult)(
-    /* [in] */ HRESULT hrResult,
-    /* [in] */ DWORD dwError,
-    /* [in] */ LPCWSTR szResult);
+    /* [in] */ HRESULT  hrResult,
+    /* [in] */ DWORD    dwError,
+    /* [in] */ LPCWSTR  szResult);
 
   // IInternetBindInfo
   STDMETHODIMP GetBindInfoEx(
-    /* [out] */ DWORD *grfBINDF,
-    /* [in, out] */ BINDINFO *pbindinfo,
-    /* [out] */ DWORD *grfBINDF2,
-    /* [in] */ DWORD* pdwReserved);
+    /* [out] */     DWORD     * grfBINDF,
+    /* [in, out] */ BINDINFO  * pbindinfo,
+    /* [out] */     DWORD     * grfBINDF2,
+    /* [in] */      DWORD     * pdwReserved);
 
   // -------------------------------------------------------------------------
-  // Public interface
-  boolean IsFrame() { return m_IsFrame; }
-  // Free the memory associated with the params allocated when calling Switch().
-  void FreeSwitchParams(BSTR* params);
+
+  // Returns true if the current request is for a frame.
+  BOOL IsFrame() { return m_IsFrame; }
+
+  // Returns true if the current request is a refresh for the top level frame.
+  BOOL isTopLevelRefresh() { return mIsTopLevelRefresh; }
+
+  // Returns true if the current request is the (HTML) document, false for a resource.
+  BOOL isDocumentRequest() { return (mCurrentFrameBrowser != NULL); }
+
+  // Returns the current bind verb.
   DWORD GetBindVerb() { return m_bindVerb; }
 
+  // Get the current frame browser and optional top level browser.
+  HRESULT getCurrentBrowser(
+      IWebBrowser2 ** aCurrentFrameBrowser,
+      IWebBrowser2 ** aTopLevelBrowserPtr = NULL);
+
+  // ???
   std::wstring getUrl() const { return m_Url; }
-private:
-  // -------------------------------------------------------------------------
-  // Implementation
-  // Allocate the correct parameters for calling Switch().
-  LPVOID InitSwitchParams(const BSTR param1, const BSTR param2 = L"");
 
-  // -------------------------------------------------------------------------
-  // Private members.
-  std::wstring m_Url;
-  boolean m_IsFrame;
-  DWORD m_bindVerb;
+// ---------------------------------------------------------------------------
+private:  // methods
+
+  // Get top-level and frame browser and store them for later use.
+  // Initializes mTopLevelBrowser and mCurrentFrameBrowser.
+  HRESULT queryCurrentBrowser();
+
+// ---------------------------------------------------------------------------
+private:  // members
+  CComQIPtr<IWebBrowser2> mTopLevelBrowser;
+  CComQIPtr<IWebBrowser2> mCurrentFrameBrowser;
+  std::wstring            m_Url;
+  DWORD                   m_bindVerb;
+  BOOL                    m_IsFrame;
+  BOOL                    mIsTopLevelRefresh;
 };
-
-class CAnchoPassthruAPP;
 
 /*============================================================================
  * class CAnchoStartPolicy
+ * TODO: what is the purpose of this class?
  */
 class CAnchoStartPolicy :
   public PassthroughAPP::CustomSinkStartPolicy<CAnchoPassthruAPP, CAnchoProtocolSink>
 {
-public:
-  HRESULT OnStart(LPCWSTR szUrl,
-    IInternetProtocolSink *pOIProtSink, IInternetBindInfo *pOIBindInfo,
-    DWORD grfPI, HANDLE_PTR dwReserved,
-    IInternetProtocol* pTargetProtocol);
+// ---------------------------------------------------------------------------
+public: // methods
+  HRESULT OnStart(
+      LPCWSTR                 szUrl,
+      IInternetProtocolSink * pOIProtSink,
+      IInternetBindInfo     * pOIBindInfo,
+      DWORD                   grfPI,
+      HANDLE_PTR              dwReserved,
+      IInternetProtocol     * pTargetProtocol);
 
-  HRESULT OnStartEx(IUri* pUri,
-    IInternetProtocolSink *pOIProtSink, IInternetBindInfo *pOIBindInfo,
-    DWORD grfPI, HANDLE_PTR dwReserved,
-    IInternetProtocolEx* pTargetProtocol);
+  HRESULT OnStartEx(
+      IUri                  * pUri,
+      IInternetProtocolSink * pOIProtSink,
+      IInternetBindInfo     * pOIBindInfo,
+      DWORD                   grfPI,
+      HANDLE_PTR              dwReserved,
+      IInternetProtocolEx   * pTargetProtocol);
 };
 
 /*============================================================================
  * class CAnchoPassthruAPP
+ * TODO: what is the purpose of this class?
  */
 class CAnchoPassthruAPP :
   public PassthroughAPP::CInternetProtocol<CAnchoStartPolicy>
 {
-private:
-  typedef std::vector<std::pair<std::wstring, std::wstring> > RedirectList;
-
-  // -------------------------------------------------------------------------
-  // DocumentSink class (for sinking HTMLDocumentEvents2)
-  class DocumentSink :
-    public IDispEventImpl<1, DocumentSink, &DIID_HTMLDocumentEvents2, &LIBID_MSHTML, 4, 0>
-  {
-  public:
-    // -------------------------------------------------------------------------
-    // Constructor/destructor
-    DocumentSink(IInternetProtocolRoot* app, IHTMLDocument2 *doc, DAnchoBrowserEvents* events,
-      BSTR bstrUrl, BOOL bIsRefreshingMainFrame) :
-      m_APP(app), m_Doc(doc), m_Events(events), m_Url(bstrUrl), m_IsRefreshingMainFrame(bIsRefreshingMainFrame)
-    {
-    }
-    ~DocumentSink();
-
-    // -------------------------------------------------------------------------
-    // Event map
-    BEGIN_SINK_MAP(DocumentSink)
-      SINK_ENTRY_EX(1, DIID_HTMLDocumentEvents2, DISPID_READYSTATECHANGE, OnReadyStateChange)
-    END_SINK_MAP()
-
-    // -------------------------------------------------------------------------
-    // Methods
-    STDMETHOD_(void, OnReadyStateChange)(IHTMLEventObj* ev);
-
-  private:
-    // -------------------------------------------------------------------------
-    // Data members
-    CComPtr<IHTMLDocument2> m_Doc;
-    CComPtr<DAnchoBrowserEvents> m_Events;
-    // Hold a pointer to the APP so we don't get freed too early.
-    CComPtr<IInternetProtocolRoot> m_APP;
-    CComBSTR m_Url;
-    BOOL m_IsRefreshingMainFrame;
-  };
+// ---------------------------------------------------------------------------
+public: // methods
+  CAnchoPassthruAPP() :
+      mIsTopLevelRefresh(FALSE), mLastRequestState(0)
+  {}
 
   // -------------------------------------------------------------------------
   // IInternetProtocolRoot
   STDMETHOD(Continue)(PROTOCOLDATA *pProtocolData);
 
   STDMETHOD(StartEx)(
-    IUri *pUri,
-    IInternetProtocolSink *pOIProtSink,
-    IInternetBindInfo *pOIBindInfo,
-    DWORD grfPI,
-    HANDLE_PTR dwReserved);
-public:
+    IUri                  * pUri,
+    IInternetProtocolSink * pOIProtSink,
+    IInternetBindInfo     * pOIBindInfo,
+    DWORD                   grfPI,
+    HANDLE_PTR              dwReserved);
+
+  // Initializes members from the protocol sink.
+  HRESULT initFromSink(CAnchoProtocolSink * aProtocolSink);
+  // Clear members, release objects.
+  void reset();
+  // Fire OnFrameStart event
+  HRESULT fireOnFrameStart(CComBSTR & aCurrentURL);
+  // Fire OnFrameRedirect event
+  HRESULT fireOnFrameRedirect(CComBSTR & aCurrentURL, CComBSTR & aAdditionalData);
+  // Fire OnBeforeHeaders event
+  HRESULT fireOnBeforeHeaders(IWebRequestReporter * aReporter);
+  // Fire OnFrameEnd event
+  HRESULT fireOnFrameEnd(CComBSTR aUrl);
+
+// ---------------------------------------------------------------------------
+private:  // types
+  typedef std::vector<std::pair<std::wstring, std::wstring> > RedirectList;
+
+  /*==========================================================================
+   * class DocumentSink
+   * Listens to the readystatechange event of HTMLDocumentEvents2 and notifies
+   * DAnchoBrowserEvents::OnEndFrame.
+   */
+  class DocumentSink :
+    public CComObjectRootEx<CComSingleThreadModel>,
+    public IUnknown,
+    public IDispEventImpl<1, DocumentSink, &DIID_HTMLDocumentEvents2, &LIBID_MSHTML, 4, 0>
+  {
   // -------------------------------------------------------------------------
-  // Destructor
-  CAnchoPassthruAPP() : m_DocSink(NULL), m_IsRefreshingMainFrame(false), m_ProcessedReportData(false) {}
-  virtual ~CAnchoPassthruAPP();
+  public: // types
+    friend CComObject<DocumentSink>;
 
-  STDMETHOD(fireOnBeforeHeaders)(CComPtr<CAnchoProtocolSink> aSink, const CComBSTR &aUrl, CComPtr<IWebRequestReporter> aReporter);
-private:
-
-  STDMETHOD(getWindowFromSink)(CComPtr<CAnchoProtocolSink> aSink, HWND &aWinHWND);
-  STDMETHOD(getEventsFromBrowser)(CComPtr<IWebBrowser2> aBrowser, CComPtr<DAnchoBrowserEvents> &aEvents);
-
-  void tryToFillDocumentRecord(HWND aDocWindow);
-
-  STDMETHOD(tryToNotifyAboutFrameEnd)(CComBSTR aUrl, bool aIsRefreshingMainFrame);
   // -------------------------------------------------------------------------
-  // Data members
-  CComQIPtr<DAnchoBrowserEvents> m_BrowserEvents;
-  CComPtr<IHTMLDocument2> m_Doc;
+  public: // methods and functions
+    // Static function to notify aBrowserEvents that a frame is complete.
+    // If the associated document is already in "complete" state, call
+    // DAnchoBrowserEvents::OnEndFrame directly. Otherwise create an
+    // instance and attach to the document's ready state change event.
+    static HRESULT notifyEndFrame(
+        IWebBrowser2        * aWebBrowser,
+        IHTMLDocument2      * aHTMLDoc,
+        DAnchoBrowserEvents * aBrowserEvents,
+        BSTR                  aURL,
+        BOOL                  aIsTopLevelRefresh);
 
-  WindowDocumentRecord m_DocumentRecord;
+    // DTOR
+    ~DocumentSink();
 
-  // It's hellish to figure out if we are refreshing the main frame (e.g. on F5).
-  // So we use the URL to check (see implementation) and remember the state in this variable.
-  bool m_IsRefreshingMainFrame;
-  bool m_ProcessedReportData;
-  CComPtr<IWebBrowser2> m_Browser;
-  std::set<CComPtr<IWebBrowser2> > m_FoundFrames;
-  DocumentSink* m_DocSink;
-  RedirectList m_Redirects;
+    BEGIN_COM_MAP(DocumentSink)
+      COM_INTERFACE_ENTRY(IUnknown)
+    END_COM_MAP()
+
+    // -------------------------------------------------------------------------
+    // Event map
+    BEGIN_SINK_MAP(DocumentSink)
+      SINK_ENTRY_EX(
+          1,
+          DIID_HTMLDocumentEvents2,
+          DISPID_READYSTATECHANGE,
+          OnReadyStateChange)
+    END_SINK_MAP()
+
+    // HTMLDocumentEvents2
+    STDMETHOD_(void, OnReadyStateChange)(IHTMLEventObj* ev);
+
+  // -------------------------------------------------------------------------
+  private:  // methods
+    // CTOR
+    DocumentSink();
+
+    HRESULT init(
+        IWebBrowser2        * aWebBrowser,
+        IHTMLDocument2      * aHTMLDoc,
+        DAnchoBrowserEvents * aBrowserEvents,
+        BSTR                  aURL,
+        BOOL                  aIsTopLevelRefresh);
+
+  // -------------------------------------------------------------------------
+  private:  // members
+    CComPtr<IWebBrowser2>         mBrowser;
+    CComPtr<IHTMLDocument2>       mHTMLDocument;
+    CComPtr<DAnchoBrowserEvents>  mEvents;
+    CComBSTR                      mURL;
+    BOOL                          mIsTopLevelRefresh;
+  };
+  //==========================================================================
+
+// ---------------------------------------------------------------------------
+private:  // members
+  CComPtr<IWebBrowser2> mTopLevelBrowser;
+  CComPtr<IWebBrowser2> mCurrentFrameBrowser;
+  CComQIPtr<DAnchoBrowserEvents>
+                        mAnchoEvents;
+  RedirectList          mRedirects;
+  BOOL                  mIsTopLevelRefresh;
+
+  // Guard to ensure each of the ANCHO_SWITCH_XXX states is handled only once.
+  DWORD mLastRequestState;
 };
