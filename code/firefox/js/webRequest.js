@@ -31,14 +31,14 @@
     if (!filter.urls) {
       throw 'No urls property provided to filter in addListener';
     }
-    return function(details, callback) {
-      if (this._checkFilter(filter, details, callback)) {
+    return function(details) {
+      if (this._checkFilter(filter, details)) {
         listener.apply(this, arguments);
       }
     }.bind(this);
   };
 
-  WebRequestEvent.prototype._checkFilter = function(filter, details, callback) {
+  WebRequestEvent.prototype._checkFilter = function(filter, details) {
     var urls = [];
     for (var i=0; i<filter.urls.length; i++) {
       urls.push(Utils.matchPatternToRegexp(filter.urls[i]));
@@ -53,21 +53,21 @@
         }
       }
       if (!matched) {
-        return;
+        return false;
       }
     }
     if (filter.types) {
       if (filter.types.indexOf(details.type) === -1) {
-        return;
+        return false;
       }
     }
     if (filter.tabId) {
       if (filter.tabId != details.tabId) {
-        return;
+        return false;
       }
     }
     // TODO: Implement filter.windowId
-    return callback();
+    return true;
   };
 
   var WebRequestAPI = function(extension) {
