@@ -56,7 +56,8 @@ typedef CComObject<CAnchoAddon> CAnchoAddonComObject;
 
 class ATL_NO_VTABLE CAnchoAddon :
   public CComObjectRootEx<CComSingleThreadModel>,
-  public IAnchoAddon
+  public IAnchoAddon,
+  public IDOMWindowWrapperManager // NOTE: This is NOT a COM interface!
 {
 public:
   // enum for registry flags
@@ -101,13 +102,18 @@ public:
   // IAnchoAddon methods. See .idl for description.
   STDMETHOD(Init)(LPCOLESTR lpsExtensionID, IAnchoAddonService * pService,
     IWebBrowser2 * pWebBrowser);
+  STDMETHOD(Shutdown)();
   STDMETHOD(OnFrameStart)(IWebBrowser2 * aBrowser, BSTR aUrl, VARIANT_BOOL aIsTopLevelFrame, VARIANT_BOOL aIsTopLevelRefresh);
   STDMETHOD(OnFrameEnd)(IWebBrowser2 * aBrowser, BSTR aUrl, VARIANT_BOOL aIsTopLevelFrame, VARIANT_BOOL aIsTopLevelRefresh);
-
   STDMETHOD(InitializeExtensionScripting)(BSTR aUrl);
-  STDMETHOD(Shutdown)();
 
-private:
+  // IDOMWindowWrapperManager methods.
+  virtual HRESULT getWrappedDOMWindow(IWebBrowser2 * aFrameBrowser, IDispatch ** aRetHTMLWindow);
+  virtual void putWrappedDOMWindow(IWebBrowser2 * aFrameBrowser, IDispatch * aHTMLWindow);
+  virtual void removeWrappedDOMWindow(IWebBrowser2 * aFrameBrowser);
+
+// ---------------------------------------------------------------------------
+private:  // types
   /*==========================================================================
    * class FrameRecord
    * Holds frame related objects(Browser, Magpie, DOM Window) and infos.
@@ -116,15 +122,26 @@ private:
   class FrameRecord
   {
   public:
-    FrameRecord(IWebBrowser2 * aWebBrowser, BOOL aIsTopLevel) :
-        mBrowser(aWebBrowser), mIsTopLevel(aIsTopLevel)
-    {}
+    FrameRecord(
+        IWebBrowser2  * aWebBrowser,
+        BOOL            aIsTopLevel);
     ~FrameRecord();
 
-    HRESULT OnFrameStart(IWebBrowser2 * aBrowser, BSTR aUrl, VARIANT_BOOL aIsTopLevelRefresh);
-    HRESULT OnFrameEnd(IWebBrowser2 * aBrowser, BSTR aUrl, VARIANT_BOOL aIsTopLevelRefresh);
-    HRESULT InitializeContentScripting(LPCWSTR aMagpieDebugName, LPCWSTR aExtensionPath, LPDISPATCH aChromeAPI, BSTR aUrl, VariantVector & aContentScripts);
+    HRESULT OnFrameStart(
+        IWebBrowser2  * aBrowser,
+        BSTR            aUrl,
+        VARIANT_BOOL    aIsTopLevelRefresh);
+
+    HRESULT InitializeContentScripting(
+        IDOMWindowWrapperManager  * aDOMWindowManager,
+        LPCWSTR                     aMagpieDebugName,
+        LPCWSTR                     aExtensionPath,
+        LPDISPATCH                  aChromeAPI,
+        BSTR                        aUrl,
+        VariantVector             & aContentScripts);
+
     void cleanupScripting();
+    void cleanup();
 
     CComPtr<IWebBrowser2>       mBrowser;
     CComPtr<IMagpieApplication> mMagpie;
@@ -138,15 +155,25 @@ private:
   // Note we store raw FrameRecord pointers here to avoid copying.
   typedef Ancho::Utils::FrameMap<FrameRecordPtr>::Type FrameMap;
 
-  // -------------------------------------------------------------------------
-  // Private functions.
+  // Map with DOMWindowWrapper objects for the current frameset.
+  // It might seem that storing a map IHTMLWindow(original) to IHTMLWindow(wrapped)
+  // makes most sense, but when we receive an IHTMLWindow from a browser it might
+  // be a proxy. Don't know though, but better safe than sorry...
+  // So in the end we use the COMOBJECTID'd IWebBrowser2 as key and the IDispatch
+  // of the wrapped window as value. IDispatch because the wrapped window does not
+  // provide a IHTMLWindow interface.
+  typedef std::map<ULONG_PTR, CComPtr<IDispatch> > DOMWindowWrapperMap;
+
+// ---------------------------------------------------------------------------
+private:  // methods
   HRESULT createMagpieInstance(IMagpieApplication ** aMagpieRetVal);
   HRESULT initializeEnvironment();
+  void cleanupFrames();
   void cleanupScripting();
   void notifyAboutUpdateStatus();
 
-  // -------------------------------------------------------------------------
-  // Private members.
+// ---------------------------------------------------------------------------
+private:  // members
   std::wstring                          m_sExtensionName;
   std::wstring                          m_sExtensionID;
   boost::filesystem::wpath              m_sExtensionPath;
@@ -168,7 +195,8 @@ private:
 
   // Map with all current frames.
   FrameMap mMapFrames;
-
+  // Map with all DOMWindowWrapper's
+  DOMWindowWrapperMap mDOMWindowWrapper;
 };
 
 

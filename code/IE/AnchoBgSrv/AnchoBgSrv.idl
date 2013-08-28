@@ -7,7 +7,6 @@
 import "oaidl.idl";
 import "ocidl.idl";
 
-
 // forwards
 interface IAnchoAddonBackground;
 interface IAnchoRuntime;
@@ -74,6 +73,7 @@ interface IAnchoAddonBackground : IUnknown
 ]
 library AnchoBgSrvLib
 {
+	importlib("stdole2.tlb");
   [
     object,
     uuid("14293D7A-EEED-4DBE-A84C-BDBBFEA2882F"),
@@ -86,7 +86,6 @@ library AnchoBgSrvLib
     HRESULT onFire();
   };
 
-	importlib("stdole2.tlb");
   [
 	  object,
 	  uuid(06550FFB-49D7-4428-A5FF-2CC688A8001F),

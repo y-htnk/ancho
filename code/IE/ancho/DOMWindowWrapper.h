@@ -9,6 +9,19 @@
 class DOMWindowWrapper;
 
 /*===========================================================================
+ * struct IDOMWindowWrapperManager
+ * Public interface CAnchoAddon offers to DOMWindowWrapper for frame
+ * management.
+ */
+struct IDOMWindowWrapperManager
+{
+  virtual ~IDOMWindowWrapperManager() {}
+  virtual HRESULT getWrappedDOMWindow(IWebBrowser2 * aFrameBrowser, IDispatch ** aRetHTMLWindow) = 0;
+  virtual void putWrappedDOMWindow(IWebBrowser2 * aFrameBrowser, IDispatch * aHTMLWindow) = 0;
+  virtual void removeWrappedDOMWindow(IWebBrowser2 * aFrameBrowser) = 0;
+};
+
+/*===========================================================================
  * class HTMLLocationWrapper
  *  Wraps window.location for the content scripts.
  * @TODO: The wrapped location object is in fact also a IDispatcEx, but for
@@ -111,8 +124,10 @@ public:
 
   // -------------------------------------------------------------------------
   // static methods
-  static HRESULT createInstance(IWebBrowser2 * aWebBrowser,
-                                CComPtr<ComObject> & aRet);
+  static HRESULT createInstance(
+      IDOMWindowWrapperManager  * aDOMWindowManager,
+      IWebBrowser2              * aWebBrowser,
+      CComPtr<ComObject>        & aRet);
 
 public:
   // -------------------------------------------------------------------------
@@ -165,10 +180,12 @@ public:
 private:
   // -------------------------------------------------------------------------
   // ctor
-  DOMWindowWrapper()
+  DOMWindowWrapper() : mDOMWindowManager(NULL)
     {}
 
-  HRESULT init(IWebBrowser2 * aWebBrowser);
+  HRESULT init(
+      IDOMWindowWrapperManager  * aDOMWindowManager,
+      IWebBrowser2              * aWebBrowser);
 
   // Map DISPIDs of on... properties to their names. The on... properties need
   // a special handling (see dispatchPropertyPut).
@@ -183,7 +200,7 @@ private:
   HRESULT dispatchPropertyGet(WORD wFlags, DISPID dispIdMember, REFIID riid,
                     LCID lcid, DISPPARAMS *pDispParams, VARIANT *pVarResult,
                     EXCEPINFO *pExcepInfo, IServiceProvider *pspCaller,
-                    BOOL & aHandled) const;
+                    BOOL & aHandled);
   HRESULT dispatchPropertyPut(WORD wFlags, DISPID dispIdMember, REFIID riid,
                     LCID lcid, DISPPARAMS *pDispParams, VARIANT *pVarResult,
                     EXCEPINFO *pExcepInfo, IServiceProvider *pspCaller,
@@ -192,10 +209,10 @@ private:
                     LCID lcid, DISPPARAMS *pDispParams, VARIANT *pVarResult,
                     EXCEPINFO *pExcepInfo, IServiceProvider *pspCaller,
                     BOOL & aHandled) const;
+  void getRelatedWrappedWindow(IHTMLWindow2 * aHTMLWindow, VARIANT *pVarResult) const;
 
-private:
-  // -------------------------------------------------------------------------
-  // Private types.
+// ---------------------------------------------------------------------------
+private:  // types
   typedef std::map<DISPID, CComVariant> MapDISPIDToCComVariant;
   typedef std::map<CComBSTR, DISPID> MapNameToDISPID;
   typedef std::map<DISPID, CComBSTR> MapDISPIDToName;
@@ -221,9 +238,6 @@ private:
     CComQIPtr<IHTMLWindow4>  w4;
     CComQIPtr<IHTMLWindow5>  w5;
   };
-
-  // -------------------------------------------------------------------------
-  // Private members.
 
   friend ComObject;   // needs to call constructor
 
@@ -256,6 +270,15 @@ private:
     DISPID_SELF           = 3000703,
     DISPID_TOP            = 3000704
   };
+
+// ---------------------------------------------------------------------------
+private:  // members
+
+  // WEAK POINTER!
+  IDOMWindowWrapperManager  * mDOMWindowManager;
+
+  // our webbrowser
+  CComPtr<IWebBrowser2>   mWebBrowser;
 
   // the original DOM window
   HTMLWindowInterfaces    mDOMWindowInterfaces;

@@ -892,6 +892,7 @@ STDMETHODIMP CAnchoRuntime::showBrowserActionBar(INT aShow)
   IF_FAILED_RET(mWebBrowser->ShowBrowserBar(&clsidVar, &show, NULL));
   return S_OK;
 }
+
 //----------------------------------------------------------------------------
 //
 STDMETHODIMP CAnchoRuntime::updateTab(LPDISPATCH aProperties)

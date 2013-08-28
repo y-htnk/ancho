@@ -73,14 +73,16 @@ void DOMWindowWrapper::HTMLWindowInterfaces::Release() {
 
 // ---------------------------------------------------------------------------
 // createInstance
-HRESULT DOMWindowWrapper::createInstance(IWebBrowser2 * aWebBrowser,
-                                         CComPtr<ComObject> & aRet)
+HRESULT DOMWindowWrapper::createInstance(
+    IDOMWindowWrapperManager  * aDOMWindowManager,
+    IWebBrowser2              * aWebBrowser,
+    CComPtr<ComObject>        & aRet)
 {
   ComObject * newObject = NULL;
   IF_FAILED_RET(ComObject::CreateInstance(&newObject));
-  CComPtr<ComObject> objectRet(newObject);  // to have a refcount of 1
-  IF_FAILED_RET(newObject->init(aWebBrowser));
-  aRet = objectRet;
+  CComPtr<ComObject> owner(newObject);
+  IF_FAILED_RET(newObject->init(aDOMWindowManager, aWebBrowser));
+  aRet = owner;
   return S_OK;
 }
 
@@ -108,11 +110,14 @@ const wchar_t *DOMWindowWrapper::getEventPropertyName(DISPID id) {
 
 // ---------------------------------------------------------------------------
 // init
-HRESULT DOMWindowWrapper::init(IWebBrowser2 * aWebBrowser)
+HRESULT DOMWindowWrapper::init(
+    IDOMWindowWrapperManager  * aDOMWindowManager,
+    IWebBrowser2              * aWebBrowser)
 {
   if (!aWebBrowser) {
     return E_INVALIDARG;
   }
+  mWebBrowser = aWebBrowser;
   mDOMWindowInterfaces = CIDispatchHelper::GetScriptDispatch(aWebBrowser);
   if (!mDOMWindowInterfaces.dispEx) {
     return E_INVALIDARG;
@@ -139,6 +144,9 @@ HRESULT DOMWindowWrapper::init(IWebBrowser2 * aWebBrowser)
   // all frame related properties (like parent, top etc) create already and put
   // the wrapped window objects there
   //mDOMWindowProperties[] = ;
+  ATLASSERT(aDOMWindowManager);
+  mDOMWindowManager = aDOMWindowManager;
+  mDOMWindowManager->putWrappedDOMWindow(aWebBrowser, this);
 
   return S_OK;
 }
@@ -147,6 +155,9 @@ HRESULT DOMWindowWrapper::init(IWebBrowser2 * aWebBrowser)
 // forceDelete
 void DOMWindowWrapper::cleanup()
 {
+  if (mDOMWindowManager) {
+    mDOMWindowManager->removeWrappedDOMWindow(mWebBrowser);
+  }
   // *sigh* - jquery (and probably other scripts) leaks like Deepwater
   // Horizon on IE, so we don't get released. Let's at least release
   // everything we use in this place.
@@ -156,6 +167,8 @@ void DOMWindowWrapper::cleanup()
   mDOMWindowPropertyNames.clear();
   mDOMEventProperties.clear();
   mLocation.Release();
+  mWebBrowser.Release();
+  mDOMWindowManager = NULL;
 }
 
 // ---------------------------------------------------------------------------
@@ -202,19 +215,73 @@ HRESULT DOMWindowWrapper::dispatchPropertyGet(WORD wFlags, DISPID dispIdMember,
                                          VARIANT *pVarResult,
                                          EXCEPINFO *pExcepInfo,
                                          IServiceProvider *pspCaller,
-                                         BOOL & aHandled) const
+                                         BOOL & aHandled)
 {
+  ENSURE_RETVAL(pVarResult);
+  VariantInit(pVarResult);
   MapDISPIDToCComVariant::const_iterator it = mDOMWindowProperties.end();
   BOOL propertyFound = FALSE;
 
-  if (DISPID_LOCATION == dispIdMember) {
-    aHandled = TRUE;
-    CComVariant vt((IDispatch*)mLocation);
-    ATLASSERT(pVarResult);
-    if (VT_DISPATCH != vt.vt) {
-      return DISP_E_MEMBERNOTFOUND;
+  // Specially handled properties
+  switch(dispIdMember) {
+    // -----------------------------
+    // window.location
+    case DISPID_LOCATION: {
+      aHandled = TRUE;
+      CComVariant vt((IDispatch*)mLocation);
+      ATLASSERT(pVarResult);
+      if (VT_DISPATCH != vt.vt) {
+        return DISP_E_MEMBERNOTFOUND;
+      }
+      return vt.Detach(pVarResult);
     }
-    return vt.Detach(pVarResult);
+    // -----------------------------
+    // window.parent
+    case DISPID_PARENT: {
+      aHandled = TRUE;
+      ATLASSERT(mDOMWindowInterfaces.w2);
+      CComPtr<IHTMLWindow2> window;
+      mDOMWindowInterfaces.w2->get_parent(&window.p);
+      getRelatedWrappedWindow(window, pVarResult);
+      return S_OK;
+    }
+/*
+    // -----------------------------
+    // window.frames
+    case DISPID_FRAMES: {
+    }
+*/
+    // -----------------------------
+    // window.opener
+    case DISPID_OPENER: {
+      aHandled = TRUE;
+      ATLASSERT(mDOMWindowInterfaces.w2);
+      CComVariant opener;
+      mDOMWindowInterfaces.w2->get_opener(&opener);
+      if (VT_DISPATCH == opener.vt && opener.pdispVal) {
+        CComQIPtr<IHTMLWindow2> window(opener.pdispVal);
+        getRelatedWrappedWindow(window, pVarResult);
+      }
+      return S_OK;
+    }
+    // -----------------------------
+    // window.self
+    case DISPID_SELF: {
+      pVarResult->pdispVal = this;
+      AddRef();
+      pVarResult->vt = VT_DISPATCH;
+      return S_OK;
+    }
+    // -----------------------------
+    // window.top
+    case DISPID_TOP: {
+      aHandled = TRUE;
+      ATLASSERT(mDOMWindowInterfaces.w2);
+      CComPtr<IHTMLWindow2> window;
+      mDOMWindowInterfaces.w2->get_top(&window.p);
+      getRelatedWrappedWindow(window, pVarResult);
+      return S_OK;
+    }
   }
 
   const wchar_t * eventName = getEventPropertyName(dispIdMember);
@@ -301,6 +368,45 @@ HRESULT DOMWindowWrapper::dispatchConstruct(DISPID dispIdMember,
 {
   // do nothing, window will handle this
   return E_NOTIMPL;
+}
+
+// ---------------------------------------------------------------------------
+// getRelatedWrappedWindow
+// This method never fails. It might under certain conditions return an empty
+// Variant. This will appear in JS as "undefined".
+void DOMWindowWrapper::getRelatedWrappedWindow(
+    IHTMLWindow2  * aHTMLWindow,
+    VARIANT       * pVarResult) const
+{
+  if(!pVarResult) {
+    return;
+  }
+
+  VariantInit(pVarResult);
+
+  if(!aHTMLWindow || !mDOMWindowManager) {
+    return;
+  }
+
+  // QI to IServiceProvider.
+  CComQIPtr<IServiceProvider> serviceProvider(aHTMLWindow);
+  ATLASSERT(serviceProvider);
+
+  // Get the webbrowser from the related window.
+  CComPtr<IWebBrowser2> webBrowser;
+  serviceProvider->QueryService(SID_SWebBrowserApp, IID_IWebBrowser2, (void**)&webBrowser.p);
+  if (!webBrowser) {
+    return;
+  }
+  // Get the wrapped window for this browser.
+  CComPtr<IDispatch> wrappedParent;
+  mDOMWindowManager->getWrappedDOMWindow(webBrowser, &wrappedParent.p);
+  if (!wrappedParent) {
+    return;
+  }
+
+  pVarResult->vt = VT_DISPATCH;
+  pVarResult->pdispVal = wrappedParent.Detach();
 }
 
 // ---------------------------------------------------------------------------
