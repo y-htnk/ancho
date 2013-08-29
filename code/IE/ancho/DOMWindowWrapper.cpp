@@ -7,6 +7,73 @@
 #include "StdAfx.h"
 #include "DOMWindowWrapper.h"
 
+// ---------------------------------------------------------------------------
+// HTMLFramesCollection::createInstance
+HRESULT HTMLFramesCollection::createInstance(
+    DOMWindowWrapper  * aWindowWrapper,
+    IHTMLWindow2      * aHTMLWindow,
+    ComPtr            & aRet)
+{
+  if (!aHTMLWindow) {
+    return E_INVALIDARG;
+  }
+
+  CComPtr<IHTMLFramesCollection2> frameCollection;
+  IF_FAILED_RET(aHTMLWindow->get_frames(&frameCollection.p));
+
+  ComObject * frameCollectionObject = NULL;
+  IF_FAILED_RET(ComObject::CreateInstance(&frameCollectionObject));
+  ComPtr ptr = frameCollectionObject;
+
+  frameCollectionObject->mWindowWrapper = aWindowWrapper;
+  frameCollectionObject->mFrameCollection = frameCollection;
+  if (!frameCollectionObject->mFrameCollection) {
+    return E_NOINTERFACE;
+  }
+  DISPID id;
+  frameCollectionObject->mFrameCollection->GetDispID(L"item", 0, &id);
+  aRet = ptr;
+  return S_OK;
+}
+
+// ---------------------------------------------------------------------------
+// HTMLFramesCollection::handsOffWrapper
+void HTMLFramesCollection::handsOffWrapper()
+{
+  mWindowWrapper = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// HTMLFramesCollection::InvokeEx
+STDMETHODIMP HTMLFramesCollection::InvokeEx(DISPID id, LCID lcid, WORD wFlags,
+                                        DISPPARAMS *pdp, VARIANT *pvarRes,
+                                        EXCEPINFO *pei,
+                                        IServiceProvider *pspCaller)
+{
+  if( (wFlags & DISPATCH_PROPERTYGET) && (3001138 == id) ) {
+    HRESULT hr = (mFrameCollection)
+      ? mFrameCollection->InvokeEx(id, lcid, wFlags, pdp, pvarRes, pei, pspCaller)
+      : E_INVALIDARG;
+    if (FAILED(hr)) {
+      return hr;
+    }
+    if (VT_DISPATCH != pvarRes->vt || !pvarRes->pdispVal) {
+      return E_FAIL;
+    }
+    CComQIPtr<IHTMLWindow2> window(pvarRes->pdispVal);
+    // Clear the original return value. In case we don't have our wrapper anymore
+    // or in case of an error return "undefined".
+    VariantClear(pvarRes);
+    if (mWindowWrapper) {
+      // Get wrapped window for original window.
+      mWindowWrapper->getRelatedWrappedWindow(window, pvarRes);
+    }
+    return S_OK;
+  }
+  return (mFrameCollection)
+    ? mFrameCollection->InvokeEx(id, lcid, wFlags, pdp, pvarRes, pei, pspCaller)
+    : E_INVALIDARG;
+}
 
 // ---------------------------------------------------------------------------
 // HTMLLocationWrapper::createInstance
@@ -25,7 +92,7 @@ HRESULT HTMLLocationWrapper::createInstance(IHTMLWindow2 * aHTMLWindow,
 
   locationObject->mLocation = htmlLocation;
   if (!locationObject->mLocation) {
-    return E_UNEXPECTED;
+    return E_NOINTERFACE;
   }
   aRet = ptr;
   return S_OK;
@@ -123,8 +190,16 @@ HRESULT DOMWindowWrapper::init(
     return E_INVALIDARG;
   }
 
+  // add this frame to WrappedDOMWindowManager
+  ATLASSERT(aDOMWindowManager);
+  mDOMWindowManager = aDOMWindowManager;
+  mDOMWindowManager->putWrappedDOMWindow(aWebBrowser, this);
+
   // location-wrapper
   IF_FAILED_RET(HTMLLocationWrapper::createInstance(mDOMWindowInterfaces.w2, mLocation));
+
+  // frames-wrapper
+  IF_FAILED_RET(HTMLFramesCollection::createInstance(this, mDOMWindowInterfaces.w2, mFrames));
 
   // also create NULL properties for all events in getEventPropertyName
   mDOMEventProperties[DISPID_ONBEFOREUNLOAD].vt = VT_NULL;
@@ -140,13 +215,6 @@ HRESULT DOMWindowWrapper::init(
   mDOMEventProperties[DISPID_ONHELP].vt = VT_NULL;
   mDOMEventProperties[DISPID_ONBEFOREPRINT].vt = VT_NULL;
   mDOMEventProperties[DISPID_ONFOCUS].vt = VT_NULL;
-
-  // all frame related properties (like parent, top etc) create already and put
-  // the wrapped window objects there
-  //mDOMWindowProperties[] = ;
-  ATLASSERT(aDOMWindowManager);
-  mDOMWindowManager = aDOMWindowManager;
-  mDOMWindowManager->putWrappedDOMWindow(aWebBrowser, this);
 
   return S_OK;
 }
@@ -167,6 +235,10 @@ void DOMWindowWrapper::cleanup()
   mDOMWindowPropertyNames.clear();
   mDOMEventProperties.clear();
   mLocation.Release();
+  if (mFrames) {
+    mFrames->handsOffWrapper();
+  }
+  mFrames.Release();
   mWebBrowser.Release();
   mDOMWindowManager = NULL;
 }
@@ -229,7 +301,16 @@ HRESULT DOMWindowWrapper::dispatchPropertyGet(WORD wFlags, DISPID dispIdMember,
     case DISPID_LOCATION: {
       aHandled = TRUE;
       CComVariant vt((IDispatch*)mLocation);
-      ATLASSERT(pVarResult);
+      if (VT_DISPATCH != vt.vt) {
+        return DISP_E_MEMBERNOTFOUND;
+      }
+      return vt.Detach(pVarResult);
+    }
+    // -----------------------------
+    // window.frames
+    case DISPID_FRAMES: {
+      aHandled = TRUE;
+      CComVariant vt((IDispatch*)mFrames);
       if (VT_DISPATCH != vt.vt) {
         return DISP_E_MEMBERNOTFOUND;
       }
@@ -245,12 +326,6 @@ HRESULT DOMWindowWrapper::dispatchPropertyGet(WORD wFlags, DISPID dispIdMember,
       getRelatedWrappedWindow(window, pVarResult);
       return S_OK;
     }
-/*
-    // -----------------------------
-    // window.frames
-    case DISPID_FRAMES: {
-    }
-*/
     // -----------------------------
     // window.opener
     case DISPID_OPENER: {
@@ -376,7 +451,7 @@ HRESULT DOMWindowWrapper::dispatchConstruct(DISPID dispIdMember,
 // Variant. This will appear in JS as "undefined".
 void DOMWindowWrapper::getRelatedWrappedWindow(
     IHTMLWindow2  * aHTMLWindow,
-    VARIANT       * pVarResult) const
+    VARIANT       * pVarResult)
 {
   if(!pVarResult) {
     return;
