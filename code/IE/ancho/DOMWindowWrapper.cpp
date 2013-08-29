@@ -30,8 +30,6 @@ HRESULT HTMLFramesCollection::createInstance(
   if (!frameCollectionObject->mFrameCollection) {
     return E_NOINTERFACE;
   }
-  DISPID id;
-  frameCollectionObject->mFrameCollection->GetDispID(L"item", 0, &id);
   aRet = ptr;
   return S_OK;
 }
@@ -50,29 +48,31 @@ STDMETHODIMP HTMLFramesCollection::InvokeEx(DISPID id, LCID lcid, WORD wFlags,
                                         EXCEPINFO *pei,
                                         IServiceProvider *pspCaller)
 {
-  if( (wFlags & DISPATCH_PROPERTYGET) && (3001138 == id) ) {
-    HRESULT hr = (mFrameCollection)
-      ? mFrameCollection->InvokeEx(id, lcid, wFlags, pdp, pvarRes, pei, pspCaller)
-      : E_INVALIDARG;
-    if (FAILED(hr)) {
-      return hr;
-    }
-    if (VT_DISPATCH != pvarRes->vt || !pvarRes->pdispVal) {
-      return E_FAIL;
-    }
-    CComQIPtr<IHTMLWindow2> window(pvarRes->pdispVal);
-    // Clear the original return value. In case we don't have our wrapper anymore
-    // or in case of an error return "undefined".
-    VariantClear(pvarRes);
-    if (mWindowWrapper) {
-      // Get wrapped window for original window.
-      mWindowWrapper->getRelatedWrappedWindow(window, pvarRes);
-    }
-    return S_OK;
-  }
-  return (mFrameCollection)
+  HRESULT hr = (mFrameCollection)
     ? mFrameCollection->InvokeEx(id, lcid, wFlags, pdp, pvarRes, pei, pspCaller)
     : E_INVALIDARG;
+  if (FAILED(hr)) {
+    return hr;
+  }
+
+  // IHTMLFramesCollection2 has only two methods. If it is not "length" then it is "item".
+  // That in turn translates to a DISPATCH_PROPERTYGET for the property <framename-or-index>.
+  // For that the return value is an object.
+  // NOTE: Of course it is possible to extend window.frames, but this we ignore here.
+  // So everything here that is an object should be a frame. Try to get it.
+  if(    (wFlags & (DISPATCH_PROPERTYGET | DISPATCH_METHOD))
+      && (VT_DISPATCH == pvarRes->vt)
+      && pvarRes->pdispVal) {
+    CComQIPtr<IHTMLWindow2> window(pvarRes->pdispVal);
+    if (mWindowWrapper) {
+      VariantClear(pvarRes);
+      // Get wrapped window for original window.
+      mWindowWrapper->getRelatedWrappedWindow(window, pspCaller, pvarRes);
+      // In case getRelatedWrappedWindow failed we return an empty VARIANT, but no error.
+      // We don't want js exceptions to be thrown.
+    }
+  }
+  return hr;
 }
 
 // ---------------------------------------------------------------------------
@@ -323,7 +323,7 @@ HRESULT DOMWindowWrapper::dispatchPropertyGet(WORD wFlags, DISPID dispIdMember,
       ATLASSERT(mDOMWindowInterfaces.w2);
       CComPtr<IHTMLWindow2> window;
       mDOMWindowInterfaces.w2->get_parent(&window.p);
-      getRelatedWrappedWindow(window, pVarResult);
+      getRelatedWrappedWindow(window, pspCaller, pVarResult);
       return S_OK;
     }
     // -----------------------------
@@ -335,7 +335,7 @@ HRESULT DOMWindowWrapper::dispatchPropertyGet(WORD wFlags, DISPID dispIdMember,
       mDOMWindowInterfaces.w2->get_opener(&opener);
       if (VT_DISPATCH == opener.vt && opener.pdispVal) {
         CComQIPtr<IHTMLWindow2> window(opener.pdispVal);
-        getRelatedWrappedWindow(window, pVarResult);
+        getRelatedWrappedWindow(window, pspCaller, pVarResult);
       }
       return S_OK;
     }
@@ -354,7 +354,7 @@ HRESULT DOMWindowWrapper::dispatchPropertyGet(WORD wFlags, DISPID dispIdMember,
       ATLASSERT(mDOMWindowInterfaces.w2);
       CComPtr<IHTMLWindow2> window;
       mDOMWindowInterfaces.w2->get_top(&window.p);
-      getRelatedWrappedWindow(window, pVarResult);
+      getRelatedWrappedWindow(window, pspCaller, pVarResult);
       return S_OK;
     }
   }
@@ -447,23 +447,21 @@ HRESULT DOMWindowWrapper::dispatchConstruct(DISPID dispIdMember,
 
 // ---------------------------------------------------------------------------
 // getRelatedWrappedWindow
-// This method never fails. It might under certain conditions return an empty
-// Variant. This will appear in JS as "undefined".
-void DOMWindowWrapper::getRelatedWrappedWindow(
-    IHTMLWindow2  * aHTMLWindow,
-    VARIANT       * pVarResult)
+HRESULT DOMWindowWrapper::getRelatedWrappedWindow(
+    IHTMLWindow2      * aHTMLWindow,
+    IServiceProvider  * pspCaller,
+    VARIANT           * pVarResult)
 {
-  if(!pVarResult) {
-    return;
-  }
+  ENSURE_RETVAL(pVarResult)
 
   VariantInit(pVarResult);
+  pVarResult->vt = VT_NULL;
 
   if(!aHTMLWindow || !mDOMWindowManager) {
-    return;
+    return E_INVALIDARG;
   }
 
-  // QI to IServiceProvider.
+  // QI related window to IServiceProvider.
   CComQIPtr<IServiceProvider> serviceProvider(aHTMLWindow);
   ATLASSERT(serviceProvider);
 
@@ -471,17 +469,34 @@ void DOMWindowWrapper::getRelatedWrappedWindow(
   CComPtr<IWebBrowser2> webBrowser;
   serviceProvider->QueryService(SID_SWebBrowserApp, IID_IWebBrowser2, (void**)&webBrowser.p);
   if (!webBrowser) {
-    return;
-  }
-  // Get the wrapped window for this browser.
-  CComPtr<IDispatch> wrappedParent;
-  mDOMWindowManager->getWrappedDOMWindow(webBrowser, &wrappedParent.p);
-  if (!wrappedParent) {
-    return;
+    return E_NOINTERFACE;
   }
 
-  pVarResult->vt = VT_DISPATCH;
-  pVarResult->pdispVal = wrappedParent.Detach();
+  // Get the wrapped window for this browser.
+  CComPtr<IDispatch> wrappedWindow;
+  HRESULT hr = mDOMWindowManager->getWrappedDOMWindow(mWebBrowser, webBrowser, &wrappedWindow.p);
+  if (SUCCEEDED(hr)) {
+    pVarResult->vt = VT_DISPATCH;
+    pVarResult->pdispVal = wrappedWindow.Detach();
+    return S_OK;
+  }
+
+  if (E_ACCESSDENIED == hr && pspCaller) {
+    // Chrome returns in this case an object, but all properties are null.
+    // Here they will be "undefined" instead of null, but that's acceptable.
+    CComPtr<IActiveScriptSite> scriptSite;
+    pspCaller->QueryService(IID_IActiveScriptSite, IID_IActiveScriptSite, (void**)&scriptSite.p);
+    CComQIPtr<IMagpieObjectCreator> magpie(scriptSite);
+    if (magpie) {
+      hr = magpie->createObject(CComBSTR(L"Object"), &pVarResult->pdispVal);
+      if (SUCCEEDED(hr)) {
+        pVarResult->vt = VT_DISPATCH;
+        return S_OK;
+      }
+    }
+  }
+
+  return hr;
 }
 
 // ---------------------------------------------------------------------------

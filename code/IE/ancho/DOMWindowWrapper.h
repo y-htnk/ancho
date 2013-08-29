@@ -16,9 +16,18 @@ class DOMWindowWrapper;
 struct IDOMWindowWrapperManager
 {
   virtual ~IDOMWindowWrapperManager() {}
-  virtual HRESULT getWrappedDOMWindow(IWebBrowser2 * aFrameBrowser, IDispatch ** aRetHTMLWindow) = 0;
-  virtual void putWrappedDOMWindow(IWebBrowser2 * aFrameBrowser, IDispatch * aHTMLWindow) = 0;
-  virtual void removeWrappedDOMWindow(IWebBrowser2 * aFrameBrowser) = 0;
+
+  virtual HRESULT getWrappedDOMWindow(
+      IWebBrowser2  * aCallerBrowser,
+      IWebBrowser2  * aFrameBrowser,
+      IDispatch    ** aRetHTMLWindow) = 0;
+
+  virtual void putWrappedDOMWindow(
+      IWebBrowser2  * aFrameBrowser,
+      IDispatch     * aHTMLWindow) = 0;
+
+  virtual void removeWrappedDOMWindow(
+      IWebBrowser2  * aFrameBrowser) = 0;
 };
 
 /*===========================================================================
@@ -30,7 +39,7 @@ class ATL_NO_VTABLE HTMLFramesCollection :
   public IDispatchEx
 {
 public:
-  HTMLFramesCollection() : mWindowWrapper(NULL) {}
+  HTMLFramesCollection() : mWindowWrapper(NULL), mDispIdItem(0) {}
   typedef CComObject<HTMLFramesCollection> ComObject;
   typedef CComPtr<ComObject> ComPtr;
 
@@ -78,7 +87,7 @@ public:
   // IDispatchEx methods: forward
   STDMETHOD(GetDispID)(BSTR bstrName, DWORD grfdex, DISPID *pid)
       FORWARD_CALL(GetDispID, bstrName, grfdex, pid)
-  // Don't forward invoke, this we handle
+  // Don't forward InvokeEx, this we handle
   STDMETHOD(InvokeEx)(DISPID id, LCID lcid, WORD wFlags, DISPPARAMS *pdp,
                       VARIANT *pvarRes, EXCEPINFO *pei,
                       IServiceProvider *pspCaller);
@@ -100,6 +109,7 @@ public:
 private: // properties
   // WEAK POINTER!
   DOMWindowWrapper * mWindowWrapper;
+  DISPID  mDispIdItem;
   CComQIPtr<IDispatchEx> mFrameCollection;
 };
 
@@ -227,7 +237,7 @@ public:
   // helper - see comment in implementation
   void cleanup();
   // Used by this and by frame collection wrapper
-  void getRelatedWrappedWindow(IHTMLWindow2 * aHTMLWindow, VARIANT *pVarResult);
+  HRESULT getRelatedWrappedWindow(IHTMLWindow2 * aHTMLWindow, IServiceProvider * pspCaller, VARIANT *pVarResult);
 
 public:
   // -------------------------------------------------------------------------

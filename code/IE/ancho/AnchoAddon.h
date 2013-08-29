@@ -108,9 +108,17 @@ public:
   STDMETHOD(InitializeExtensionScripting)(BSTR aUrl);
 
   // IDOMWindowWrapperManager methods.
-  virtual HRESULT getWrappedDOMWindow(IWebBrowser2 * aFrameBrowser, IDispatch ** aRetHTMLWindow);
-  virtual void putWrappedDOMWindow(IWebBrowser2 * aFrameBrowser, IDispatch * aHTMLWindow);
-  virtual void removeWrappedDOMWindow(IWebBrowser2 * aFrameBrowser);
+  virtual HRESULT getWrappedDOMWindow(
+      IWebBrowser2  * aCallerBrowser,
+      IWebBrowser2  * aFrameBrowser,
+      IDispatch    ** aRetHTMLWindow);
+
+  virtual void putWrappedDOMWindow(
+      IWebBrowser2  * aFrameBrowser,
+      IDispatch     * aHTMLWindow);
+
+  virtual void removeWrappedDOMWindow(
+      IWebBrowser2  * aFrameBrowser);
 
 // ---------------------------------------------------------------------------
 private:  // types

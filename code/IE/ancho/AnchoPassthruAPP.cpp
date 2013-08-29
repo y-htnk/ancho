@@ -355,7 +355,7 @@ HRESULT CAnchoProtocolSink::queryCurrentBrowser()
     }
 
     // ... that should be a IServiceProvider ...
-    CComQIPtr<IServiceProvider> serviceProvider = accessible;
+    CComQIPtr<IServiceProvider> serviceProvider(accessible);
     ATLASSERT(serviceProvider);
 
     // ... that delivers us a IHTMLWindow2 ...

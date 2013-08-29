@@ -274,10 +274,35 @@ STDMETHODIMP CAnchoAddon::InitializeExtensionScripting(BSTR aUrl)
 
 //----------------------------------------------------------------------------
 // getWrappedDOMWindow
-HRESULT CAnchoAddon::getWrappedDOMWindow(IWebBrowser2 * aFrameBrowser, IDispatch ** aRetHTMLWindow)
+HRESULT CAnchoAddon::getWrappedDOMWindow(
+    IWebBrowser2  * aCallerBrowser,
+    IWebBrowser2  * aFrameBrowser,
+    IDispatch    ** aRetHTMLWindow)
 {
   ENSURE_RETVAL(aRetHTMLWindow);
   (*aRetHTMLWindow) = NULL;
+
+  // For a cross-frame request domain, protocol and port must match.
+  CComPtr<IWebBrowser2> browser[2] = {aCallerBrowser, aFrameBrowser};
+  CComBSTR protocol[2];
+  CComBSTR domain[2];
+  DWORD port[2] = {0, 0};
+  for(int n = 0; n < 2; n++) {
+    CComBSTR bs;
+    browser[n]->get_LocationURL(&bs);
+    CComPtr<IUri> uri;
+    CreateUri(bs, Uri_CREATE_CANONICALIZE, 0, &uri.p);
+    if (!uri) {
+      return E_FAIL;
+    }
+    uri->GetDomain(&domain[n]);
+    uri->GetSchemeName(&protocol[n]);
+    uri->GetPort(&port[n]);
+  }
+  if ( (domain[0] != domain[1]) || (protocol[0] != protocol[1]) || (port[0] != port[1]) ) {
+    return E_ACCESSDENIED;
+  }
+
   DOMWindowWrapperMap::iterator it = mDOMWindowWrapper.find(COMOBJECTID(aFrameBrowser));
   if (it == mDOMWindowWrapper.end()) {
     return E_FAIL;
@@ -288,14 +313,17 @@ HRESULT CAnchoAddon::getWrappedDOMWindow(IWebBrowser2 * aFrameBrowser, IDispatch
 
 //----------------------------------------------------------------------------
 // putWrappedDOMWindow
-void CAnchoAddon::putWrappedDOMWindow(IWebBrowser2 * aFrameBrowser, IDispatch * aHTMLWindow)
+void CAnchoAddon::putWrappedDOMWindow(
+    IWebBrowser2  * aFrameBrowser,
+    IDispatch     * aHTMLWindow)
 {
   mDOMWindowWrapper[COMOBJECTID(aFrameBrowser)] = aHTMLWindow;
 }
 
 //----------------------------------------------------------------------------
 // removeWrappedDOMWindow
-void CAnchoAddon::removeWrappedDOMWindow(IWebBrowser2 * aFrameBrowser)
+void CAnchoAddon::removeWrappedDOMWindow(
+    IWebBrowser2  * aFrameBrowser)
 {
   mDOMWindowWrapper.erase(COMOBJECTID(aFrameBrowser));
 }

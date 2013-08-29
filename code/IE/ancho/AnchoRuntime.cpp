@@ -300,7 +300,7 @@ HRESULT CAnchoRuntime::get_cookieManager(LPDISPATCH* ppRet)
 //
 STDMETHODIMP_(void) CAnchoRuntime::OnBrowserDownloadBegin()
 {
-  ARTTRACE(_T(""));
+  ARTTRACE(_T("\n"));
   mExtensionPageAPIPrepared = false;
 }
 
@@ -830,12 +830,12 @@ STDMETHODIMP CAnchoRuntime::SetSite(IUnknown *pUnkSite)
       hr = InitAddons();
 /*
       if (SUCCEEDED(hr)) {
+        CComBSTR url;
+        mWebBrowser->get_LocationURL(&url);
         // in case IE has already a page loaded initialize scripting 
         READYSTATE readyState;
         mWebBrowser->get_ReadyState(&readyState);
         if (readyState >= READYSTATE_INTERACTIVE) {
-          CComBSTR url;
-          mWebBrowser->get_LocationURL(&url);
           if (!isExtensionPage(std::wstring(url))) {
             if (url != L"about:blank") {
               // give toolbar a chance to load
@@ -844,6 +844,7 @@ STDMETHODIMP CAnchoRuntime::SetSite(IUnknown *pUnkSite)
             }
           }
         }
+        int asd = 0;
       }
       //showBrowserActionBar(TRUE);
 */
