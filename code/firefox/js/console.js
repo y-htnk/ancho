@@ -42,6 +42,9 @@
       }
     },
 
+    trace: function() {
+    },
+
     _toString: function(args) {
       if ('undefined' === typeof(args)) {
         return 'undefined';

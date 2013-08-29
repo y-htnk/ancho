@@ -147,7 +147,6 @@
     for (var windowId in this._windowEventEmitters) {
       this._windowEventEmitters[windowId].shutdown(reason);
     }
-    this._windowEventEmitters = {};
 
     this.emit('unload', reason);
 
@@ -165,6 +164,9 @@
       windowEventEmitter = new WindowEventEmitter(win);
       windowEventEmitter.init();
       this._windowEventEmitters[windowId] = windowEventEmitter;
+      windowEventEmitter.once('unload', function() {
+        delete this._windowEventEmitters[windowId];
+      }.bind(this));
     }
     else {
       windowEventEmitter = this._windowEventEmitters[windowId];

@@ -43,7 +43,7 @@
     chrome.windows = new WindowsAPI(extension);
     chrome.webRequest = new WebRequestAPI(extension);
     chrome.browserAction = new BrowserActionAPI(extension);
-    chrome.cookies = new CookiesAPI(extension);
+    chrome.cookies = new CookiesAPI(extension, window);
     chrome.history = new HistoryAPI(extension);
     chrome.i18n = new I18nAPI(extension);
     chrome.runtime = new RuntimeAPI(extension);
