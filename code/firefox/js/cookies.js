@@ -14,11 +14,11 @@
   var COOKIE_CHANGED_DATA_CHANGED = 'changed';
   var COOKIE_CHANGED_DATA_DELETED = 'deleted';
 
-  var CookiesAPI = function(extension) {
+  var CookiesAPI = function(extension, contentWindow) {
     this.onChanged = new Event(extension, 'cookie.changed');
     Services.obs.addObserver(this, COOKIE_CHANGED, false);
     var self = this;
-    extension.once('unload', function() {
+    extension.forWindow(contentWindow).once('unload', function() {
       Services.obs.removeObserver(self, COOKIE_CHANGED, false);
     });
   };

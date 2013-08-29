@@ -35,6 +35,7 @@
 
   function Require() {
     this.wrappedJSObject = this;
+    this.console = null;
   }
 
   Require.prototype = {
@@ -89,6 +90,9 @@
         var directoryUrl = Services.io.newURI('.', '', url);
         context.require = function(id) { return require(id, directoryUrl); };
         context.process = { title: 'Ancho' };
+        if (self.console) {
+          context.console = self.console;
+        }
 
         // Need to add to the cache here to avoid stack overflow in case of require() cycles
         // (e.g. A requires B which requires A).

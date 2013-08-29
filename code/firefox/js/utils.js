@@ -157,7 +157,7 @@
   exports.mapHttpError = function(code) {
     var res = FirefoxHttpErrors[code];
     if (!res) {
-      dump('Unknown HTTP request error. Code = ' + code + '\n');
+      console.debug('Unknown HTTP request error. Code = ' + code + '\n');
       return 'UNKNOWN_ERROR';
     }
     return res;
