@@ -298,6 +298,13 @@ HRESULT CAnchoRuntime::get_cookieManager(LPDISPATCH* ppRet)
 }
 //----------------------------------------------------------------------------
 //
+HRESULT CAnchoRuntime::get_browser(LPDISPATCH* ppRet)
+{
+  ENSURE_RETVAL(ppRet);
+  return mWebBrowser->QueryInterface(ppRet);
+}
+//----------------------------------------------------------------------------
+//
 STDMETHODIMP_(void) CAnchoRuntime::OnBrowserDownloadBegin()
 {
   ARTTRACE(_T(""));
@@ -329,6 +336,37 @@ STDMETHODIMP_(void) CAnchoRuntime::OnNavigateComplete(LPDISPATCH pDispatch, VARI
       mExtensionPageAPIPrepared = true;
     }
   }
+}
+
+//----------------------------------------------------------------------------
+/**
+ * \param aScheme either ancho-absolute or ancho-relative
+ * \param aUrl Input/Output parameter specifies wrapped URL and the unwrapped url will be also stored here.
+ * \result RequestId
+ **/
+int handleWrappedUrl(const std::wstring &aScheme, std::wstring &aUrl)
+{
+  int requestId = 0;
+  if (aScheme == s_AnchoAbsoluteUrlHelperScheme) {
+    boost::wregex expression(L".+://([0-9]+)/([^/]*)/(.*)");
+    boost::wsmatch what;
+    if (boost::regex_match(aUrl, what, expression)) {
+      requestId = boost::lexical_cast<int>(what[1].str());
+      aUrl = what[2] + L"://" + what[3];
+    } else {
+      ATLASSERT(false && L"Helper URL malformed");
+    }
+  } else {
+    boost::wregex expression(L".+://([0-9]+)/(.*)");
+    boost::wsmatch what;
+    if (boost::regex_match(aUrl, what, expression)) {
+      requestId = boost::lexical_cast<int>(what[1].str());
+      aUrl = what[2];
+    }else {
+      ATLASSERT(false && L"Helper URL malformed");
+    }
+  }
+  return requestId;
 }
 
 //----------------------------------------------------------------------------
@@ -388,18 +426,13 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
   // Check if this is a new tab we are creating programmatically.
   // If so redirect it to the correct URL.
   std::wstring url(pURL->bstrVal, SysStringLen(pURL->bstrVal));
-
-  boost::wregex expression(L"(.*)://\\$\\$([0-9]+)\\$\\$(.*)");
-  boost::wsmatch what;
-  //TODO - find a better way
-  if (boost::regex_match(url, what, expression)) {
-    int requestId = boost::lexical_cast<int>(what[2].str());
-    url = boost::str(boost::wformat(L"%1%://%2%") % what[1] % what[3]);
-
-    _variant_t vtUrl(url.c_str());
+  if (scheme == s_AnchoAbsoluteUrlHelperScheme || scheme == s_AnchoRelativeUrlHelperScheme) {
+    int requestId = handleWrappedUrl(scheme.m_str, url);
     *Cancel = bCancel = TRUE;
     currentFrameBrowser->Stop();
     bCancel = FALSE;
+
+    _variant_t vtUrl(url.c_str());
     currentFrameBrowser->Navigate2(&vtUrl.GetVARIANT(), Flags, TargetFrameName, PostData, Headers);
     mTabManager->createTabNotification(mTabId, requestId);
     return;
@@ -828,7 +861,7 @@ STDMETHODIMP CAnchoRuntime::SetSite(IUnknown *pUnkSite)
     if (SUCCEEDED(hr)) {
       hr = InitAddons();
       if (SUCCEEDED(hr)) {
-        // in case IE has already a page loaded initialize scripting 
+        // in case IE has already a page loaded initialize scripting
         READYSTATE readyState;
         mWebBrowser->get_ReadyState(&readyState);
         if (readyState >= READYSTATE_INTERACTIVE) {

@@ -118,6 +118,7 @@ public:
   // -------------------------------------------------------------------------
   // IAnchoRuntime methods
   STDMETHOD(get_cookieManager)(LPDISPATCH* ppRet);
+  STDMETHOD(get_browser)(LPDISPATCH* ppRet);
   STDMETHOD(reloadTab)();
   STDMETHOD(closeTab)();
   STDMETHOD(executeScript)(BSTR aExtensionId, BSTR aCode, INT aFileSpecified);

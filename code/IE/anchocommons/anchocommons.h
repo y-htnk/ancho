@@ -4,6 +4,7 @@
 #include <boost/atomic.hpp>
 #include <ctime>
 #include <boost/filesystem.hpp>
+#include <boost/regex.hpp>
 
 extern const wchar_t * s_AnchoMainAPIModuleID;
 extern const wchar_t * s_AnchoExtensionsRegistryKey;
@@ -26,6 +27,8 @@ extern const wchar_t * s_AnchoBackgroundConsoleObjectName;
 extern const wchar_t * s_AnchoFnGetContentAPI;
 extern const wchar_t * s_AnchoFnReleaseContentAPI;
 extern const wchar_t * s_AnchoTabIDPropertyName;
+extern const wchar_t * s_AnchoRelativeUrlHelperScheme;
+extern const wchar_t * s_AnchoAbsoluteUrlHelperScheme;
 
 
 
@@ -101,6 +104,24 @@ namespace Utils {
 std::wstring getProductName(HMODULE hInstance);
 
 boost::filesystem::wpath getAnchoAppDataDirectory();
+
+inline std::wstring getSchemeFromUrl(const std::wstring &aUrl) {
+  boost::wregex expression(L"(.+)://.*");
+  boost::wsmatch what;
+  if (boost::regex_match(aUrl, what, expression)) {
+    return what[1];
+  }
+  return std::wstring();
+}
+
+inline std::wstring getHostAndPathFromUrl(const std::wstring &aUrl) {
+  boost::wregex expression(L".+://(.*)");
+  boost::wsmatch what;
+  if (boost::regex_match(aUrl, what, expression)) {
+    return what[1];
+  }
+  return std::wstring();
+}
 
 /**
  * Thread safe generator of unique sequential IDs.

@@ -20,7 +20,9 @@ var strippedCopy = require("utils.js").strippedCopy;
 var EVENT_LIST = ['onConnect',
                   'onConnectExternal',
                   'onMessage',
-                  'onMessageExternal'];
+                  'onMessageExternal',
+                  'onRequest' //deprecated
+                  ];
 var API_NAME = 'extension';
 
 var portPairs = {}

@@ -195,33 +195,36 @@ struct CreateTabTask
   void operator()()
   {
     ATLTRACE(L"TABMANAGER - CreateTabTask start\n");
-    CComPtr<IWebBrowser2> browser = Utils::findActiveBrowser();
 
+    CComPtr<IWebBrowser2> browser = getBrowser();
     if (!browser) {
+      ATLTRACE(L"CREATE TAB TASK - failed to obtain browser - cannot create new tab\n");
       //Problem - no browser available
       return;
     }
 
+    std::wstring tmpUrl = getURL();
+
+    // Wrap the url so we can pass request ID to the browser.
+    // Request Id is then used to invoke right callback
+    if (!mCallback.empty()) {
+      int requestID = TabManager::instance().mRequestIdGenerator.next();
+      std::wstring scheme = Utils::getSchemeFromUrl(tmpUrl);
+      if (scheme.empty()) {
+        tmpUrl = boost::str(boost::wformat(L"%1%://%2%/%3%") % s_AnchoRelativeUrlHelperScheme % requestID % tmpUrl);
+      } else {
+        std::wstring hostAndPath = Utils::getHostAndPathFromUrl(tmpUrl);
+        tmpUrl = boost::str(boost::wformat(L"%1%://%2%/%3%/%4%") % s_AnchoAbsoluteUrlHelperScheme % requestID % scheme % hostAndPath);
+      }
+      TabManager::CreateTabCallbackRequestInfo requestInfo = { mCallback, mExtensionId, mApiId };
+      TabManager::instance().addCreateTabCallbackInfo(requestID, requestInfo);
+    }
+
+    _variant_t vtUrl = tmpUrl.c_str();
+
     Utils::JSVariant windowIdVt = mProperties[L"windowId"];
     //TODO - handle windowId properly
     int windowId = (windowIdVt.which() == Utils::jsInt) ? boost::get<int>(windowIdVt) : WINDOW_ID_CURRENT;
-
-    Utils::JSVariant url = mProperties[L"url"];
-    std::wstring tmpUrl = (url.which() == Utils::jsString) ? boost::get<std::wstring>(url) : L"about:blank";
-
-    if (!mCallback.empty()) {
-      int requestID = TabManager::instance().mRequestIdGenerator.next();
-      boost::wregex expression(L"(.*)://(.*)");
-      boost::wsmatch what;
-      if (boost::regex_match(tmpUrl, what, expression)) {
-        tmpUrl = boost::str(boost::wformat(L"%1%://$$%2%$$%3%") % what[1] % requestID % what[2]);
-
-        TabManager::CreateTabCallbackRequestInfo requestInfo = { mCallback, mExtensionId, mApiId };
-        TabManager::instance().addCreateTabCallbackInfo(requestID, requestInfo);
-      }
-    }
-    _variant_t vtUrl = tmpUrl.c_str();
-
     long flags = windowId == WINDOW_ID_NON_EXISTENT ? navOpenInNewWindow : navOpenInNewTab;
     _variant_t vtFlags(flags, VT_I4);
 
@@ -240,6 +243,57 @@ struct CreateTabTask
                                 &vtHeaders.GetVARIANT())
                                 );
     ATLTRACE(L"TABMANAGER - CreateTabTask end\n");
+  }
+
+  CComPtr<IWebBrowser2> getBrowser()
+  {
+    CComPtr<IWebBrowser2> browser;
+    Utils::JSVariant openerTabId = mProperties[L"openerTabId"];
+    if (openerTabId.which() == Utils::jsInt) {
+      // If opener tab id available -> call from tab context
+      // This means that relative URLs will be properly handled by browser
+      try {
+        int openerId = boost::get<int>(openerTabId);
+        auto rec = TabManager::instance().getTabRecord(openerId);
+        if (rec) {
+          CComPtr<IDispatch> dispatch;
+          rec->runtime()->get_browser(&dispatch);
+          browser = dispatch;
+        }
+      } catch (ENotValidTabId &e) {
+        // will fallback to findActiveBrowser() if the desired tab is not available anymore
+        ATLTRACE(L"CREATE TAB TASK - failed to obtain tab %d\n", mApiId);
+      }
+    }
+    if (!browser) {
+      browser = Utils::findActiveBrowser();
+    }
+    return browser;
+  }
+
+  /**
+   * \result Gets url from properties and handles relative extension pages.
+   **/
+  std::wstring getURL()
+  {
+    Utils::JSVariant tmpUrl = mProperties[L"url"];
+    std::wstring url;
+    if (tmpUrl.which() == Utils::jsString) {
+      url = boost::get<std::wstring>(tmpUrl);
+
+      std::wstring scheme = Utils::getSchemeFromUrl(url);
+      if (scheme.empty()) {
+        //no scheme was specified -> relative path
+        if (mApiId <= 0 && mProperties[L"openerTabId"].which() != Utils::jsInt) {
+          // Handle relative URL - only for popups and background page -  make sure it will lead to the extension page
+          // If force context by openerTabId let browser handle relative paths
+          url = boost::str(boost::wformat(L"%1%%2%/%3%") % s_AnchoProtocolHandlerPrefix % mExtensionId % url);
+        }
+      }
+    } else {
+      url = L"about:blank";
+    }
+    return url;
   }
 
   Utils::JSObject mProperties;

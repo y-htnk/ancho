@@ -99,6 +99,8 @@ library AnchoBgSrvLib
   {
     [propget, id(1)]
     HRESULT cookieManager([out, retval] LPDISPATCH* ppRet);
+    [propget, id(2)]
+    HRESULT browser([out, retval] LPDISPATCH* ppRet);
 
     HRESULT reloadTab();
     HRESULT closeTab();

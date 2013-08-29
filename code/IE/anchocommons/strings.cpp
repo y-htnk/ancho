@@ -85,7 +85,14 @@ const wchar_t * s_AnchoFnGetContentAPI =
 const wchar_t * s_AnchoFnReleaseContentAPI =
     L"releaseContentInfo";
 
-// name of the exported function for releasing a content API
+// name of the tab window property where tab id is stored
 const wchar_t * s_AnchoTabIDPropertyName =
     L"AnchoTabID";
 
+// scheme used to wrap request ID and relative url when creating new tab
+const wchar_t * s_AnchoRelativeUrlHelperScheme =
+    L"ancho-relative";
+
+// scheme used to wrap request ID and absolute url when creating new tab
+const wchar_t * s_AnchoAbsoluteUrlHelperScheme =
+    L"ancho-absolute";
