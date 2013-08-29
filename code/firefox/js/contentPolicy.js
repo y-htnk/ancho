@@ -37,7 +37,13 @@
       if (aRequestPrincipal && aRequestPrincipal !== this.systemPrincipal && aContentLocation.schemeIs('ancho-extension')) {
         var url = Cc['@mozilla.org/network/standard-url;1'].createInstance(Ci.nsIStandardURL);
         url.init(Ci.nsIStandardURL.URLTYPE_STANDARD, null, aContentLocation.spec, null, null);
-        if (!isWebAccessible(url.host, url.path)) {
+        var uri = url.QueryInterface(Ci.nsIURI);
+        var id = uri.userPass;
+        if (id) {
+          id += '@';
+        }
+        id += uri.host;
+        if (!isWebAccessible(id, uri.path)) {
           return Ci.nsIContentPolicy.REJECT_REQUEST;
         }
       }
