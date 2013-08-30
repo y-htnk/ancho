@@ -18,7 +18,7 @@ require("pageAction_spec.js");
 var preprocessArguments = require("typeChecking.js").preprocessArguments;
 var notImplemented = require("typeChecking.js").notImplemented;
 
-var addonRootURL = require("extension.js").addonRootURL;
+var addonRootURL = require("runtime.js").addonRootURL;
 
 var getLocalizedMessage = require("i18n.js").getLocalizedMessage;
 var isLocalizedMessageIdentifier = require("i18n.js").isLocalizedMessageIdentifier;

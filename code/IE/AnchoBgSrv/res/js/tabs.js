@@ -24,25 +24,10 @@ var EVENT_LIST = ['onActivated',
                   'onUpdated'];
 var API_NAME = 'tabs';
 
-var MessageSender = require("extension.js").MessageSender;
-var CallbackWrapper = require("extension.js").CallbackWrapper;
-var PortPair = require("extension.js").PortPair;
-var addPortPair = require("extension.js").addPortPair;
-
-//Used for gathering callbacks from removeTabs
-//singleTabRemoveCallback is called from even if the tab was already removed
-var removeCallbackWrapper = function(aTabs, aCallback) {
-  var callback = aCallback;
-  var tabs = aTabs;
-  var count = aTabs.length;
-  this.singleTabRemoveCallback = function(aTabID) {
-    console.debug("removeSingleTab callback for tab: " + aTabID);
-    --count;
-    if (count == 0 && callback) {
-      callback();
-    }
-  }
-}
+var MessageSender = require("runtime.js").MessageSender;
+var CallbackWrapper = require("runtime.js").CallbackWrapper;
+var PortPair = require("runtime.js").PortPair;
+var addPortPair = require("runtime.js").addPortPair;
 
 //******************************************************************************
 //* main closure
@@ -117,6 +102,12 @@ var Tabs = function(instanceID) {
     addPortPair(pair, _instanceID);
     addonAPI.invokeEventObject(
               'extension.onConnect',
+              args['tabId'],
+              false,
+              [pair.far]
+              );
+    addonAPI.invokeEventObject(
+              'runtime.onConnect',
               args['tabId'],
               false,
               [pair.far]
@@ -247,39 +238,56 @@ var Tabs = function(instanceID) {
   // chrome.tabs.sendMessage
   this.sendMessage = function(tabId, message, responseCallback) {
     var args = preprocessArguments('chrome.tabs.sendMessage', arguments);
-
+    console.debug("tabs.sendMessage(..) called: " + args.message);
     sender = new MessageSender(_instanceID);
     callback = undefined;
     ret = undefined;
+    ret2 = undefined;
     if (responseCallback) {
       var callbackWrapper = new CallbackWrapper(args.responseCallback);
       callback = callbackWrapper.callback;
     } else {
       callback = function() { /*dummy*/ }
     }
+    // Two events are invoked - we support deprecated extension.onMessage
     ret = addonAPI.invokeEventObject(
+            'runtime.onMessage',
+            args.tabId,
+            false, //we are selecting tab with tabId
+            [args.message, sender, callback]
+            );
+    ret2 = addonAPI.invokeEventObject(
             'extension.onMessage',
             args.tabId,
             false, //we are selecting tab with tabId
             [args.message, sender, callback]
-            ); //TODO: fill MessageSender
+            );
     if (callbackWrapper === undefined) {
       return;
     }
 
     //if responseCallback not yet called, check if some of the listeners
     //requests asynchronous responseCallback, otherwise disable responseCallback
-    if (callbackWrapper.callable && ret != undefined) {
-      var arr = new VBArray(ret).toArray();
+    function processReturnValues(aReturnVal) {
+      if (!aReturnVal) {
+        return false;
+      }
+      var arr = new VBArray(aReturnVal).toArray();
       for (var i = 0; i < arr.length; ++i) {
         if (arr[i] === true) {
           console.debug("Asynchronous call to responseCallback requested!");
-          return;
+          return true;
         }
       }
+      return false;
     }
-    callbackWrapper.callable = false;
+    if (callbackWrapper.callable) {
+      if (processReturnValues(ret) || processReturnValues(ret2)) {
+        return;
+      }
+    }
 
+    callbackWrapper.callable = false;
   };
 
   //----------------------------------------------------------------------------

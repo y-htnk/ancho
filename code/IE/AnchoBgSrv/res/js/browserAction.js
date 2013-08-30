@@ -18,7 +18,7 @@ require("browserAction_spec.js");
 var preprocessArguments = require("typeChecking.js").preprocessArguments;
 var notImplemented = require("typeChecking.js").notImplemented;
 
-var addonRootURL = require("extension.js").addonRootURL;
+var addonRootURL = require("runtime.js").addonRootURL;
 
 var browserActionInfo;
 
