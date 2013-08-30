@@ -5,6 +5,7 @@
 
   Cu.import('resource://gre/modules/Services.jsm');
   Cu.import('resource://gre/modules/FileUtils.jsm');
+  Cu.import("resource://services-common/async.js");
 
   const APP_STARTUP = 1;
   const APP_SHUTDOWN = 2;
@@ -17,6 +18,10 @@
 
   const DEFAULT_LOCALE = 'en';
   const LOCALE_MESSAGE_REGEXP = /^__MSG_(.*)__$/;
+
+  const ANCHO_ROOT = 'ancho@salsitasoft.com';
+  const EXTENSION_DATA = 'extension-data';
+  const STORAGE_DB_NAME = 'storage.sqlite3';
 
   var inherits = require('inherits');
   var EventEmitter2 = require('eventemitter2').EventEmitter2;
@@ -131,8 +136,7 @@
       this._onEnabled();
     }
 
-    var dbFile = rootDirectory.clone();
-    dbFile.append('ancho_storage.sqlite3');
+    var dbFile = FileUtils.getFile('ProfD', [ ANCHO_ROOT, EXTENSION_DATA, this.id, STORAGE_DB_NAME ]);
     this._storageConnection = Services.storage.openUnsharedDatabase(dbFile);
 
     this._loadMessages();
@@ -154,7 +158,10 @@
       this._onDisabled();
     }
 
-    this._storageConnection.asyncClose();
+    var callback = Async.makeSyncCallback();
+    this._storageConnection.asyncClose(callback);
+    Async.waitForSyncCallback(callback);
+    this._storageConnection = null;
   };
 
   Extension.prototype.forWindow = function(win) {
