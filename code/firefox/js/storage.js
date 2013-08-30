@@ -56,7 +56,7 @@
         };
         if (myKeys.length) {
           var statement =
-            this._storageConnection.createStatement('SELECT key, value FROM '+this._tableName+' WHERE key IN (:key)');
+            this._storageConnection.createAsyncStatement('SELECT key, value FROM '+this._tableName+' WHERE key IN (:key)');
           var par, params = statement.newBindingParamsArray();
           for (var i=0; i<myKeys.length; i++) {
             par = params.newBindingParams();
@@ -99,7 +99,7 @@
     set: function(items, callback) {
       if (typeof items === 'object') {
         var statement =
-          this._storageConnection.createStatement('REPLACE INTO '+this._tableName+' (key, value) VALUES (:key, :value)');
+          this._storageConnection.createAsyncStatement('REPLACE INTO '+this._tableName+' (key, value) VALUES (:key, :value)');
 
         var par, params = statement.newBindingParamsArray();
         for (var key in items) {
@@ -137,7 +137,7 @@
           throw new Error('Invocation of method remove does not match definition');
         }
         var statement =
-          this._storageConnection.createStatement('DELETE FROM '+this._tableName+' WHERE key IN (:key)');
+          this._storageConnection.createAsyncStatement('DELETE FROM '+this._tableName+' WHERE key IN (:key)');
 
         var par, params = statement.newBindingParamsArray();
         for (var i=0; i<myKeys.length; i++) {
