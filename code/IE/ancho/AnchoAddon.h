@@ -69,7 +69,10 @@ public:
 
   // -------------------------------------------------------------------------
   // ctor
-  CAnchoAddon() : m_InstanceID(0), mUpdateState(usNone)
+  CAnchoAddon() :
+      m_InstanceID(0),
+      mUpdateState(usNone),
+      mContentScriptsForFrames(FALSE)
   {
   }
 
@@ -202,7 +205,9 @@ private:  // members
   UpdateState                           mUpdateState; //whether extension was freshly installed, updated or none of these
 
   // Map with all current frames.
-  FrameMap mMapFrames;
+  FrameMap  mMapFrames;
+  BOOL      mContentScriptsForFrames; // value from the addon's manifest
+
   // Map with all DOMWindowWrapper's
   DOMWindowWrapperMap mDOMWindowWrapper;
 };

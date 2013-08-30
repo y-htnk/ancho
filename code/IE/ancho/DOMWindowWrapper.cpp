@@ -484,9 +484,8 @@ HRESULT DOMWindowWrapper::getRelatedWrappedWindow(
   if (E_ACCESSDENIED == hr && pspCaller) {
     // Chrome returns in this case an object, but all properties are null.
     // Here they will be "undefined" instead of null, but that's acceptable.
-    CComPtr<IActiveScriptSite> scriptSite;
-    pspCaller->QueryService(IID_IActiveScriptSite, IID_IActiveScriptSite, (void**)&scriptSite.p);
-    CComQIPtr<IMagpieObjectCreator> magpie(scriptSite);
+    CComPtr<IMagpieObjectCreator> magpie;
+    pspCaller->QueryService(IID_IActiveScriptSite, IID_IMagpieObjectCreator, (void**)&magpie.p);
     if (magpie) {
       hr = magpie->createObject(CComBSTR(L"Object"), &pVarResult->pdispVal);
       if (SUCCEEDED(hr)) {

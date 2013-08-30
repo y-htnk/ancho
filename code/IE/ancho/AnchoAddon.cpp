@@ -184,11 +184,27 @@ STDMETHODIMP CAnchoAddon::Shutdown()
 // OnFrameStart
 STDMETHODIMP CAnchoAddon::OnFrameStart(IWebBrowser2 * aBrowser, BSTR aUrl, VARIANT_BOOL aIsTopLevelFrame, VARIANT_BOOL aIsTopLevelRefresh)
 {
+  IF_FAILED_RET(initializeEnvironment());
+
+  // get content our API
+  if (!m_pContentInfo) {
+    IF_FAILED_RET(m_pAddonBackground->GetContentInfo(m_InstanceID, aUrl, &m_pContentInfo));
+    ATLTRACE(L"ANCHO - GetContentInfo() succeeded");
+  }
+  CIDispatchHelper contentInfo(m_pContentInfo);
+  VARIANT_BOOL all_frames = VARIANT_FALSE;
+  contentInfo.Get<VARIANT_BOOL, VT_BOOL>(L"all_frames", all_frames);
+  mContentScriptsForFrames = (VARIANT_TRUE == all_frames);
+
+  BOOL processThisFrame = mContentScriptsForFrames || (VARIANT_TRUE == aIsTopLevelFrame);
   if (VARIANT_TRUE == aIsTopLevelFrame) {
     // Now is the time to remove all frames and cleanup everything.
     // This method is also hit in case of a refresh, that's why we do it here.
     cleanupFrames();
     cleanupScripting();
+  }
+  if (!processThisFrame) {
+    return S_OK;
   }
 
   // Get / setup frame record:
@@ -214,6 +230,10 @@ STDMETHODIMP CAnchoAddon::OnFrameStart(IWebBrowser2 * aBrowser, BSTR aUrl, VARIA
 // OnFrameEnd
 STDMETHODIMP CAnchoAddon::OnFrameEnd(IWebBrowser2 * aBrowser, BSTR aUrl, VARIANT_BOOL aIsTopLevelFrame, VARIANT_BOOL aIsTopLevelRefresh)
 {
+  if ( !(mContentScriptsForFrames || (VARIANT_TRUE == aIsTopLevelFrame)) ) {
+    return S_OK;
+  }
+
   IF_FAILED_RET(initializeEnvironment());
 
   // get content our API
@@ -221,6 +241,7 @@ STDMETHODIMP CAnchoAddon::OnFrameEnd(IWebBrowser2 * aBrowser, BSTR aUrl, VARIANT
     IF_FAILED_RET(m_pAddonBackground->GetContentInfo(m_InstanceID, aUrl, &m_pContentInfo));
     ATLTRACE(L"ANCHO - GetContentInfo() succeeded");
   }
+  CIDispatchHelper contentInfo(m_pContentInfo);
 
   FrameMap::iterator it = mMapFrames.find(COMOBJECTID(aBrowser));
   if (it != mMapFrames.end()) {
@@ -229,7 +250,6 @@ STDMETHODIMP CAnchoAddon::OnFrameEnd(IWebBrowser2 * aBrowser, BSTR aUrl, VARIANT
     magpieDebugName.Format(_T("Ancho content [%s] [%i]"), m_sExtensionName, m_InstanceID);
 
     // get chrome API
-    CIDispatchHelper contentInfo(m_pContentInfo);
     CComVariant chromeAPIVT;
     IF_FAILED_RET((contentInfo.Get<CComVariant, VT_DISPATCH, IDispatch*>(L"api", chromeAPIVT)));
 

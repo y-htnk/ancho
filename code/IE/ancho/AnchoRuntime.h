@@ -42,7 +42,9 @@ public:
       mAnchoBrowserEventsCookie(0),
       mExtensionPageAPIPrepared(false),
       mNextFrameId(0),
-      mIsExtensionPage(false)
+      mIsExtensionPage(false),
+      mIsFirstRun(TRUE),
+      mIsRequestCanceled(FALSE)
   {
   }
 
@@ -238,6 +240,8 @@ private:
   CComObjectStackEx<HtmlToolbarWindow>    mToolbarWindow;
   DWORD m_dwBandID;
   DWORD m_dwViewMode;
+  BOOL mIsFirstRun;
+  BOOL mIsRequestCanceled;
 
   CComPtr<ComSimpleJSObject>              mCurrentTabInfo;
 };

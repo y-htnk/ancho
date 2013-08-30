@@ -27,6 +27,17 @@ class CAnchoProtocolSink :
   public IHttpNegotiate
 {
 // ---------------------------------------------------------------------------
+public: // attributes
+  // This is the sheet anchor for getting the browser for the currently active
+  // request. In case the user setup a startpage the papp is not able to get a
+  // browser - and by this not able to get ancho browser events for calling
+  // back. So we use this static variable which gets set in
+  // CAnchoRuntime::OnBrowserBeforeNavigate2 and cleared in
+  // CAnchoProtocolSink::initializeBrowsers.
+  // This is a hack, but ok, because BeginningTransaction is called on the same
+  // thread and ALWAYS after OnBrowserBeforeNavigate2.
+  static CComPtr<IWebBrowser2>  sCurrentTopLevelBrowser;
+
 public:  // types
   /*==========================================================================
    * class SwitchParams
@@ -143,7 +154,7 @@ private:  // methods
 
   // Get top-level and frame browser and store them for later use.
   // Initializes mTopLevelBrowser and mCurrentFrameBrowser.
-  HRESULT queryCurrentBrowser();
+  HRESULT initializeBrowsers();
 
 // ---------------------------------------------------------------------------
 private:  // members
