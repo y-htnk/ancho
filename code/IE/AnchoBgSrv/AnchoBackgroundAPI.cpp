@@ -505,13 +505,22 @@ STDMETHODIMP CAnchoBackgroundAPI::invokeEvent(BSTR aEventName, INT aSelectedInst
   }
   return S_OK;
 }
-
-StorageDatabase & CAnchoBackgroundAPI::getStorageInstance(const std::wstring &aStorageType)
+//----------------------------------------------------------------------------
+//
+static void checkStorageType(const std::wstring &aStorageType)
 {
+  // Only two storage types are supported by google
   if (aStorageType != L"local" && aStorageType != L"sync") {
     ANCHO_THROW(std::runtime_error("Unsupported storage type"));
   }
+}
+//----------------------------------------------------------------------------
+//
+StorageDatabase & CAnchoBackgroundAPI::getStorageInstance(const std::wstring &aStorageType)
+{
+  checkStorageType(aStorageType);
 
+  //We lock to be sure that we open the databse only once
   boost::unique_lock<boost::recursive_mutex> lock(mStorageMutex);
 
   if (!mStorageLocalDb.isOpened()) {
@@ -530,38 +539,39 @@ StorageDatabase & CAnchoBackgroundAPI::getStorageInstance(const std::wstring &aS
     mStorageLocalDb.open(path.wstring(), tableName);
   }
 
+  //We currently map both storage types to storage.local
   return mStorageLocalDb;
 }
-
+//----------------------------------------------------------------------------
+//
 STDMETHODIMP CAnchoBackgroundAPI::storageGet(BSTR aStorageType, LPDISPATCH aKeysArray, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId)
 {
   BEGIN_TRY_BLOCK;
-  if (aExtensionId == NULL || aStorageType == NULL) {
+  if (aStorageType == NULL || aKeysArray == NULL || aCallback == NULL || aExtensionId == NULL) {
     return E_INVALIDARG;
   }
   std::wstring storageType(aStorageType);
-  if (storageType != L"local" && storageType != L"sync") {
-    ANCHO_THROW(std::runtime_error("Unsupported storage type"));
-  }
+  checkStorageType(storageType);
+
   Ancho::Utils::JavaScriptCallback<StorageItemsObject, void> callback(aCallback);
+  auto keysArray = Ancho::Utils::convertIDispatchToJSArray(aKeysArray);
 
-  CComQIPtr<IDispatchEx> tmp(aKeysArray);
-  if (!tmp) {
-    return E_FAIL;
-  }
-  Ancho::Utils::JSArray keysArray = boost::get<Ancho::Utils::JSArray>(Ancho::Utils::convertToJSVariant(*tmp));
-
-  storageGet(std::wstring(aStorageType), keysArray, callback, std::wstring(aExtensionId), aApiId);
+  //All COM arguments wrapped or copied to normal C++ datastructures, so we can use them in other threads
+  storageGet(storageType, keysArray, callback, std::wstring(aExtensionId), aApiId);
   END_TRY_BLOCK_CATCH_TO_HRESULT;
   return S_OK;
 }
-
+//----------------------------------------------------------------------------
+//
 void CAnchoBackgroundAPI::storageGet(const std::wstring &aStorageType, const Ancho::Utils::JSArray &aKeysArray, StorageItemsObjectCallback aCallback, const std::wstring &aExtensionId, int aApiId)
 {
   mAsyncTaskManager.addTask([=, this](){
     auto &storage = this->getStorageInstance(aStorageType);
+    // Create JS object by constructor from right context
+    // This object will contain requested items
     CComPtr<IDispatch> data = CAnchoAddonService::instance().createObject(aExtensionId, aApiId);
     _variant_t vtData(data);
+    // Wrap the object for easier manipulation
     Ancho::Utils::JSObjectWrapper dataWrapper = Ancho::Utils::JSValueWrapper(vtData.GetVARIANT()).toObject();
     for (size_t i = 0; i < aKeysArray.size(); ++i) {
       std::wstring key = boost::get<std::wstring>(aKeysArray[i]);
@@ -576,37 +586,36 @@ void CAnchoBackgroundAPI::storageGet(const std::wstring &aStorageType, const Anc
     aCallback(data);
   });
 }
-
+//----------------------------------------------------------------------------
+//
 STDMETHODIMP CAnchoBackgroundAPI::storageSet(BSTR aStorageType, LPDISPATCH aValuesObject, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId)
 {
   BEGIN_TRY_BLOCK;
-  if (aExtensionId == NULL || aStorageType == NULL) {
+  if (aStorageType == NULL || aValuesObject == NULL || aCallback == NULL || aExtensionId == NULL) {
     return E_INVALIDARG;
   }
   std::wstring storageType(aStorageType);
-  if (storageType != L"local" && storageType != L"sync") {
-    ANCHO_THROW(std::runtime_error("Unsupported storage type"));
-  }
+  checkStorageType(storageType);
+
   Ancho::Utils::JavaScriptCallback<void, void> callback(aCallback);
+  auto valuesObject = Ancho::Utils::convertIDispatchToJSObject(aValuesObject);
 
-  CComQIPtr<IDispatchEx> tmp(aValuesObject);
-  if (!tmp) {
-    return E_FAIL;
-  }
-  Ancho::Utils::JSObject valuesObject = boost::get<Ancho::Utils::JSObject>(Ancho::Utils::convertToJSVariant(*tmp));
-
-  storageSet(std::wstring(aStorageType), valuesObject, callback, std::wstring(aExtensionId), aApiId);
+  //All COM arguments wrapped or copied to normal C++ datastructures, so we can use them in other threads
+  storageSet(storageType, valuesObject, callback, std::wstring(aExtensionId), aApiId);
   END_TRY_BLOCK_CATCH_TO_HRESULT;
   return S_OK;
 }
-
+//----------------------------------------------------------------------------
+//
 void CAnchoBackgroundAPI::storageSet(const std::wstring &aStorageType, const Ancho::Utils::JSObject &aValuesObject, SimpleCallback aCallback, const std::wstring &aExtensionId, int aApiId)
 {
   mAsyncTaskManager.addTask([=, this](){
     auto &storage = this->getStorageInstance(aStorageType);
 
+    // Store all atributes of passed obejct into the database
     for (auto it = aValuesObject.begin(); it != aValuesObject.end(); ++it) {
       std::wstring key = it->first;
+      // Each attribute must be a string - JSON.stringify should have been called on JS side
       if (it->second.which() != Ancho::Utils::jsString) {
         ATLTRACE(L"Skipping store of key %s - value is not a string\n", key.c_str());
         continue;
@@ -617,30 +626,27 @@ void CAnchoBackgroundAPI::storageSet(const std::wstring &aStorageType, const Anc
     aCallback();
   });
 }
-
+//----------------------------------------------------------------------------
+//
 STDMETHODIMP CAnchoBackgroundAPI::storageRemove(BSTR aStorageType, LPDISPATCH aKeysArray, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId)
 {
   BEGIN_TRY_BLOCK;
-  if (aExtensionId == NULL || aStorageType == NULL) {
+  if (aStorageType == NULL || aKeysArray == NULL || aCallback == NULL || aExtensionId == NULL) {
     return E_INVALIDARG;
   }
   std::wstring storageType(aStorageType);
-  if (storageType != L"local" && storageType != L"sync") {
-    ANCHO_THROW(std::runtime_error("Unsupported storage type"));
-  }
+  checkStorageType(storageType);
   Ancho::Utils::JavaScriptCallback<void, void> callback(aCallback);
 
-  CComQIPtr<IDispatchEx> tmp(aKeysArray);
-  if (!tmp) {
-    return E_FAIL;
-  }
-  Ancho::Utils::JSArray keysArray = boost::get<Ancho::Utils::JSArray>(Ancho::Utils::convertToJSVariant(*tmp));
+  auto keysArray = Ancho::Utils::convertIDispatchToJSArray(aKeysArray);
 
-  storageRemove(std::wstring(aStorageType), keysArray, callback, std::wstring(aExtensionId), aApiId);
+  //All COM arguments wrapped or copied to normal C++ datastructures, so we can use them in worker threads
+  storageRemove(storageType, keysArray, callback, std::wstring(aExtensionId), aApiId);
   END_TRY_BLOCK_CATCH_TO_HRESULT;
   return S_OK;
 }
-
+//----------------------------------------------------------------------------
+//
 void CAnchoBackgroundAPI::storageRemove(const std::wstring &aStorageType, const Ancho::Utils::JSArray &aKeysArray, SimpleCallback aCallback, const std::wstring &aExtensionId, int aApiId)
 {
   mAsyncTaskManager.addTask([=, this](){
@@ -657,24 +663,24 @@ void CAnchoBackgroundAPI::storageRemove(const std::wstring &aStorageType, const 
     aCallback();
   });
 }
-
+//----------------------------------------------------------------------------
+//
 STDMETHODIMP CAnchoBackgroundAPI::storageClear(BSTR aStorageType, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId)
 {
   BEGIN_TRY_BLOCK;
-  if (aExtensionId == NULL || aStorageType == NULL) {
+  if (aStorageType == NULL || aCallback == NULL || aExtensionId == NULL) {
     return E_INVALIDARG;
   }
   std::wstring storageType(aStorageType);
-  if (storageType != L"local" && storageType != L"sync") {
-    ANCHO_THROW(std::runtime_error("Unsupported storage type"));
-  }
+  checkStorageType(storageType);
   Ancho::Utils::JavaScriptCallback<void, void> callback(aCallback);
 
-  storageClear(std::wstring(aStorageType), callback, std::wstring(aExtensionId), aApiId);
+  storageClear(storageType, callback, std::wstring(aExtensionId), aApiId);
   END_TRY_BLOCK_CATCH_TO_HRESULT;
   return S_OK;
 }
-
+//----------------------------------------------------------------------------
+//
 void CAnchoBackgroundAPI::storageClear(const std::wstring &aStorageType, SimpleCallback aCallback, const std::wstring &aExtensionId, int aApiId) {
   mAsyncTaskManager.addTask([=, this](){
     getStorageInstance(aStorageType).clear();

@@ -121,11 +121,11 @@ public:
   STDMETHOD(setIDispatchEventInvocationHandler)(LPDISPATCH aFunction);
   STDMETHOD(callFunction)(LPDISPATCH aFunction, LPDISPATCH aArgs, VARIANT* pvRet);
 
-  /*STDMETHOD(storageGet)(BSTR aStorageType, BSTR aKey, VARIANT* aValue);
-  STDMETHOD(storageSet)(BSTR aStorageType, BSTR aKey, BSTR aValue);
-  STDMETHOD(storageRemove)(BSTR aStorageType, BSTR aKey);
-  STDMETHOD(storageClear)(BSTR aStorageType);*/
-
+  // --------------------------------------------------------------------------
+  // Methods for manipulation with storage database
+  // Each operation has IAnchoBackgroundAPI non-throwing version
+  // and throwing version, which takes arguments directly usable
+  // in different thread (C++ objects, COM objects wrapped together with marshaller)
   STDMETHOD(storageGet)(BSTR aStorageType, LPDISPATCH aKeysArray, LPDISPATCH aCallback, BSTR aExtensionId, INT aApiId);
   void storageGet(const std::wstring &aStorageType, const Ancho::Utils::JSArray &aKeysArray, StorageItemsObjectCallback aCallback, const std::wstring &aExtensionId, int aApiId);
 
