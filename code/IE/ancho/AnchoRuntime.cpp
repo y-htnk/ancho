@@ -87,6 +87,9 @@ void CAnchoRuntime::DestroyAddons()
 //  Cleanup
 HRESULT CAnchoRuntime::Cleanup()
 {
+  // See CAnchoProtocolSink header for this one. Clear it here also just to be sure.
+  CAnchoProtocolSink::sCurrentTopLevelBrowser.Release();
+
   if (mToolbarWindow) {
     mToolbarWindow.DestroyWindow();
   }
@@ -300,7 +303,7 @@ HRESULT CAnchoRuntime::get_cookieManager(LPDISPATCH* ppRet)
 //
 STDMETHODIMP_(void) CAnchoRuntime::OnBrowserDownloadBegin()
 {
-  ARTTRACE(_T(""));
+  ARTTRACE(_T("\n"));
   mExtensionPageAPIPrepared = false;
 }
 
@@ -319,6 +322,9 @@ STDMETHODIMP_(void) CAnchoRuntime::OnWindowStateChanged(LONG dwFlags, LONG dwVal
 //  OnNavigateComplete
 STDMETHODIMP_(void) CAnchoRuntime::OnNavigateComplete(LPDISPATCH pDispatch, VARIANT *URL)
 {
+  // See CAnchoProtocolSink header for this one. Clear it here so it will not block anything.
+  CAnchoProtocolSink::sCurrentTopLevelBrowser.Release();
+
   CComBSTR url(URL->bstrVal);
   ARTTRACE(_T("To %s browser 0x%08x\n"), url, (ULONG_PTR)pDispatch);
 
@@ -337,7 +343,6 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
   VARIANT *TargetFrameName, VARIANT *PostData, VARIANT *Headers, BOOL *Cancel)
 {
   static BOOL bFirstRun = TRUE;
-  static BOOL bCancel = FALSE;
 
   // prepare URL, current browser
   ATLASSERT(pURL->vt == VT_BSTR && pURL->bstrVal != NULL);
@@ -346,18 +351,21 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
   CComQIPtr<IWebBrowser2> currentFrameBrowser(pDisp);
   ATLASSERT(currentFrameBrowser != NULL);
 
+  // See CAnchoProtocolSink header for this one
+  CAnchoProtocolSink::sCurrentTopLevelBrowser = mWebBrowser;
+
   ARTTRACE(_T("To %s browser 0x%08x\n"), currentURL, (ULONG_PTR)pDisp);
 
   // OnBrowserBeforeNavigate2 is called multiple times recursive because of
   // the call to pWebBrowser->Stop() (goes to res://ieframe.dll/navcancl.htm)
   // and the following Navigate2.
-  if (bCancel) {
+  if (mIsRequestCanceled) {
     // Cancel flag is set, the previous navigation was canceled,
     // so this is - hopefully - a call to res://ieframe.dll/navcancl.htm
     // Don't process.
     ARTTRACE(_T("\t\t ***canceled\n"));
     // But reset flag.
-    bCancel = FALSE;
+    mIsRequestCanceled = FALSE;
     return;
   }
 
@@ -375,10 +383,10 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
   if (bFirstRun) {
     ARTTRACE(_T("\t\tFIRST RUN, cancel\n"));
     bFirstRun = FALSE;
-    *Cancel = bCancel = TRUE;
+    *Cancel = mIsRequestCanceled = TRUE;
     currentFrameBrowser->Stop();
     ARTTRACE(_T("\t\tFIRST RUN, go\n"));
-    bCancel = FALSE;
+    mIsRequestCanceled = FALSE;
     currentFrameBrowser->Navigate2(pURL, Flags, TargetFrameName, PostData, Headers);
     return;
   }
@@ -397,9 +405,9 @@ STDMETHODIMP_(void) CAnchoRuntime::OnBrowserBeforeNavigate2(LPDISPATCH pDisp, VA
     url = boost::str(boost::wformat(L"%1%://%2%") % what[1] % what[3]);
 
     _variant_t vtUrl(url.c_str());
-    *Cancel = bCancel = TRUE;
+    *Cancel = mIsRequestCanceled = TRUE;
     currentFrameBrowser->Stop();
-    bCancel = FALSE;
+    mIsRequestCanceled = FALSE;
     currentFrameBrowser->Navigate2(&vtUrl.GetVARIANT(), Flags, TargetFrameName, PostData, Headers);
     mTabManager->createTabNotification(mTabId, requestId);
     return;
@@ -490,6 +498,7 @@ STDMETHODIMP CAnchoRuntime::OnFrameEnd(IWebBrowser2 * aBrowser, BSTR aUrl, VARIA
 //  OnFrameRedirect
 STDMETHODIMP CAnchoRuntime::OnFrameRedirect(IWebBrowser2 * aBrowser, BSTR bstrOldUrl, BSTR bstrNewUrl)
 {
+  ARTTRACE(_T("%s -> %s browser 0x%08x\n"), bstrOldUrl, bstrNewUrl, aBrowser);
   // Update current URL so that OnFrameEnd propertly triggers the content scripts.
   if (aBrowser) {
     aBrowser->PutProperty(CComBSTR(L"anchoCurrentURL"), CComVariant(bstrNewUrl));
@@ -828,25 +837,6 @@ STDMETHODIMP CAnchoRuntime::SetSite(IUnknown *pUnkSite)
     hr = Init();
     if (SUCCEEDED(hr)) {
       hr = InitAddons();
-/*
-      if (SUCCEEDED(hr)) {
-        // in case IE has already a page loaded initialize scripting 
-        READYSTATE readyState;
-        mWebBrowser->get_ReadyState(&readyState);
-        if (readyState >= READYSTATE_INTERACTIVE) {
-          CComBSTR url;
-          mWebBrowser->get_LocationURL(&url);
-          if (!isExtensionPage(std::wstring(url))) {
-            if (url != L"about:blank") {
-              // give toolbar a chance to load
-              //Sleep(200);
-              //InitializeContentScripting(mWebBrowser, url, TRUE, documentLoadEnd);
-            }
-          }
-        }
-      }
-      //showBrowserActionBar(TRUE);
-*/
     }
   }
   else

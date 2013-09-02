@@ -16,9 +16,101 @@ class DOMWindowWrapper;
 struct IDOMWindowWrapperManager
 {
   virtual ~IDOMWindowWrapperManager() {}
-  virtual HRESULT getWrappedDOMWindow(IWebBrowser2 * aFrameBrowser, IDispatch ** aRetHTMLWindow) = 0;
-  virtual void putWrappedDOMWindow(IWebBrowser2 * aFrameBrowser, IDispatch * aHTMLWindow) = 0;
-  virtual void removeWrappedDOMWindow(IWebBrowser2 * aFrameBrowser) = 0;
+
+  virtual HRESULT getWrappedDOMWindow(
+      IWebBrowser2  * aCallerBrowser,
+      IWebBrowser2  * aFrameBrowser,
+      IDispatch    ** aRetHTMLWindow) = 0;
+
+  virtual void putWrappedDOMWindow(
+      IWebBrowser2  * aFrameBrowser,
+      IDispatch     * aHTMLWindow) = 0;
+
+  virtual void removeWrappedDOMWindow(
+      IWebBrowser2  * aFrameBrowser) = 0;
+};
+
+/*===========================================================================
+ * class HTMLFramesCollection
+ * Wrapper for window.frames.
+ */
+class ATL_NO_VTABLE HTMLFramesCollection :
+  public CComObjectRootEx<CComSingleThreadModel>,
+  public IDispatchEx
+{
+public:
+  HTMLFramesCollection() : mWindowWrapper(NULL), mDispIdItem(0) {}
+  typedef CComObject<HTMLFramesCollection> ComObject;
+  typedef CComPtr<ComObject> ComPtr;
+
+  static HRESULT createInstance(DOMWindowWrapper * aWindowWrapper, IHTMLWindow2 * aHTMLWindow,
+                                ComPtr & aRet);
+
+  // -------------------------------------------------------------------------
+  // COM interface map
+  BEGIN_COM_MAP(HTMLFramesCollection)
+    COM_INTERFACE_ENTRY(IDispatch)
+    COM_INTERFACE_ENTRY(IDispatchEx)
+  END_COM_MAP()
+
+  // -------------------------------------------------------------------------
+  // COM standard methods
+  HRESULT FinalConstruct() {
+    return S_OK;
+  }
+
+  void FinalRelease() {
+    mFrameCollection.Release();
+  }
+
+  void handsOffWrapper();
+public:
+  // -------------------------------------------------------------------------
+  // IDispatch methods: forward
+#define FORWARD_CALL(_name, ...) \
+    { return (mFrameCollection) ? mFrameCollection->_name(__VA_ARGS__) : E_UNEXPECTED; }
+
+  STDMETHOD(GetTypeInfoCount)(UINT *pctinfo)
+      FORWARD_CALL(GetTypeInfoCount, pctinfo)
+  STDMETHOD(GetTypeInfo)(UINT iTInfo, LCID lcid, ITypeInfo **ppTInfo)
+      FORWARD_CALL(GetTypeInfo, iTInfo, lcid, ppTInfo)
+  STDMETHOD(GetIDsOfNames)(REFIID riid, LPOLESTR *rgszNames, UINT cNames,
+                                         LCID lcid, DISPID *rgDispId)
+      FORWARD_CALL(GetIDsOfNames, riid, rgszNames, cNames, lcid, rgDispId)
+  STDMETHOD(Invoke)(DISPID dispIdMember, REFIID riid, LCID lcid, WORD wFlags,
+                                  DISPPARAMS *pDispParams, VARIANT *pVarResult,
+                                  EXCEPINFO *pExcepInfo, UINT *puArgErr)
+      FORWARD_CALL(Invoke, dispIdMember, riid, lcid, wFlags, pDispParams,
+                    pVarResult, pExcepInfo, puArgErr)
+
+  // -------------------------------------------------------------------------
+  // IDispatchEx methods: forward
+  STDMETHOD(GetDispID)(BSTR bstrName, DWORD grfdex, DISPID *pid)
+      FORWARD_CALL(GetDispID, bstrName, grfdex, pid)
+  // Don't forward InvokeEx, this we handle
+  STDMETHOD(InvokeEx)(DISPID id, LCID lcid, WORD wFlags, DISPPARAMS *pdp,
+                      VARIANT *pvarRes, EXCEPINFO *pei,
+                      IServiceProvider *pspCaller);
+  STDMETHOD(DeleteMemberByName)(BSTR bstrName,DWORD grfdex)
+      FORWARD_CALL(DeleteMemberByName, bstrName, grfdex)
+  STDMETHOD(DeleteMemberByDispID)(DISPID id)
+      FORWARD_CALL(DeleteMemberByDispID, id)
+  STDMETHOD(GetMemberProperties)(DISPID id, DWORD grfdexFetch, DWORD *pgrfdex)
+      FORWARD_CALL(GetMemberProperties, id, grfdexFetch, pgrfdex)
+  STDMETHOD(GetMemberName)(DISPID id, BSTR *pbstrName)
+      FORWARD_CALL(GetMemberName, id, pbstrName)
+  STDMETHOD(GetNextDispID)(DWORD grfdex, DISPID id, DISPID *pid)
+      FORWARD_CALL(GetNextDispID, grfdex, id, pid)
+  STDMETHOD(GetNameSpaceParent)(IUnknown **ppunk)
+      FORWARD_CALL(GetNameSpaceParent, ppunk)
+#undef FORWARD_CALL
+
+// ---------------------------------------------------------------------------
+private: // properties
+  // WEAK POINTER!
+  DOMWindowWrapper * mWindowWrapper;
+  DISPID  mDispIdItem;
+  CComQIPtr<IDispatchEx> mFrameCollection;
 };
 
 /*===========================================================================
@@ -106,7 +198,7 @@ public:
 
 private:
   // the original IHTMLLocation object
-  CComPtr<IDispatchEx> mLocation;
+  CComQIPtr<IDispatchEx> mLocation;
 };
 
 /*===========================================================================
@@ -144,6 +236,8 @@ public:
 
   // helper - see comment in implementation
   void cleanup();
+  // Used by this and by frame collection wrapper
+  HRESULT getRelatedWrappedWindow(IHTMLWindow2 * aHTMLWindow, IServiceProvider * pspCaller, VARIANT *pVarResult);
 
 public:
   // -------------------------------------------------------------------------
@@ -209,7 +303,6 @@ private:
                     LCID lcid, DISPPARAMS *pDispParams, VARIANT *pVarResult,
                     EXCEPINFO *pExcepInfo, IServiceProvider *pspCaller,
                     BOOL & aHandled) const;
-  void getRelatedWrappedWindow(IHTMLWindow2 * aHTMLWindow, VARIANT *pVarResult) const;
 
 // ---------------------------------------------------------------------------
 private:  // types
@@ -247,28 +340,28 @@ private:  // types
 
   // These DISPIDs are related to on... properties. We have to handle them
   // in a special way, so we need the IDs.
+  // These IDs are taken from mshtml.tlb.
   enum {
-    DISPID_ONBEFOREUNLOAD = -2147412073,
-    DISPID_ONMESSAGE      = -2147412002,
-    DISPID_ONBLUR         = -2147412097,
-    DISPID_ONUNLOAD       = -2147412079,
-    DISPID_ONHASHCHANGE   = -2147412003,
-    DISPID_ONLOAD         = -2147412080,
-    DISPID_ONSCROLL       = -2147412081,
-    DISPID_ONAFTERPRINT   = -2147412045,
-    DISPID_ONRESIZE       = -2147412076,
-    DISPID_ONERROR        = -2147412083,
-    DISPID_ONHELP         = -2147412099,
-    DISPID_ONBEFOREPRINT  = -2147412046,
-    DISPID_ONFOCUS        = -2147412098,
-    // also there is the DISPID for window.location
-    DISPID_LOCATION       = 14,
-    // and there are properties for frames:
-    DISPID_PARENT         = 12,
-    DISPID_FRAMES         = 3000700,
-    DISPID_OPENER         = 3000701,
-    DISPID_SELF           = 3000703,
-    DISPID_TOP            = 3000704
+    DISPID_ONBEFOREUNLOAD = 0x80011797,
+    DISPID_ONMESSAGE      = 0x800117de,
+    DISPID_ONBLUR         = 0x8001177f,
+    DISPID_ONUNLOAD       = 0x80011791,
+    DISPID_ONHASHCHANGE   = 0x800117dd,
+    DISPID_ONLOAD         = 0x80011790,
+    DISPID_ONSCROLL       = 0x8001178F,
+    DISPID_ONAFTERPRINT   = 0x800117B3,
+    DISPID_ONRESIZE       = 0x80011794,
+    DISPID_ONERROR        = 0x8001178D,
+    DISPID_ONHELP         = 0x8001177D,
+    DISPID_ONBEFOREPRINT  = 0x800117B2,
+    DISPID_ONFOCUS        = 0x8001177E,
+    // and there are properties for frames and window.location:
+    DISPID_OPENER         = 0x00000004,
+    DISPID_PARENT         = 0x0000000c,
+    DISPID_LOCATION       = 0x0000000e,
+    DISPID_SELF           = 0x00000014,
+    DISPID_TOP            = 0x00000015,
+    DISPID_FRAMES         = 0x0000044C
   };
 
 // ---------------------------------------------------------------------------
@@ -295,5 +388,6 @@ private:  // members
   MapDISPIDToCComVariant  mDOMEventProperties;
 
   // Wrapper for window.location
-  HTMLLocationWrapper::ComPtr mLocation;
+  HTMLLocationWrapper::ComPtr   mLocation;
+  HTMLFramesCollection::ComPtr  mFrames;
 };

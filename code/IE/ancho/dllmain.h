@@ -15,9 +15,9 @@ public :
   DECLARE_LIBID(LIBID_anchoLib)
   static HRESULT WINAPI UpdateRegistryAppId(BOOL bRegister) throw()
   {
-	  CStringW modulePath;
+    CStringW modulePath;
     LPWSTR lps = modulePath.GetBuffer(MAX_PATH);
-	  ::GetModuleFileNameW( _AtlModule.m_hInstance, lps, MAX_PATH );
+    ::GetModuleFileNameW( _AtlModule.m_hInstance, lps, MAX_PATH );
     PathRemoveFileSpecW(lps);
     modulePath.ReleaseBuffer();
 

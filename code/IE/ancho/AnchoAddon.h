@@ -69,7 +69,10 @@ public:
 
   // -------------------------------------------------------------------------
   // ctor
-  CAnchoAddon() : m_InstanceID(0), mUpdateState(usNone)
+  CAnchoAddon() :
+      m_InstanceID(0),
+      mUpdateState(usNone),
+      mContentScriptsForFrames(FALSE)
   {
   }
 
@@ -108,9 +111,17 @@ public:
   STDMETHOD(InitializeExtensionScripting)(BSTR aUrl);
 
   // IDOMWindowWrapperManager methods.
-  virtual HRESULT getWrappedDOMWindow(IWebBrowser2 * aFrameBrowser, IDispatch ** aRetHTMLWindow);
-  virtual void putWrappedDOMWindow(IWebBrowser2 * aFrameBrowser, IDispatch * aHTMLWindow);
-  virtual void removeWrappedDOMWindow(IWebBrowser2 * aFrameBrowser);
+  virtual HRESULT getWrappedDOMWindow(
+      IWebBrowser2  * aCallerBrowser,
+      IWebBrowser2  * aFrameBrowser,
+      IDispatch    ** aRetHTMLWindow);
+
+  virtual void putWrappedDOMWindow(
+      IWebBrowser2  * aFrameBrowser,
+      IDispatch     * aHTMLWindow);
+
+  virtual void removeWrappedDOMWindow(
+      IWebBrowser2  * aFrameBrowser);
 
 // ---------------------------------------------------------------------------
 private:  // types
@@ -194,7 +205,9 @@ private:  // members
   UpdateState                           mUpdateState; //whether extension was freshly installed, updated or none of these
 
   // Map with all current frames.
-  FrameMap mMapFrames;
+  FrameMap  mMapFrames;
+  BOOL      mContentScriptsForFrames; // value from the addon's manifest
+
   // Map with all DOMWindowWrapper's
   DOMWindowWrapperMap mDOMWindowWrapper;
 };

@@ -99,6 +99,8 @@ HRESULT CAnchoStartPolicy::OnStartEx(
  * class CAnchoProtocolSink
  */
 
+CComPtr<IWebBrowser2>  CAnchoProtocolSink::sCurrentTopLevelBrowser;
+
 //----------------------------------------------------------------------------
 // SwitchParams::create
 //  Creates SwitchParams and sets the params.
@@ -141,7 +143,7 @@ STDMETHODIMP CAnchoProtocolSink::BeginningTransaction(
   }
 
   // Get browsers for this request.
-  queryCurrentBrowser();
+  initializeBrowsers();
 
   m_IsFrame = (mTopLevelBrowser && !mTopLevelBrowser.IsEqualObject(mCurrentFrameBrowser));
   mIsTopLevelRefresh = FALSE;
@@ -158,7 +160,7 @@ STDMETHODIMP CAnchoProtocolSink::BeginningTransaction(
 
   // Init frame info in CAnchoPassthruAPP for new request. The protocol will query the
   // browsers and other things from us, so we have to have that data at
-  // this point - from queryCurrentBrowser()
+  // this point - from initializeBrowsers()
   CAnchoPassthruAPP *protocol = CAnchoPassthruAPP::GetProtocol(this);
   protocol->initFromSink(this);
 
@@ -314,10 +316,10 @@ HRESULT CAnchoProtocolSink::getCurrentBrowser(IWebBrowser2 ** aCurrentFrameBrows
 }
 
 //----------------------------------------------------------------------------
-// queryCurrentBrowser
+// initializeBrowsers
 //  private version, sets internal members
 //  Get browser for current frame if any, otherwise root browser.
-HRESULT CAnchoProtocolSink::queryCurrentBrowser()
+HRESULT CAnchoProtocolSink::initializeBrowsers()
 {
   mTopLevelBrowser.Release();
   mCurrentFrameBrowser.Release();
@@ -327,52 +329,58 @@ HRESULT CAnchoProtocolSink::queryCurrentBrowser()
   // 1) Query directly from client
   HRESULT hr = QueryServiceFromClient(SID_SWebBrowserApp, &mTopLevelBrowser.p);
   if (FAILED(hr)) {
-
     // 2) If this failed, try getting the IWindowForBindingUI ...
-    CComPtr<IWindowForBindingUI> windowForBindingUI;
-    hr = QueryServiceFromClient(IID_IWindowForBindingUI, &windowForBindingUI);
-    if (!windowForBindingUI) {
-      return hr;
-    }
+    do {
+      CComPtr<IWindowForBindingUI> windowForBindingUI;
+      hr = QueryServiceFromClient(IID_IWindowForBindingUI, &windowForBindingUI);
+      if (!windowForBindingUI) {
+        break;
+      }
 
-    // ... and from there a HWND for "Internet Explorer_Server" ...
-    HWND hwnd = NULL;
-    hr = windowForBindingUI->GetWindow(IID_IAuthenticate, &hwnd);
-    if (FAILED(hr)) {
-      hr = windowForBindingUI->GetWindow(IID_IHttpSecurity, &hwnd);
-    }
-    if(FAILED(hr)) {
-      return hr;
-    }
-    ATLASSERT(hwnd);
+      // ... and from there a HWND for "Internet Explorer_Server" ...
+      HWND hwnd = NULL;
+      hr = windowForBindingUI->GetWindow(IID_IAuthenticate, &hwnd);
+      if (FAILED(hr)) {
+        hr = windowForBindingUI->GetWindow(IID_IHttpSecurity, &hwnd);
+      }
+      if(FAILED(hr)) {
+        break;
+      }
+      ATLASSERT(hwnd);
 
-    // ... from there the IAccessible ...
-    CComPtr<IAccessible> accessible;
-    hr = AccessibleObjectFromWindow(hwnd, OBJID_WINDOW, IID_IAccessible, (void**)&accessible);
-    ATLASSERT(SUCCEEDED(hr));
-    if(FAILED(hr)) {
-      return hr;
-    }
+      // ... from there the IAccessible ...
+      CComPtr<IAccessible> accessible;
+      hr = AccessibleObjectFromWindow(hwnd, OBJID_WINDOW, IID_IAccessible, (void**)&accessible);
+      ATLASSERT(SUCCEEDED(hr));
+      if(FAILED(hr)) {
+        break;
+      }
 
-    // ... that should be a IServiceProvider ...
-    CComQIPtr<IServiceProvider> serviceProvider = accessible;
-    ATLASSERT(serviceProvider);
+      // ... that should be a IServiceProvider ...
+      CComQIPtr<IServiceProvider> serviceProvider(accessible);
+      ATLASSERT(serviceProvider);
 
-    // ... that delivers us a IHTMLWindow2 ...
-    CComPtr<IHTMLWindow2> window;
-    hr = serviceProvider->QueryService(IID_IHTMLWindow2, IID_IHTMLWindow2, (void**)&window.p);
-    if(FAILED(hr)) {
-      return hr;
-    }
+      // ... that delivers us a IHTMLWindow2 ...
+      CComPtr<IHTMLWindow2> window;
+      hr = serviceProvider->QueryService(IID_IHTMLWindow2, IID_IHTMLWindow2, (void**)&window.p);
+      if(FAILED(hr)) {
+        break;
+      }
 
-    // ... which in turn is again a IServiceProvider ...
-    serviceProvider = window;
+      // ... which in turn is again a IServiceProvider ...
+      serviceProvider = window;
 
-    // ... giving us the IWebBrowser2 we are looking for.
-    hr = serviceProvider->QueryService(SID_SWebBrowserApp, IID_IWebBrowser2, (void**)&mTopLevelBrowser.p);
-    if(FAILED(hr)) {
-      return hr;
-    }
+      // ... giving us the IWebBrowser2 we are looking for.
+      hr = serviceProvider->QueryService(SID_SWebBrowserApp, IID_IWebBrowser2, (void**)&mTopLevelBrowser.p);
+    } while(false);
+  }
+  if(FAILED(hr)) {
+    // 3) If 1 and 2 failed, get browser from CAnchoProtocolSink::sCurrentTopLevelBrowser
+    mTopLevelBrowser = sCurrentTopLevelBrowser;
+    sCurrentTopLevelBrowser.Release();
+  }
+  if (!mTopLevelBrowser) {
+    return E_FAIL;
   }
 
   // Now get the browser for the current frame (if any).
