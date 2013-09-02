@@ -200,6 +200,34 @@ inline JSVariant convertToJSVariant(IDispatchEx &aDispatch)
   return detail::convert(aDispatch);
 }
 
+/**
+ * Copies recursively items from JS objects (all objects must implement IDispatchEx interface)
+ * \param aDisp - JS object with IDispatchEx!!! interface
+ * \result JSObject containing all attributes from aDisp
+ **/
+inline JSObject convertIDispatchToJSObject(IDispatch *aDisp)
+{
+  CComQIPtr<IDispatchEx> tmp(aDisp);
+  if (!tmp) {
+    ANCHO_THROW(EFail());
+  }
+  return boost::get<Ancho::Utils::JSObject>(Ancho::Utils::convertToJSVariant(*tmp));
+}
+
+/**
+ * Copies recursively items from JS array (all objects must implement IDispatchEx interface)
+ * \param aDisp - JS array with IDispatchEx!!! interface
+ * \result JSArray containing all items from aDisp
+ **/
+inline JSArray convertIDispatchToJSArray(IDispatch *aDisp)
+{
+  CComQIPtr<IDispatchEx> tmp(aDisp);
+  if (!tmp) {
+    ANCHO_THROW(EFail());
+  }
+  return boost::get<Ancho::Utils::JSArray>(Ancho::Utils::convertToJSVariant(*tmp));
+}
+
 namespace detail {
 /** Conversion traits implementation - generic version is undefined - compile time error when using conversion without specialization
  **/

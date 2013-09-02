@@ -13,6 +13,11 @@ namespace Utils {
 class AsynchronousTaskManager: public boost::noncopyable
 {
 public:
+  /// Number of worker threads which will be spawned during initialization
+  static const int cDefaultNumberOfWorkerThreads = 2;
+  /// Worker thread count limit - to prevent spawning of large number of worker threads
+  static const int cMaxNumberOfWorkerThreads = 8;
+
   AsynchronousTaskManager();
   ~AsynchronousTaskManager();
 
@@ -27,6 +32,7 @@ public:
   void finalize();
 private:
   void addPackagedTask(boost::function<void()> aTask);
+  void createNewWorkerThread();
 
   //Hidden implementation
   struct Pimpl;

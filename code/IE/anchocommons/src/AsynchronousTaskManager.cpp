@@ -16,13 +16,14 @@ typedef std::deque<boost::function<void()> > TaskQueue;
  **/
 struct WorkerThreadFunc
 {
-  WorkerThreadFunc(TaskQueue &aQueue, boost::condition_variable &aCondVariable, boost::mutex &aMutex)
-    : mQueue(aQueue), mCondVariable(aCondVariable), mMutex(aMutex)
+  WorkerThreadFunc(TaskQueue &aQueue, boost::condition_variable &aCondVariable, boost::mutex &aMutex, int &aAvailableWorkerCount)
+    : mQueue(aQueue), mCondVariable(aCondVariable), mMutex(aMutex), mAvailableWorkerCount(aAvailableWorkerCount)
   { /*empty*/ }
 
   TaskQueue &mQueue;
   boost::condition_variable &mCondVariable;
   boost::mutex &mMutex;
+  int &mAvailableWorkerCount;
 
   void operator()()
   {
@@ -36,9 +37,11 @@ struct WorkerThreadFunc
         {//synchronize only queue management
           boost::unique_lock<boost::mutex> lock(mMutex);
           while (mQueue.empty()) {
-              ATLTRACE(L"ASYNC TASK MANAGER - Waiting\n");
+              ++mAvailableWorkerCount;
+              ATLTRACE(L"ASYNC TASK MANAGER - Waiting %d threads\n", mAvailableWorkerCount);
               mCondVariable.wait(lock);
-              ATLTRACE(L"ASYNC TASK MANAGER - Finished waiting\n");
+              --mAvailableWorkerCount;
+              ATLTRACE(L"ASYNC TASK MANAGER - Finished waiting - %d threads still waiting\n", mAvailableWorkerCount);
           }
           task = mQueue.front();
           mQueue.pop_front();
@@ -75,17 +78,20 @@ struct AsynchronousTaskManager::Pimpl
   boost::mutex mMutex;
 
   std::list<boost::thread> mWorkerThreads;
+
+  /// Maintain number of worker threads waiting for a job
+  int mAvailableWorkerCount;
 };
 
 
 AsynchronousTaskManager::AsynchronousTaskManager(): mPimpl(new AsynchronousTaskManager::Pimpl())
 {
-  //TODO - decide in what situations we should create additional worker threads
-  for (size_t i = 0; i < 2; ++i) {
-    mPimpl->mWorkerThreads.push_back(boost::thread(detail::WorkerThreadFunc(mPimpl->mQueue, mPimpl->mCondVariable, mPimpl->mMutex)));
-  }
-
+  mPimpl->mAvailableWorkerCount = 0;
   mPimpl->mFinalized = false;
+
+  for (size_t i = 0; i < cDefaultNumberOfWorkerThreads; ++i) {
+    createNewWorkerThread();
+  }
 }
 
 AsynchronousTaskManager::~AsynchronousTaskManager()
@@ -100,11 +106,22 @@ void AsynchronousTaskManager::addPackagedTask(boost::function<void()> aTask)
     if (mPimpl->mFinalized) {
       ANCHO_THROW(EFail());
     }
+    // if no worker available and we didn't spawn too much threads yet
+    if (mPimpl->mAvailableWorkerCount == 0 && mPimpl->mWorkerThreads.size() < cMaxNumberOfWorkerThreads) {
+      createNewWorkerThread();
+    }
     mPimpl->mQueue.push_back(aTask);
   }
 
   //notify the threads waiting on the condition variable (threads are waiting only in case of empty queue)
   mPimpl->mCondVariable.notify_one();
+}
+
+void AsynchronousTaskManager::createNewWorkerThread()
+{
+  ATLTRACE(L"ASYNC TASK MANAGER - Creating new worker thread - %d\n", mPimpl->mWorkerThreads.size());
+  mPimpl->mWorkerThreads.push_back(
+    boost::thread(detail::WorkerThreadFunc(mPimpl->mQueue, mPimpl->mCondVariable, mPimpl->mMutex, mPimpl->mAvailableWorkerCount)));
 }
 
 void AsynchronousTaskManager::finalize()

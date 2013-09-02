@@ -32,6 +32,9 @@ var StorageArea = function(aStorageType, instanceID) {
     if (utils.isString(args.keys)) {
       keyList = [args.keys];
     }
+    // If keys aren't string nor array it must be object providing
+    // default values for requested keys.
+    // We get array of attribute names and store orignal object as defaults
     if (!utils.isArray(args.keys)) {
       defaults = args.keys;
       keyList = [];
@@ -42,9 +45,13 @@ var StorageArea = function(aStorageType, instanceID) {
       }
     }
 
+    // We cannot directly use data provided by C++ implementation
+    // So we wrap the provided callback and preprocess the data before we call it
     var internalCallback = function(data) {
       try {
+        // We obtained object with stringified attributes
         items = {};
+        // Check all requsted keys - missing ones are set to default values (if provided)
         for (var key in data) {
           if (data.hasOwnProperty(key)) {
             var item = data[key];
@@ -73,6 +80,7 @@ var StorageArea = function(aStorageType, instanceID) {
   this.set = function(items, callback) {
     var args = preprocessArguments('chrome.storage.StorageArea.set', arguments);
     var serializedValues = {};
+    // All data passed to database must be stringified
     for (var key in args.items) {
       if (args.items.hasOwnProperty(key)) {
         var value = args.items[key];
@@ -83,6 +91,7 @@ var StorageArea = function(aStorageType, instanceID) {
     var internalCallback = function() {
       //TODO - fire event
       try {
+        // Callback is not mandatory - check if available
         args.callback && args.callback();
       } catch (e) {
         console.error("Exception in chrome.storage." + mStorageType + ".set() callback: " + e.message);
@@ -95,12 +104,14 @@ var StorageArea = function(aStorageType, instanceID) {
   this.remove = function(keys, callback) {
     var args = preprocessArguments('chrome.storage.StorageArea.remove', arguments);
     var keyList = args.keys;
+    // addonAPI.storageRemove expects array
     if (utils.isString(keyList)) {
       keyList = [args.keys];
     }
     var internalCallback = function() {
       //TODO - fire event
       try {
+        // Callback is not mandatory - check if available
         args.callback && args.callback();
       } catch (e) {
         console.error("Exception in chrome.storage." + mStorageType + ".remove() callback: " + e.message);
@@ -115,6 +126,7 @@ var StorageArea = function(aStorageType, instanceID) {
     var internalCallback = function() {
       //TODO - fire event
       try {
+        // Callback is not mandatory - check if available
         args.callback && args.callback();
       } catch (e) {
         console.error("Exception in chrome.storage." + mStorageType + ".clear() callback: " + e.message);
