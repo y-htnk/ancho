@@ -197,14 +197,15 @@ exports.getContentInfo = function(aInstanceID, aUrl) {
     pageAction.register(aInstanceID);
   }
   var api = contentInstances[aInstanceID];
-  var scripts = (
-    manifest.content_scripts instanceof Array
-    && manifest.content_scripts.length > 0
-    && manifest.content_scripts[0].js instanceof Array
-    ? manifest.content_scripts[0].js
-    : []
-  );
-  return { api: api, scripts: scripts, console: console };
+  var scripts = [];
+  var all_frames = false;
+  if (manifest.content_scripts instanceof Array
+      && manifest.content_scripts.length > 0
+      && manifest.content_scripts[0].js instanceof Array) {
+    scripts = manifest.content_scripts[0].js;
+    all_frames = !!manifest.content_scripts[0].all_frames;
+  }
+  return { api: api, scripts: scripts, console: console, all_frames: all_frames };
 };
 
 // Releases an instance of the content API for a certain tab.

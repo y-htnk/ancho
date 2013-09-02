@@ -7,6 +7,73 @@
 #include "StdAfx.h"
 #include "DOMWindowWrapper.h"
 
+// ---------------------------------------------------------------------------
+// HTMLFramesCollection::createInstance
+HRESULT HTMLFramesCollection::createInstance(
+    DOMWindowWrapper  * aWindowWrapper,
+    IHTMLWindow2      * aHTMLWindow,
+    ComPtr            & aRet)
+{
+  if (!aHTMLWindow) {
+    return E_INVALIDARG;
+  }
+
+  CComPtr<IHTMLFramesCollection2> frameCollection;
+  IF_FAILED_RET(aHTMLWindow->get_frames(&frameCollection.p));
+
+  ComObject * frameCollectionObject = NULL;
+  IF_FAILED_RET(ComObject::CreateInstance(&frameCollectionObject));
+  ComPtr ptr = frameCollectionObject;
+
+  frameCollectionObject->mWindowWrapper = aWindowWrapper;
+  frameCollectionObject->mFrameCollection = frameCollection;
+  if (!frameCollectionObject->mFrameCollection) {
+    return E_NOINTERFACE;
+  }
+  aRet = ptr;
+  return S_OK;
+}
+
+// ---------------------------------------------------------------------------
+// HTMLFramesCollection::handsOffWrapper
+void HTMLFramesCollection::handsOffWrapper()
+{
+  mWindowWrapper = NULL;
+}
+
+// ---------------------------------------------------------------------------
+// HTMLFramesCollection::InvokeEx
+STDMETHODIMP HTMLFramesCollection::InvokeEx(DISPID id, LCID lcid, WORD wFlags,
+                                        DISPPARAMS *pdp, VARIANT *pvarRes,
+                                        EXCEPINFO *pei,
+                                        IServiceProvider *pspCaller)
+{
+  HRESULT hr = (mFrameCollection)
+    ? mFrameCollection->InvokeEx(id, lcid, wFlags, pdp, pvarRes, pei, pspCaller)
+    : E_INVALIDARG;
+  if (FAILED(hr)) {
+    return hr;
+  }
+
+  // IHTMLFramesCollection2 has only two methods. If it is not "length" then it is "item".
+  // That in turn translates to a DISPATCH_PROPERTYGET for the property <framename-or-index>.
+  // For that the return value is an object.
+  // NOTE: Of course it is possible to extend window.frames, but this we ignore here.
+  // So everything here that is an object should be a frame. Try to get it.
+  if(    (wFlags & (DISPATCH_PROPERTYGET | DISPATCH_METHOD))
+      && (VT_DISPATCH == pvarRes->vt)
+      && pvarRes->pdispVal) {
+    CComQIPtr<IHTMLWindow2> window(pvarRes->pdispVal);
+    if (mWindowWrapper) {
+      VariantClear(pvarRes);
+      // Get wrapped window for original window.
+      mWindowWrapper->getRelatedWrappedWindow(window, pspCaller, pvarRes);
+      // In case getRelatedWrappedWindow failed we return an empty VARIANT, but no error.
+      // We don't want js exceptions to be thrown.
+    }
+  }
+  return hr;
+}
 
 // ---------------------------------------------------------------------------
 // HTMLLocationWrapper::createInstance
@@ -25,7 +92,7 @@ HRESULT HTMLLocationWrapper::createInstance(IHTMLWindow2 * aHTMLWindow,
 
   locationObject->mLocation = htmlLocation;
   if (!locationObject->mLocation) {
-    return E_UNEXPECTED;
+    return E_NOINTERFACE;
   }
   aRet = ptr;
   return S_OK;
@@ -73,14 +140,16 @@ void DOMWindowWrapper::HTMLWindowInterfaces::Release() {
 
 // ---------------------------------------------------------------------------
 // createInstance
-HRESULT DOMWindowWrapper::createInstance(IWebBrowser2 * aWebBrowser,
-                                         CComPtr<ComObject> & aRet)
+HRESULT DOMWindowWrapper::createInstance(
+    IDOMWindowWrapperManager  * aDOMWindowManager,
+    IWebBrowser2              * aWebBrowser,
+    CComPtr<ComObject>        & aRet)
 {
   ComObject * newObject = NULL;
   IF_FAILED_RET(ComObject::CreateInstance(&newObject));
-  CComPtr<ComObject> objectRet(newObject);  // to have a refcount of 1
-  IF_FAILED_RET(newObject->init(aWebBrowser));
-  aRet = objectRet;
+  CComPtr<ComObject> owner(newObject);
+  IF_FAILED_RET(newObject->init(aDOMWindowManager, aWebBrowser));
+  aRet = owner;
   return S_OK;
 }
 
@@ -108,18 +177,29 @@ const wchar_t *DOMWindowWrapper::getEventPropertyName(DISPID id) {
 
 // ---------------------------------------------------------------------------
 // init
-HRESULT DOMWindowWrapper::init(IWebBrowser2 * aWebBrowser)
+HRESULT DOMWindowWrapper::init(
+    IDOMWindowWrapperManager  * aDOMWindowManager,
+    IWebBrowser2              * aWebBrowser)
 {
   if (!aWebBrowser) {
     return E_INVALIDARG;
   }
+  mWebBrowser = aWebBrowser;
   mDOMWindowInterfaces = CIDispatchHelper::GetScriptDispatch(aWebBrowser);
   if (!mDOMWindowInterfaces.dispEx) {
     return E_INVALIDARG;
   }
 
+  // add this frame to WrappedDOMWindowManager
+  ATLASSERT(aDOMWindowManager);
+  mDOMWindowManager = aDOMWindowManager;
+  mDOMWindowManager->putWrappedDOMWindow(aWebBrowser, this);
+
   // location-wrapper
   IF_FAILED_RET(HTMLLocationWrapper::createInstance(mDOMWindowInterfaces.w2, mLocation));
+
+  // frames-wrapper
+  IF_FAILED_RET(HTMLFramesCollection::createInstance(this, mDOMWindowInterfaces.w2, mFrames));
 
   // also create NULL properties for all events in getEventPropertyName
   mDOMEventProperties[DISPID_ONBEFOREUNLOAD].vt = VT_NULL;
@@ -143,6 +223,9 @@ HRESULT DOMWindowWrapper::init(IWebBrowser2 * aWebBrowser)
 // forceDelete
 void DOMWindowWrapper::cleanup()
 {
+  if (mDOMWindowManager) {
+    mDOMWindowManager->removeWrappedDOMWindow(mWebBrowser);
+  }
   // *sigh* - jquery (and probably other scripts) leaks like Deepwater
   // Horizon on IE, so we don't get released. Let's at least release
   // everything we use in this place.
@@ -152,6 +235,12 @@ void DOMWindowWrapper::cleanup()
   mDOMWindowPropertyNames.clear();
   mDOMEventProperties.clear();
   mLocation.Release();
+  if (mFrames) {
+    mFrames->handsOffWrapper();
+  }
+  mFrames.Release();
+  mWebBrowser.Release();
+  mDOMWindowManager = NULL;
 }
 
 // ---------------------------------------------------------------------------
@@ -198,19 +287,76 @@ HRESULT DOMWindowWrapper::dispatchPropertyGet(WORD wFlags, DISPID dispIdMember,
                                          VARIANT *pVarResult,
                                          EXCEPINFO *pExcepInfo,
                                          IServiceProvider *pspCaller,
-                                         BOOL & aHandled) const
+                                         BOOL & aHandled)
 {
+  ENSURE_RETVAL(pVarResult);
+  VariantInit(pVarResult);
   MapDISPIDToCComVariant::const_iterator it = mDOMWindowProperties.end();
   BOOL propertyFound = FALSE;
 
-  if (DISPID_LOCATION == dispIdMember) {
-    aHandled = TRUE;
-    CComVariant vt((IDispatch*)mLocation);
-    ATLASSERT(pVarResult);
-    if (VT_DISPATCH != vt.vt) {
-      return DISP_E_MEMBERNOTFOUND;
+  // Specially handled properties
+  switch(dispIdMember) {
+    // -----------------------------
+    // window.location
+    case DISPID_LOCATION: {
+      aHandled = TRUE;
+      CComVariant vt((IDispatch*)mLocation);
+      if (VT_DISPATCH != vt.vt) {
+        return DISP_E_MEMBERNOTFOUND;
+      }
+      return vt.Detach(pVarResult);
     }
-    return vt.Detach(pVarResult);
+    // -----------------------------
+    // window.frames
+    case DISPID_FRAMES: {
+      aHandled = TRUE;
+      CComVariant vt((IDispatch*)mFrames);
+      if (VT_DISPATCH != vt.vt) {
+        return DISP_E_MEMBERNOTFOUND;
+      }
+      return vt.Detach(pVarResult);
+    }
+    // -----------------------------
+    // window.parent
+    case DISPID_PARENT: {
+      aHandled = TRUE;
+      ATLASSERT(mDOMWindowInterfaces.w2);
+      CComPtr<IHTMLWindow2> window;
+      mDOMWindowInterfaces.w2->get_parent(&window.p);
+      getRelatedWrappedWindow(window, pspCaller, pVarResult);
+      return S_OK;
+    }
+    // -----------------------------
+    // window.opener
+    case DISPID_OPENER: {
+      aHandled = TRUE;
+      ATLASSERT(mDOMWindowInterfaces.w2);
+      CComVariant opener;
+      mDOMWindowInterfaces.w2->get_opener(&opener);
+      if (VT_DISPATCH == opener.vt && opener.pdispVal) {
+        CComQIPtr<IHTMLWindow2> window(opener.pdispVal);
+        getRelatedWrappedWindow(window, pspCaller, pVarResult);
+      }
+      return S_OK;
+    }
+    // -----------------------------
+    // window.self
+    case DISPID_SELF: {
+      pVarResult->pdispVal = this;
+      AddRef();
+      pVarResult->vt = VT_DISPATCH;
+      return S_OK;
+    }
+    // -----------------------------
+    // window.top
+    case DISPID_TOP: {
+      aHandled = TRUE;
+      ATLASSERT(mDOMWindowInterfaces.w2);
+      CComPtr<IHTMLWindow2> window;
+      mDOMWindowInterfaces.w2->get_top(&window.p);
+      getRelatedWrappedWindow(window, pspCaller, pVarResult);
+      return S_OK;
+    }
   }
 
   const wchar_t * eventName = getEventPropertyName(dispIdMember);
@@ -297,6 +443,59 @@ HRESULT DOMWindowWrapper::dispatchConstruct(DISPID dispIdMember,
 {
   // do nothing, window will handle this
   return E_NOTIMPL;
+}
+
+// ---------------------------------------------------------------------------
+// getRelatedWrappedWindow
+HRESULT DOMWindowWrapper::getRelatedWrappedWindow(
+    IHTMLWindow2      * aHTMLWindow,
+    IServiceProvider  * pspCaller,
+    VARIANT           * pVarResult)
+{
+  ENSURE_RETVAL(pVarResult)
+
+  VariantInit(pVarResult);
+  pVarResult->vt = VT_NULL;
+
+  if(!aHTMLWindow || !mDOMWindowManager) {
+    return E_INVALIDARG;
+  }
+
+  // QI related window to IServiceProvider.
+  CComQIPtr<IServiceProvider> serviceProvider(aHTMLWindow);
+  ATLASSERT(serviceProvider);
+
+  // Get the webbrowser from the related window.
+  CComPtr<IWebBrowser2> webBrowser;
+  serviceProvider->QueryService(SID_SWebBrowserApp, IID_IWebBrowser2, (void**)&webBrowser.p);
+  if (!webBrowser) {
+    return E_NOINTERFACE;
+  }
+
+  // Get the wrapped window for this browser.
+  CComPtr<IDispatch> wrappedWindow;
+  HRESULT hr = mDOMWindowManager->getWrappedDOMWindow(mWebBrowser, webBrowser, &wrappedWindow.p);
+  if (SUCCEEDED(hr)) {
+    pVarResult->vt = VT_DISPATCH;
+    pVarResult->pdispVal = wrappedWindow.Detach();
+    return S_OK;
+  }
+
+  if (E_ACCESSDENIED == hr && pspCaller) {
+    // Chrome returns in this case an object, but all properties are null.
+    // Here they will be "undefined" instead of null, but that's acceptable.
+    CComPtr<IMagpieObjectCreator> magpie;
+    pspCaller->QueryService(IID_IActiveScriptSite, IID_IMagpieObjectCreator, (void**)&magpie.p);
+    if (magpie) {
+      hr = magpie->createObject(CComBSTR(L"Object"), &pVarResult->pdispVal);
+      if (SUCCEEDED(hr)) {
+        pVarResult->vt = VT_DISPATCH;
+        return S_OK;
+      }
+    }
+  }
+
+  return hr;
 }
 
 // ---------------------------------------------------------------------------
