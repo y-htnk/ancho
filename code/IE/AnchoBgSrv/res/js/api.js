@@ -59,6 +59,7 @@ var API_NAMES = [
 var CONTENT_API_NAMES = [
     "app",
     "extension",
+    "runtime",
     "i18n",
     "storage"];
 

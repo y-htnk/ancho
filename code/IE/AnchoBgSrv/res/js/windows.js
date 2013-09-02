@@ -13,7 +13,7 @@ var EventFactory = require("utils.js").EventFactory;
 require("windows_spec.js");
 var preprocessArguments = require("typeChecking.js").preprocessArguments;
 var notImplemented = require("typeChecking.js").notImplemented;
-var addonRootURL = require("extension.js").addonRootURL;
+var addonRootURL = require("runtime.js").addonRootURL;
 
 
 var EVENT_LIST = ['onCreated',
